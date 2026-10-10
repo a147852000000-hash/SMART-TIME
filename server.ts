@@ -183,7 +183,12 @@ function authUser(req: express.Request) {
     if (!row || row.role !== claims.role || !rolesForDbRole(String(row.role)).includes(String(claims.selectedRole))) return null;
     return { ...row, actualRoleInDB: row.role, selectedRole: claims.selectedRole, role: claims.selectedRole };
   }
-  return db.prepare(`SELECT u.id,u.email,u.username,u.display_name as name,u.phone,u.phone_verified as phoneVerified,u.activation_status,u.role,s.session_role as selectedRole,s.id as session_id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=? AND julianday(s.expires_at) > julianday('now')`).get(token) as any || null;
+  const legacy = db.prepare(`SELECT u.id,u.email,u.username,u.display_name as name,u.phone,u.phone_verified as phoneVerified,u.activation_status,u.role,s.session_role as selectedRole,s.id as session_id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=? AND julianday(s.expires_at) > julianday('now')`).get(token) as any || null;
+  if (!legacy) return null;
+  const selectedRole = String(legacy.selectedRole || 'user').toLowerCase();
+  if (!VALID_APP_ROLES.has(selectedRole) || !rolesForDbRole(String(legacy.role || 'user')).includes(selectedRole)) return null;
+  if (selectedRole === 'owner' && !OWNER_EMAILS.has(String(legacy.email || '').toLowerCase())) return null;
+  return { ...legacy, selectedRole, role: selectedRole, actualRoleInDB: String(legacy.role || 'user') };
 }
 function publicUser(row:any){const selectedRole=row.selectedRole||'user';return {id:row.id,email:row.email,username:row.username||undefined,name:row.name||row.display_name||'',phone:row.phone||undefined,phoneVerified:!!row.phoneVerified,role:selectedRole,selectedRole,activationStatus:row.activation_status||row.activationStatus||'pending'};}
 function normalizePhone(phone:string){return String(phone||'').replace(/[\s()-]/g,'');}
