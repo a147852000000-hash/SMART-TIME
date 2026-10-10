@@ -138,18 +138,18 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
   };
 
   return (
-    <main style={{ backgroundColor: '#FFFFFF' }} className="min-h-screen w-full bg-[#FFFFFF] text-black flex items-center justify-center px-4 py-6 sm:px-6 sm:py-10 font-sans" dir="ltr">
+    <main style={{ backgroundColor: '#FFFFFF' }} className="h-[100dvh] min-h-0 w-full overflow-hidden bg-[#FFFFFF] text-black flex items-center justify-center px-3 py-2 sm:min-h-screen sm:h-auto sm:px-6 sm:py-10 font-sans" dir="ltr">
       {/* Transparent card - pure white background */}
-      <section style={{ backgroundColor: 'transparent' }} className="w-full max-w-[440px] bg-transparent p-6 sm:p-8 border-0 shadow-none">
-        <header className="mb-7 sm:mb-8 flex flex-col items-center text-center">
+      <section style={{ backgroundColor: 'transparent' }} className="w-full max-w-[440px] max-h-full overflow-y-auto bg-transparent p-3 sm:p-8 border-0 shadow-none">
+        <header className="mb-3 sm:mb-8 flex flex-col items-center text-center">
           <img
             src="/logo-smarttime-original.png"
             alt="SmartTime TIME GOLD"
-            className="mb-2 h-auto w-[360px] max-w-full object-contain"
+            className="mb-1 h-auto w-[min(64vw,220px)] sm:w-[360px] max-w-full object-contain"
           />
           {/* Eng.mamdouh saad in GOLD */}
-          <p className="mt-1 font-serif text-[24px] font-medium tracking-wide text-[#C5A059]">Eng.mamdouh saad</p>
-          <h1 className="mt-4 sm:mt-5 font-serif text-[34px] sm:text-[42px] font-medium leading-tight text-black">
+          <p className="mt-0 font-serif text-[18px] sm:mt-1 sm:text-[24px] font-medium tracking-wide text-[#C5A059]">Eng.mamdouh saad</p>
+          <h1 className="mt-2 sm:mt-5 font-serif text-[26px] sm:text-[42px] font-medium leading-tight text-black">
             {mode === 'login' ? 'Welcome back' : mode === 'register' ? 'Create account' : 'Forgot password?'}
           </h1>
         </header>
@@ -165,7 +165,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
             {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
           </div>
         ) : (
-          <form onSubmit={submit} className="space-y-5">
+          <form onSubmit={submit} className="space-y-3 sm:space-y-5">
             {loginNotice && mode === 'login' && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{loginNotice}</div>}
 
             {mode === 'register' && <>
@@ -186,7 +186,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
               <span className="mb-2 block text-[15px] sm:text-[17px] font-medium text-gray-900">Email</span>
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
-                <input required type="email" autoComplete="email" dir="ltr" value={email} onChange={e=>{setEmail(e.target.value); setError('');}} className="h-12 w-full rounded-xl border border-[#D4AF37]/50 bg-white pl-12 pr-4 outline-none transition placeholder:text-gray-500 focus:border-[#C5A059] focus:ring-2 focus:ring-[#C5A059]/20" placeholder="email@example.com" />
+                <input required type="email" autoComplete="email" dir="ltr" value={email} onChange={e=>{setEmail(e.target.value); setError('');}} className="h-10 sm:h-12 w-full rounded-xl border border-[#D4AF37]/50 bg-white pl-12 pr-4 outline-none transition placeholder:text-gray-500 focus:border-[#C5A059] focus:ring-2 focus:ring-[#C5A059]/20" placeholder="email@example.com" />
               </div>
             </label>
 
@@ -202,7 +202,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
                 <span className="mb-2 block text-[15px] sm:text-[17px] font-medium text-gray-900">{mode === 'forgot' ? 'New password' : 'Password'}</span>
                 <div className="relative">
                   <LockKeyhole className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
-                  <input required minLength={8} type={show?'text':'password'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={e=>setPassword(e.target.value)} className="h-[60px] sm:h-[68px] w-full rounded-[14px] border border-[#D4AF37]/50 bg-white pl-12 pr-12 text-[16px] sm:text-[18px] outline-none transition placeholder:text-gray-400 focus:border-[#B88A32] focus:ring-2 focus:ring-[#C5A059]/20" placeholder="••••••••" />
+                  <input required minLength={8} type={show?'text':'password'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={e=>setPassword(e.target.value)} className="h-11 sm:h-[68px] w-full rounded-[14px] border border-[#D4AF37]/50 bg-white pl-12 pr-12 text-[16px] sm:text-[18px] outline-none transition placeholder:text-gray-400 focus:border-[#B88A32] focus:ring-2 focus:ring-[#C5A059]/20" placeholder="••••••••" />
                   <button type="button" aria-label={show?'Hide password':'Show password'} onClick={()=>setShow(!show)} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-black focus:outline-none focus:ring-2 focus:ring-[#C5A059]/40">{show?<EyeOff className="h-5 w-5"/>:<Eye className="h-5 w-5"/>}</button>
                 </div>
               </label>
@@ -210,14 +210,14 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
 
             {error && <div role="alert" className={`rounded-xl p-3 text-sm font-medium ${error.includes('تم ') ? 'border border-emerald-200 bg-emerald-50 text-emerald-700' : 'border border-red-200 bg-red-50 text-red-700'}`}>{error}</div>}
 
-            <button disabled={busy || (mode === 'register' && emailExistsInRailway)} className="flex h-[60px] sm:h-[72px] w-full items-center justify-center rounded-full bg-[#090909] px-4 font-semibold text-[20px] sm:text-[24px] text-[#D6AD52] shadow-[0_8px_20px_rgba(0,0,0,0.08)] transition hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C5A059] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+            <button disabled={busy || (mode === 'register' && emailExistsInRailway)} className="flex h-11 sm:h-[72px] w-full items-center justify-center rounded-full bg-[#090909] px-4 font-semibold text-[17px] sm:text-[24px] text-[#D6AD52] shadow-[0_8px_20px_rgba(0,0,0,0.08)] transition hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C5A059] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
               {busy?'Please wait…':mode==='register'?'Create account':mode==='forgot'?(resetSent?'Reset password':'Send reset code'):'Sign In'}
             </button>
 
             {mode === 'login' && (
               <>
                 {/* Forgot + Sign up */}
-                <div className="flex flex-col items-center gap-3 pt-2 text-sm">
+                <div className="flex flex-col items-center gap-1 sm:gap-3 pt-0 sm:pt-2 text-xs sm:text-sm">
                   <button type="button" onClick={()=>switchMode('forgot')} className="text-[#C5A059] transition hover:underline">Forgot password?</button>
                   <p className="text-center text-gray-700">Don't have an account?{' '}
                     <button type="button" onClick={()=>switchMode('register')} className="font-semibold text-[#C5A059] transition hover:text-[#A68136] hover:underline">Sign up</button>
@@ -231,7 +231,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
                     <span>or continue with</span>
                     <span className="h-px flex-1 bg-[#D4AF37]/40"/>
                   </div>
-                  <button type="button" onClick={()=>setError('Google sign-in is not configured on this deployment yet.')} className="flex min-h-[60px] sm:min-h-[68px] w-full items-center justify-center gap-3 rounded-[14px] border border-[#D4AF37]/50 bg-white px-4 py-3 text-[17px] sm:text-[20px] shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#C5A059]/40">
+                  <button type="button" onClick={()=>setError('Google sign-in is not configured on this deployment yet.')} className="flex min-h-[42px] sm:min-h-[68px] w-full items-center justify-center gap-3 rounded-[14px] border border-[#D4AF37]/50 bg-white px-4 py-2 sm:py-3 text-[14px] sm:text-[20px] shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#C5A059]/40">
                     <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24">
                       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                       <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
