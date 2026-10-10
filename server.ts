@@ -146,10 +146,10 @@ function jwtSecret(): string {
   if (secret.length < 32) throw new Error('JWT_SECRET must be configured with at least 32 characters.');
   return secret;
 }
-function base64url(value: string | Buffer): string { return Buffer.from(value).toString('base64').replace(/=/g, '').replace(/\\+/g, '-').replace(/\\//g, '_'); }
+function base64url(value: string | Buffer): string { return Buffer.from(value).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_'); }
 function signJwt(payload: Record<string, unknown>): string {
   const unsigned = `${base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))}.${base64url(JSON.stringify(payload))}`;
-  const signature = crypto.createHmac('sha256', jwtSecret()).update(unsigned).digest('base64').replace(/=/g, '').replace(/\\+/g, '-').replace(/\\//g, '_');
+  const signature = crypto.createHmac('sha256', jwtSecret()).update(unsigned).digest('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
   return `${unsigned}.${signature}`;
 }
 function verifyJwt(token: string): any | null {
@@ -179,7 +179,7 @@ function authUser(req: express.Request) {
   if (token.split('.').length === 3) {
     const claims = verifyJwt(token);
     if (!claims || claims.purpose !== 'app_session' || !claims.sub || !VALID_APP_ROLES.has(String(claims.selectedRole))) return null;
-    const row = db.prepare('SELECT u.id,u.email,u.username,u.display_name as name,u.phone,u.phone_verified as phoneVerified,u.activation_status,u.role,s.id as session_id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=? AND s.user_id=? AND julianday(s.expires_at)>julianday('now')').get(String(claims.sid||''),String(claims.sub)) as any;
+    const row = db.prepare("SELECT u.id,u.email,u.username,u.display_name as name,u.phone,u.phone_verified as phoneVerified,u.activation_status,u.role,s.id as session_id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=? AND s.user_id=? AND julianday(s.expires_at)>julianday('now')").get(String(claims.sid||''),String(claims.sub)) as any;
     if (!row || row.role !== claims.role || !rolesForDbRole(String(row.role)).includes(String(claims.selectedRole))) return null;
     return { ...row, actualRoleInDB: row.role, selectedRole: claims.selectedRole, role: claims.selectedRole };
   }
