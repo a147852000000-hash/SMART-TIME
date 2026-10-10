@@ -1,0 +1,20 @@
+name: Phase 12 - Real STT + ASR Corpus Verify
+
+on:
+  push:
+    branches:
+      - feat/v3-next
+  pull_request:
+    branches:
+      - feat/v3-next
+
+jobs:
+  phase12-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Verify Phase 12 contract
+        run: node scripts/verify-phase12-stt-corpus.mjs

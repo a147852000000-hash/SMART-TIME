@@ -1,0 +1,96 @@
+{
+  "phase": 10,
+  "name": "Voice-First Architecture + Execution Order",
+  "status": "pre_run_manifest",
+  "branch": "feat/v3-next",
+  "training_authorized_by_phase": false,
+  "base_model": {
+    "name": "Qwen/Qwen3-4B",
+    "revision_required": true,
+    "revision": null
+  },
+  "training_data": {
+    "files": [
+      "backend/ai/training/smart-time-v2.jsonl",
+      "backend/ai/training/smart-time-grounded-v1.jsonl"
+    ],
+    "sha256_required": true,
+    "sha256": {}
+  },
+  "held_out_evaluation": {
+    "files": [
+      "backend/ai/training/smart-time-eval-v1.jsonl",
+      "backend/ai/training/smart-time-eval-v4g.jsonl"
+    ],
+    "sha256_required": true,
+    "sha256": {}
+  },
+  "adapter": {
+    "method": "SFT + LoRA",
+    "rank": 16,
+    "alpha": 32,
+    "dropout": 0.05,
+    "target_modules": "all-linear"
+  },
+  "runtime": {
+    "seed_required": true,
+    "max_length": 1024,
+    "epochs": 3,
+    "learning_rate": 0.0002,
+    "batch_size": 2,
+    "gradient_accumulation_steps": 8,
+    "thinking_mode": "disabled_for_runtime_evaluation",
+    "library_versions": {
+      "node": "20.x",
+      "python": "3.11+",
+      "note": "Exact training environment versions must be captured in the immutable run manifest before any future training run."
+    }
+  },
+  "evaluation_order": [
+    "model_health",
+    "stt_transcript_correctness",
+    "intent_preservation",
+    "structured_proposal_validity",
+    "policy_schema_validation",
+    "confirmation_boundary",
+    "tool_execution",
+    "read_back_verification",
+    "response_grounding",
+    "tts_synthesis",
+    "audio_playback",
+    "voice_e2e_latency_and_error",
+    "security_privacy",
+    "reproducibility_artifacts"
+  ],
+  "artifact_policy": {
+    "model_hash_required": true,
+    "adapter_hash_required": true,
+    "dataset_hash_required": true,
+    "rollback_reference_required": true,
+    "artifact_location_required": true,
+    "pre_run_state": "No training run is authorized in Phase 10; model/dataset hashes, exact runtime lockfile versions, artifact location, and rollback reference are mandatory capture fields for the first authorized future training run."
+  },
+  "activation_policy": "evaluation_then_manual_runtime_enable",
+  "note": "Phase 10 is a pre-run architecture contract, not a training run. Required future-run evidence fields are explicitly declared; no future training artifact is claimed or fabricated.",
+  "evaluation_suite": {
+    "version": "phase10-canonical-v1",
+    "source": "docs/AI_EVALUATION.md",
+    "gate_suite": "Gate 4G + Voice-First evaluation order"
+  },
+  "expected_gates": [
+    "model_health",
+    "stt_transcript_correctness",
+    "intent_preservation",
+    "structured_proposal_validity",
+    "policy_schema_validation",
+    "confirmation_boundary",
+    "tool_execution",
+    "read_back_verification",
+    "response_grounding",
+    "tts_synthesis",
+    "audio_playback",
+    "voice_e2e_latency_and_error",
+    "security_privacy",
+    "reproducibility_artifacts"
+  ]
+}

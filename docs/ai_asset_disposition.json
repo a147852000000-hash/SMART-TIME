@@ -1,0 +1,35 @@
+{
+  "status": "A0_CLOSURE_CANDIDATE",
+  "branch": "feat/v3-next",
+  "production_path": [
+    "Real STT",
+    "Groq API",
+    "RAG/Knowledge",
+    "Structured Output",
+    "Tools/Actions",
+    "TTS",
+    "E2E"
+  ],
+  "protected_assets": [
+    "backend/ai/training/**",
+    "infra/smart-ai/training/**",
+    "infra/smart-ai/training/output/**",
+    "artifacts/training/**",
+    "backend/ai/models/smart-ai-v2-super/**",
+    "Qwen/LoRA evaluation/provenance assets",
+    "training datasets and notebooks/runbooks"
+  ],
+  "disposition": {
+    "qwen_lora": "KEEP; non-production experimental/future provider asset",
+    "datasets": "KEEP; immutable research/evaluation assets; no raw customer data added",
+    "user_audio": "KEEP metadata/evidence only; raw recordings remain outside Git",
+    "tool_registry": "REUSE",
+    "memory_context": "REUSE_AND_HARDEN",
+    "tts_voicetut": "REUSE_AND_INTEGRATE",
+    "browser_web_speech": "SUPERSEDED_AS_PRODUCTION_STT"
+  },
+  "deletions_authorized": false,
+  "main_or_production_modified": false,
+  "secret_policy": "GROQ_API_KEY server-side only; never VITE_*",
+  "notes": "This record freezes asset disposition for the Groq-first plan. It does not authorize deletion or training."
+}

@@ -1,0 +1,26 @@
+name: Phase 11 Voice Security Verify
+
+on:
+  push:
+    branches: [feat/v3-next]
+    paths:
+      - "src/services/smartVoiceDnaCrypto.ts"
+      - "src/services/smartVoiceDnaService.ts"
+      - "src/services/smartVoiceDnaClient.ts"
+      - "backend/voice/**"
+      - "server.ts"
+      - "infra/smart-voice/phase11-voice-manifest.json"
+      - "scripts/verify-phase11-security-repro.mjs"
+      - ".github/workflows/phase11-security-verify.yml"
+  workflow_dispatch:
+
+jobs:
+  phase11-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Verify Phase 11 security and reproducibility contract
+        run: node scripts/verify-phase11-security-repro.mjs

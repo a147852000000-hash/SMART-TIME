@@ -1,0 +1,110 @@
+{
+  "phase": 12,
+  "branch": "feat/v3-next",
+  "evidence_policy": "screenshot-backed runtime observation; raw audio is not stored",
+  "source_artifact": {
+    "type": "conversation-uploaded-screenshot",
+    "filename": "1000318854.jpg",
+    "sha256": "f94f05cd8fb920a4b63b809b8065454274a2a0ec0685f3bb59933c2adafe8899"
+  },
+  "cases": [
+    {
+      "id": "ar-eg",
+      "status": "OBSERVED_PASS",
+      "observed": {
+        "microphone_used": true,
+        "android_microphone_privacy_indicator_visible": true,
+        "final_transcript_visible": true,
+        "observed_transcript_excerpt": "انا رايح الشغل بكره بدري وعايز اصحى الساعه 7:30 الصبح",
+        "language": "ar-EG"
+      },
+      "artifact": "conversation screenshot 1000318819.jpg",
+      "notes": "Screenshot shows microphone active/used and a resulting Arabic utterance in the app. Raw audio is not retained."
+    },
+    {
+      "id": "code-switch",
+      "status": "OBSERVED_PASS",
+      "observed": {
+        "microphone_used": true,
+        "android_microphone_privacy_indicator_visible": true,
+        "final_transcript_visible": true,
+        "observed_transcript_excerpt": "انا عايز اروح بكره الشغل بدري واعمل ميتنج الساعه 10:00",
+        "spoken_target": "أنا رايح الشغل بكرة بدري وعايز أعمل meeting الساعة عشرة."
+      },
+      "artifact": "conversation screenshot 1000318820.jpg",
+      "notes": "Screenshot shows a second runtime result after the Egyptian Arabic case; recognized text contains the code-switched meeting concept and numeric time."
+    },
+    {
+      "id": "numbers-dates",
+      "status": "OBSERVED_PASS",
+      "observed": {
+        "microphone_used": true,
+        "android_microphone_privacy_indicator_visible": true,
+        "final_transcript_visible": true,
+        "observed_transcript_excerpt": "انا عندي ميعاد يوم 15 اكتوبر 2026 الساعه 7:30 الصبح وهتحرك من البيت الساعه 6:45",
+        "spoken_target": "أنا عندي ميعاد يوم 15 أكتوبر 2026 الساعة 7:30 الصبح، وهتحرك من البيت الساعة 6:45."
+      },
+      "artifact": "conversation screenshot 1000318834.jpg",
+      "notes": "Rerun after the prior 2023 mismatch. Screenshot shows the microphone privacy indicator and the final transcript with the target year 2026, date 15 October, and times 7:30 and 6:45."
+    },
+    {
+      "id": "permission-denial",
+      "status": "OBSERVED_PASS",
+      "observed": {
+        "permission_prompt_shown": true,
+        "user_selected_denial": true,
+        "final_transcript_visible": false,
+        "app_error_visible": true,
+        "error_text": "حصلت مشكلة في الميكروفون. جرّب تاني.",
+        "microphone_control_inactive_after_denial": true
+      },
+      "artifact": "conversation screenshot 1000318840.jpg",
+      "artifact_sha256": "d54bc97bb1f58d4ea80c75c08d2426ba2f4fbf4156f0640b45bff97b9ea48206",
+      "notes": "Screenshot-backed runtime evidence: Chrome microphone permission prompt was presented, denial was selected, and the subsequent SMART TIME state showed the microphone problem message with no new transcript; microphone control was inactive."
+    },
+    {
+      "id": "provider-network-failure",
+      "status": "OBSERVED_PASS",
+      "observed": {
+        "internet_available": false,
+        "final_transcript_visible": false,
+        "recognition_error_code": "network",
+        "app_error_visible": true
+      },
+      "artifact": "1000318853.jpg",
+      "artifact_sha256": "fe874720e6ff41fc86e7b6dc20a682eab58169c886584041f5542368f98dd676",
+      "notes": "Runtime screenshot shows Android no-internet state and SMART TIME displaying recognition error code network with no new transcript. No AI action was triggered."
+    },
+    {
+      "id": "noisy-ambiguous",
+      "status": "OBSERVED_PASS",
+      "observed": {
+        "microphone_used": true,
+        "final_transcript_visible": true,
+        "observed_transcript_excerpt": "انا رايح الشغل بكره الصبح وعندي ميعاد بكره الساعه 10:30",
+        "automatic_ai_action": false,
+        "transcript_displayed_as_user_message": true
+      },
+      "artifact": "1000318854.jpg",
+      "artifact_sha256": "f94f05cd8fb920a4b63b809b8065454274a2a0ec0685f3bb59933c2adafe8899",
+      "notes": "Runtime screenshot shows a real final Arabic transcript under the AI conversation as a user message. No automatic AI reply/action is shown. An unrelated SMART_AI_LOCAL_URL configuration error is visible."
+    },
+    {
+      "id": "smart-ai-voice-conversation",
+      "status": "NOT_RUN",
+      "observed": {
+        "listening_until_speech_end": false,
+        "final_transcript_forwarded_to_ai": false,
+        "ai_response_spoken": false,
+        "returned_to_listening": false,
+        "automatic_action": false
+      },
+      "notes": "Implementation added on feat/v3-next; real browser evidence is still required before this gate can PASS."
+    }
+  ],
+  "remaining_cases": [
+    "smart-ai-voice-conversation"
+  ],
+  "phase12_closed": false,
+  "next_phase_authorized": false
+}

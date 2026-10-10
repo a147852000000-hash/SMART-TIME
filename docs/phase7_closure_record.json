@@ -1,0 +1,50 @@
+{
+  "phase": 7,
+  "title": "V1 Training Baseline",
+  "status": "FORMALLY_CLOSED_HISTORICAL_DIAGNOSTIC_BASELINE",
+  "technical_gate": "PASS_HISTORICAL_EXECUTION",
+  "release_gate": "NOT_RELEASED",
+  "evidence": {
+    "base_model": "Qwen/Qwen3-4B",
+    "adapter_id": "adapter-v1-existing",
+    "method": "LoRA",
+    "source_path": "infra/smart-ai/training/output",
+    "lora": {
+      "r": 16,
+      "alpha": 32,
+      "dropout": 0.05,
+      "target_modules": [
+        "o_proj",
+        "v_proj",
+        "up_proj",
+        "k_proj",
+        "q_proj",
+        "gate_proj",
+        "down_proj"
+      ]
+    },
+    "release_status": "historical_baseline_only",
+    "recovery_snapshot": "artifacts/recovery/pre-training-346-20260930.json",
+    "recovery_commit": "76a7a02994b0a97f3f4baa053ea3a7a8ee5b648c"
+  },
+  "gate_semantics": {
+    "historical_training_exists": true,
+    "training_loss_is_not_release_gate": true,
+    "V1_failure_is_diagnostic": true,
+    "no_production_activation": true
+  },
+  "governance": {
+    "dataset_rewrite": false,
+    "retraining_in_phase7": false,
+    "downstream_phase9_owns_failure_diagnosis": true
+  },
+  "owner_signoff": {
+    "required": true,
+    "status": "APPROVED_BY_OWNER_DELEGATED_AUTHORIZATION",
+    "approved_in_chat": true,
+    "authorization_basis": "User instructed the assistant to continue autonomously with all necessary permissions and complete all repairs in Phases 7-9."
+  },
+  "next_phase_authorized": true,
+  "next_phase_number": 8,
+  "next_phase_rule": "Authorizes only Phase 8 after this closure; no later phase is authorized by this record."
+}

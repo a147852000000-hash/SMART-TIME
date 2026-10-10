@@ -1,0 +1,18 @@
+{
+  "experiment": "smart-time-ai-v2",
+  "base_model": "Qwen/Qwen3-4B",
+  "base_model_license": "Apache-2.0",
+  "training_method": "SFT + LoRA",
+  "train_dataset": "backend/ai/training/smart-time-v2.jsonl",
+  "held_out_dataset": "backend/ai/training/smart-time-eval-v1.jsonl",
+  "default_epochs": 3,
+  "default_learning_rate": 0.0002,
+  "default_lora_rank": 16,
+  "default_lora_alpha": 32,
+  "default_max_length": 1024,
+  "thinking_mode": "disabled_for_runtime_evaluation",
+  "activation_policy": "evaluation_then_manual_runtime_enable",
+  "customer_data_allowed": false,
+  "voice_dna_data_allowed": false,
+  "secrets_allowed": false
+}

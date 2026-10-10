@@ -1,0 +1,46 @@
+{
+  "phase": "A1",
+  "name": "Provider Gateway & Groq Runtime",
+  "status": "PASS",
+  "branch": "feat/v3-next",
+  "implementation_commit": "d8835409c2bf83317c1c57ae00eb3ed69b9a4a89",
+  "railway": {
+    "service": "SMART-TIME-AI-PREVIEW",
+    "environment": "staging",
+    "deployment_id": "ddc2513f-6885-442b-9fa0-e2d0668e9f98",
+    "status": "SUCCESS",
+    "healthcheck_path": "/api/ai/groq_health",
+    "healthcheck_result": "succeeded",
+    "runtime_start": "[SMART TIME V8] Server & Chat WebSocket running on http://0.0.0.0:8080"
+  },
+  "provider_contract": {
+    "interface": "backend/ai/providers/aiProvider.ts",
+    "implementation": "backend/ai/providers/groqProvider.ts",
+    "error_taxonomy": [
+      "not_configured",
+      "timeout",
+      "unauthorized",
+      "rate_limited",
+      "bad_request",
+      "upstream",
+      "invalid_response"
+    ],
+    "structured_output": "json_schema",
+    "streaming": true,
+    "tool_call_transport": true
+  },
+  "automation": {
+    "test": "backend/ai/providers/groqProvider.test.ts",
+    "npm_script": "test:groq-provider",
+    "main_ci_includes_test": true,
+    "ci_commit": "d8835409c2bf83317c1c57ae00eb3ed69b9a4a89",
+    "all_observed_workflows_success": true
+  },
+  "security": {
+    "secret_name": "GROQ_API_KEY",
+    "client_exposure_not_added": true,
+    "browser_env_prefix_not_used": true,
+    "production_health_endpoint_guarded": true
+  },
+  "note": "The healthcheck is fail-closed: it returns non-success unless GROQ_API_KEY is configured and the provider /models call is reachable. The API key value is never recorded in this artifact."
+}

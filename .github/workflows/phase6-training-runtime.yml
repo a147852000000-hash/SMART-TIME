@@ -1,0 +1,28 @@
+name: Phase 6 - Training Runtime Reproducibility
+
+on:
+  push:
+    branches: [phase/06-training-runtime-reproducibility]
+  pull_request:
+    branches: [feat/v3-next]
+    paths:
+      - "infra/smart-ai/training/**"
+      - "scripts/verify-phase6-training-runtime.mjs"
+      - "package.json"
+      - "docs/PHASE_06_TRAINING_RUNTIME_REPRODUCIBILITY.md"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.13"
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm run verify:phase6-training-runtime
+      - run: npm run lint
+      - run: npm run build

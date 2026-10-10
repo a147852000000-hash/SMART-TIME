@@ -1,0 +1,526 @@
+{
+  "schema_version": "2.0",
+  "scanned_at": "2026-10-08T18:15:10.386Z",
+  "scope": {
+    "root": "src",
+    "extensions": [
+      ".ts",
+      ".tsx",
+      ".js",
+      ".jsx"
+    ],
+    "direct_storage_apis": [
+      "localStorage",
+      "sessionStorage"
+    ],
+    "adapter_patterns": [
+      "StorageAdapter",
+      "storageAdapter"
+    ],
+    "literal_pattern": "smart_time_*"
+  },
+  "known_registry": {
+    "file": "src/services/storageKeys.ts",
+    "key_count": 33,
+    "keys": [
+      "smart_time_accident_records",
+      "smart_time_ai_chat_history",
+      "smart_time_athkar_items",
+      "smart_time_bank_certificates",
+      "smart_time_budget",
+      "smart_time_calc_history",
+      "smart_time_chat_messages",
+      "smart_time_chat_rooms",
+      "smart_time_daily_tasks",
+      "smart_time_dashboard_layout",
+      "smart_time_dashboard_sections_v2",
+      "smart_time_edu_expenses",
+      "smart_time_expenses",
+      "smart_time_expenses_sections_order",
+      "smart_time_favorite_places",
+      "smart_time_fuel_records",
+      "smart_time_lessons",
+      "smart_time_maint_records",
+      "smart_time_media_folders",
+      "smart_time_media_items",
+      "smart_time_monthly_income",
+      "smart_time_note_folders",
+      "smart_time_note_tags",
+      "smart_time_notes",
+      "smart_time_notification_sound",
+      "smart_time_notifications",
+      "smart_time_recent_trips",
+      "smart_time_secure_records",
+      "smart_time_sports_cards_order",
+      "smart_time_students",
+      "smart_time_user_profile",
+      "smart_time_vehicles",
+      "smart_time_workout_logs"
+    ]
+  },
+  "scan": {
+    "files_scanned": 118,
+    "total_discovered_keys": 56,
+    "hidden_discovered_keys": 23,
+    "hidden_keys": [
+      "smart_time_adhan_alert",
+      "smart_time_auth_session",
+      "smart_time_call_logs_changed",
+      "smart_time_call_logs_v1",
+      "smart_time_car_income_trips",
+      "smart_time_card_preferences_v1",
+      "smart_time_christian_prayers",
+      "smart_time_christian_reading",
+      "smart_time_contacts_",
+      "smart_time_contacts_changed",
+      "smart_time_dashboard_layout_settings_v1",
+      "smart_time_device_id",
+      "smart_time_permission_audit_logs_v1",
+      "smart_time_permissions_changed",
+      "smart_time_permissions_v1",
+      "smart_time_personal_associations",
+      "smart_time_phone_contacts_v1",
+      "smart_time_quran_bookmarks",
+      "smart_time_quran_last_stop",
+      "smart_time_quran_wird",
+      "smart_time_surah_cache_",
+      "smart_time_trip_home",
+      "smart_time_trip_work"
+    ],
+    "findings": {
+      "smart_time_permissions_changed": [
+        {
+          "file": "src/components/AndroidStatusBar.tsx",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        },
+        {
+          "file": "src/components/PhonePermissionsManager.tsx",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        },
+        {
+          "file": "src/services/permissionService.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_personal_associations": [
+        {
+          "file": "src/components/ExpensesView.tsx",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_students": [
+        {
+          "file": "src/components/ExpensesView.tsx",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        },
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_call_logs_changed": [
+        {
+          "file": "src/components/PhonePermissionsManager.tsx",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        },
+        {
+          "file": "src/services/permissionService.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_contacts_changed": [
+        {
+          "file": "src/components/PhonePermissionsManager.tsx",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        },
+        {
+          "file": "src/services/permissionService.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_trip_home": [
+        {
+          "file": "src/components/TripsView.tsx",
+          "access": "getItem",
+          "evidence": "storage-call"
+        },
+        {
+          "file": "src/components/TripsView.tsx",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_trip_work": [
+        {
+          "file": "src/components/TripsView.tsx",
+          "access": "getItem",
+          "evidence": "storage-call"
+        },
+        {
+          "file": "src/components/TripsView.tsx",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_car_income_trips": [
+        {
+          "file": "src/components/expenses/CarIncomeSection.tsx",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_auth_session": [
+        {
+          "file": "src/services/authService.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_device_id": [
+        {
+          "file": "src/services/authService.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_permissions_v1": [
+        {
+          "file": "src/services/permissionService.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_call_logs_v1": [
+        {
+          "file": "src/services/permissionService.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_phone_contacts_v1": [
+        {
+          "file": "src/services/permissionService.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_permission_audit_logs_v1": [
+        {
+          "file": "src/services/permissionService.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_contacts_": [
+        {
+          "file": "src/services/permissionService.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_quran_last_stop": [
+        {
+          "file": "src/services/quranService.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        },
+        {
+          "file": "src/services/repositories/religiousRepository.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_quran_bookmarks": [
+        {
+          "file": "src/services/quranService.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_surah_cache_": [
+        {
+          "file": "src/services/quranService.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_dashboard_layout_settings_v1": [
+        {
+          "file": "src/services/repositories/dashboardLayoutRepository.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_quran_wird": [
+        {
+          "file": "src/services/repositories/religiousRepository.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_christian_prayers": [
+        {
+          "file": "src/services/repositories/religiousRepository.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_christian_reading": [
+        {
+          "file": "src/services/repositories/religiousRepository.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_adhan_alert": [
+        {
+          "file": "src/services/repositories/religiousRepository.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_user_profile": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_notes": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_note_folders": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_note_tags": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_calc_history": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_daily_tasks": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_expenses": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_budget": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_monthly_income": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_bank_certificates": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_vehicles": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_fuel_records": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_maint_records": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_accident_records": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_lessons": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_edu_expenses": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_favorite_places": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_recent_trips": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_secure_records": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_chat_rooms": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_chat_messages": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_media_folders": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_media_items": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_notifications": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_athkar_items": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_ai_chat_history": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_notification_sound": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_dashboard_layout": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_dashboard_sections_v2": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_workout_logs": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_sports_cards_order": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_expenses_sections_order": [
+        {
+          "file": "src/services/storageKeys.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ],
+      "smart_time_card_preferences_v1": [
+        {
+          "file": "src/utils/cardDesignHelper.ts",
+          "access": "string-reference",
+          "evidence": "smart_time-literal"
+        }
+      ]
+    }
+  },
+  "phase_1_note": "Discovery evidence only. Not the canonical storage registry."
+}

@@ -1,0 +1,12 @@
+{
+  "name": "Remix SMART TIME — وقتك من ذهب",
+  "description": "تطبيق Super App شخصي متكامل لإدارة الحياة اليومية: الملاحظات، الحسابات والمصروفات، السيارات، التعليم، الطعام، الرحلات، الدردشة، الوسائط، الخزنة الرقمية، الذكاء الاصطناعي والبحث الصوتي.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

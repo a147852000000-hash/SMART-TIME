@@ -1,0 +1,30 @@
+name: Phase 4 - Historical Dataset Provenance
+
+on:
+  push:
+    branches: [phase/04-dataset-provenance]
+  pull_request:
+    branches: [feat/v3-next]
+    paths:
+      - "backend/ai/training/**"
+      - "artifacts/training/dataset-provenance.json"
+      - "scripts/verify-phase4-dataset-provenance.mjs"
+      - "docs/PHASE_04_DATASET_PROVENANCE.md"
+      - ".github/workflows/phase4-dataset-provenance.yml"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Verify historical dataset provenance
+        run: npm run verify:phase4-dataset-provenance
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build

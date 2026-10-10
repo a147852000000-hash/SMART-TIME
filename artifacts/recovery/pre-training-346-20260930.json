@@ -1,0 +1,32 @@
+{
+  "timestamp": "2026-09-30T10:57:33.194417Z",
+  "branch": "feat/v3-next",
+  "commit": "76a7a02994b0a97f3f4baa053ea3a7a8ee5b648c",
+  "files": {
+    "backend/ai/training/smart-time-sft.jsonl": {
+      "bytes": 19841,
+      "nonempty_lines": 46,
+      "sha256": "58885b818789ecb32021ba6ae505287e062b3eb18898912697986612921937ce"
+    },
+    "backend/ai/training/smart-time-grounded-v4-batch-a.jsonl": {
+      "bytes": 63281,
+      "nonempty_lines": 100,
+      "sha256": "4746eff872052c9cecb6cb2b92a82850d25f9fbf89498da56b082af602442007"
+    },
+    "backend/ai/training/smart-time-grounded-v4-batch-b.jsonl": {
+      "bytes": 46210,
+      "nonempty_lines": 200,
+      "sha256": "5cccff4b0610dd06195687169129e249025c4223c7cd9df075ffc7d49ac37cd2"
+    },
+    "backend/ai/training/smart-time-grounded-v4-batch-b-train.jsonl": {
+      "bytes": 88696,
+      "nonempty_lines": 200,
+      "sha256": "25d57663af63219c67d22eb9901869b8bc7b291567c10b01d2b9e40886010f0b"
+    },
+    "infra/smart-ai/training/train_smart_ai.py": {
+      "bytes": 9317,
+      "nonempty_lines": 217,
+      "sha256": "a09a31c7f7e62661e17f48bd96cadd0919bd4b3f7c58a6cc310a6a1d90900e64"
+    }
+  }
+}

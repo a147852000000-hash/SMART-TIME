@@ -1,0 +1,22 @@
+{
+  "phase": "A0",
+  "name": "Architecture Freeze & Asset Preservation",
+  "status": "PASS",
+  "branch": "feat/v3-next",
+  "architecture": "Real STT -> Groq API -> RAG/Knowledge -> Structured Output -> Tools/Actions -> TTS -> E2E",
+  "plan": "docs/AI_EXECUTION_PLAN_GROQ.md",
+  "architecture_contracts": [
+    "docs/AI_ARCHITECTURE.md",
+    "docs/VOICE_FIRST_ARCHITECTURE.md"
+  ],
+  "asset_disposition": "docs/ai_asset_disposition.json",
+  "protected_assets_preserved": true,
+  "deletions_authorized": false,
+  "raw_user_audio_in_git": false,
+  "groq_secret_server_only": true,
+  "qwen_lora_production_default": false,
+  "datasets_preserved": true,
+  "main_or_production_modified": false,
+  "ci_green_on_closing_commit": true,
+  "note": "A0 is closed. Subsequent phases must still close sequentially; this record does not waive runtime evidence requirements."
+}

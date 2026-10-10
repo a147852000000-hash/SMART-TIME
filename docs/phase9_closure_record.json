@@ -1,0 +1,54 @@
+{
+  "phase": 9,
+  "title": "V1 Gate Failure Diagnosis",
+  "status": "FORMALLY_CLOSED_DIAGNOSTICALLY",
+  "technical_gate": "PASS_DIAGNOSIS",
+  "release_gate": "NOT_RELEASED",
+  "evidence": {
+    "run3_generation_gate": {
+      "total": 120,
+      "passed": 0,
+      "rate": 0,
+      "identity": "Run #3"
+    },
+    "corrective_run": {
+      "identity": "Fix1",
+      "total": 120,
+      "passed": 119,
+      "rate": 0.9916666667,
+      "note": "later corrective baseline; not the historical 113/120 claim"
+    },
+    "unsupported_gate": {
+      "total": 32,
+      "passed": 14,
+      "rate": 0.4375
+    },
+    "root_cause_class": "TRAINING-TEXT / COMPLETION-MASK ALIGNMENT",
+    "root_cause_detail": "Original prompt-only and full-target chat-template construction used inconsistent add_generation_prompt behavior; completion-only masking depended on the prompt/full token boundary. Fix1 normalized the generation-marker behavior before target concatenation.",
+    "source_evidence": "Library forensic notebook: New Text Document (2).txt",
+    "dataset_provenance": "artifacts/training/dataset-provenance.json",
+    "model_registry": "artifacts/training/model-data-version-registry.json"
+  },
+  "corrective_actions": {
+    "dataset_rebuild": false,
+    "fix1_patch_reconstructed": true,
+    "chat_template_alignment_fixed": true,
+    "completion_mask_preserved": true,
+    "unsupported_scope_failure_retained_as_open_downstream_training_requirement": true,
+    "historical_113_120_claim": "SUPERSEDED_FOR_ACTIVE_GOVERNANCE_BY_RECOVERED_RUN3_0_120_AND_FIX1_119_120_EVIDENCE"
+  },
+  "hard_rules": {
+    "no_release_from_training_loss": true,
+    "no_activation_of_failed_adapter": true,
+    "no_phase12_authorization_from_phase9_alone": true
+  },
+  "owner_signoff": {
+    "required": true,
+    "status": "APPROVED_BY_OWNER_DELEGATED_AUTHORIZATION",
+    "approved_in_chat": true,
+    "authorization_basis": "User instructed the assistant to continue autonomously with all necessary permissions and complete all repairs in Phases 7-9."
+  },
+  "next_phase_authorized": true,
+  "next_phase_number": 10,
+  "next_phase_rule": "Authorizes only Phase 10 after this closure; Phase 12 is not authorized by Phase 9 alone."
+}

@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "phase": 4,
+  "generated_at": "2026-10-01",
+  "purpose": "Immutable provenance record for historical training/evaluation datasets. Counts are verified against repository content; the 746-row V2 structured dataset is archived from its dedicated training branch.",
+  "datasets": [
+    {
+      "path": "backend/ai/training/smart-time-eval-v1.jsonl",
+      "source_commit": "ffa0709b08b28a5215486cd2e8d06116e3bada3c",
+      "blob_sha": "25ccf2252bd3402c4b4eea3965a66505bad94643",
+      "size_bytes": 6141,
+      "line_count": 22
+    },
+    {
+      "path": "backend/ai/training/smart-time-eval-v4g.jsonl",
+      "source_commit": "ffa0709b08b28a5215486cd2e8d06116e3bada3c",
+      "blob_sha": "9e8a56c6a6f90ceae8154b3a51fdeaf3a70db5bc",
+      "size_bytes": 3064,
+      "line_count": 12
+    },
+    {
+      "path": "backend/ai/training/smart-time-grounded-v1.jsonl",
+      "source_commit": "ffa0709b08b28a5215486cd2e8d06116e3bada3c",
+      "blob_sha": "2b8b53044ee477bac1f590844506be9d80c8d437",
+      "size_bytes": 18020,
+      "line_count": 35
+    },
+    {
+      "path": "backend/ai/training/smart-time-grounded-v2.jsonl",
+      "source_commit": "ffa0709b08b28a5215486cd2e8d06116e3bada3c",
+      "blob_sha": "8c5b0c987e6c60fe836ab75c19ffc51496523178",
+      "size_bytes": 24929,
+      "line_count": 53
+    },
+    {
+      "path": "backend/ai/training/smart-time-grounded-v3.jsonl",
+      "source_commit": "ffa0709b08b28a5215486cd2e8d06116e3bada3c",
+      "blob_sha": "84d4a357118ad081102370d06684126a4c528771",
+      "size_bytes": 29698,
+      "line_count": 66
+    },
+    {
+      "path": "backend/ai/training/smart-time-grounded-v4-batch-a.jsonl",
+      "source_commit": "ffa0709b08b28a5215486cd2e8d06116e3bada3c",
+      "blob_sha": "879f46668982b7329fa3b555395fb2cca0c920f8",
+      "size_bytes": 63281,
+      "line_count": 100
+    },
+    {
+      "path": "backend/ai/training/smart-time-grounded-v4-batch-b-train.jsonl",
+      "source_commit": "ffa0709b08b28a5215486cd2e8d06116e3bada3c",
+      "blob_sha": "a1aba5c2044b6677ea8c2e9815cb2cd3206a3f07",
+      "size_bytes": 88696,
+      "line_count": 200
+    },
+    {
+      "path": "backend/ai/training/smart-time-grounded-v4-batch-b.jsonl",
+      "source_commit": "ffa0709b08b28a5215486cd2e8d06116e3bada3c",
+      "blob_sha": "57126a9f72ae790285f1b34e5dc046ac6d80c9a5",
+      "size_bytes": 46210,
+      "line_count": 200
+    },
+    {
+      "path": "backend/ai/training/smart-time-legacy-90.jsonl",
+      "source_commit": "ffa0709b08b28a5215486cd2e8d06116e3bada3c",
+      "blob_sha": "7e204dd99556ed863572718411f134f7cdeb52b3",
+      "size_bytes": 44754,
+      "line_count": 90
+    },
+    {
+      "path": "backend/ai/training/smart-time-sft.jsonl",
+      "source_commit": "ffa0709b08b28a5215486cd2e8d06116e3bada3c",
+      "blob_sha": "7db2ff05b3ba72ed5215279786ae48db0f21637b",
+      "size_bytes": 19841,
+      "line_count": 46
+    },
+    {
+      "path": "backend/ai/training/smart-time-v1.jsonl",
+      "source_commit": "ffa0709b08b28a5215486cd2e8d06116e3bada3c",
+      "blob_sha": "8124363050fcb0bcd0f742e7cdde3571c26b7b68",
+      "size_bytes": 3397,
+      "line_count": 4
+    },
+    {
+      "path": "backend/ai/training/smart-time-tool-v2.jsonl",
+      "source_branch": "feat/smart-ai-v2-json-gate",
+      "source_commit": "6620da09f9e4ad808be1bcf1dc9f4d83fedff4f3",
+      "blob_sha": "f9d513485922ac4d9ade589e4be2fe2d53a50bb9",
+      "size_bytes": 248745,
+      "line_count": 746,
+      "unique_inputs": 746,
+      "categories": {
+        "finance": 300,
+        "reminder": 150,
+        "calendar": 150,
+        "query": 100,
+        "unsupported": 32,
+        "clarification": 14
+      }
+    }
+  ]
+}

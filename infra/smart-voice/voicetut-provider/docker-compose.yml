@@ -1,0 +1,36 @@
+services:
+  voicetut-provider:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smart-time-voicetut
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      SMART_VOICE_DNA_PROVIDER_TOKEN: ${SMART_VOICE_DNA_PROVIDER_TOKEN}
+      SMART_VOICE_DNA_MODEL: ${SMART_VOICE_DNA_MODEL:-mohammedaly22/VoiceTut-TTS}
+      SMART_VOICE_DNA_MAX_REFERENCE_BYTES: ${SMART_VOICE_DNA_MAX_REFERENCE_BYTES:-8388608}
+      SMART_VOICE_DNA_MAX_TEXT_CHARS: ${SMART_VOICE_DNA_MAX_TEXT_CHARS:-4000}
+      HF_HOME: /models-cache
+      HUGGINGFACE_HUB_CACHE: /models-cache/hub
+      TRANSFORMERS_CACHE: /models-cache/transformers
+    gpus: all
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    volumes:
+      - voicetut-model-cache:/models-cache
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import json,urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)); raise SystemExit(0 if d.get('ok') is True else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+
+volumes:
+  voicetut-model-cache:

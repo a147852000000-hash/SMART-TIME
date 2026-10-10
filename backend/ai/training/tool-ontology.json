@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "name": "SMART TIME AI Tool Ontology",
+  "contract": {"output_format":"json","required_keys":["intent","tool","arguments","requiresConfirmation"],"unknown_tool_policy":"reject"},
+  "intents": {
+    "expense":{"tools":["finance.transaction.create","finance.transaction.delete","finance.get_summary"]},
+    "task":{"tools":["task.create"]},
+    "reminder":{"tools":["reminder.create"]},
+    "file_analysis":{"tools":["analyze_file"]},
+    "web_research":{"tools":["web_search"]}
+  },
+  "canonical_tools": {
+    "finance.transaction.create":{"intent":"expense","requiresConfirmation":true},
+    "finance.transaction.delete":{"intent":"expense","requiresConfirmation":true},
+    "finance.get_summary":{"intent":"expense","requiresConfirmation":false},
+    "task.create":{"intent":"task","requiresConfirmation":true},
+    "reminder.create":{"intent":"reminder","requiresConfirmation":true},
+    "analyze_file":{"intent":"file_analysis","requiresConfirmation":false},
+    "web_search":{"intent":"web_research","requiresConfirmation":false}
+  },
+  "forbidden_tool_names":["smart_time","none","delete_last_expense","search","set_reminder","analyze_budget_file"]
+}

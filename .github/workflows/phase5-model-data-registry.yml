@@ -1,0 +1,25 @@
+name: Phase 5 - Model Data Version Registry
+
+on:
+  push:
+    branches: [phase/05-model-data-version-registry]
+  pull_request:
+    branches: [feat/v3-next]
+    paths:
+      - "artifacts/training/model-data-version-registry.json"
+      - "backend/ai/training/**"
+      - "scripts/verify-phase5-model-data-registry.mjs"
+      - "docs/PHASE_05_MODEL_DATA_VERSION_REGISTRY.md"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm run verify:phase5-model-data-registry
+      - run: npm run lint
+      - run: npm run build

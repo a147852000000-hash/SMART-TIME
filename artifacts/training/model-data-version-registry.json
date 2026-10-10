@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "phase": 5,
+  "as_of": "2026-10-01",
+  "project": "SMART-TIME",
+  "policy": {
+    "customer_data_allowed": false,
+    "voice_dna_data_allowed": false,
+    "secrets_allowed": false,
+    "production_activation_requires_evaluation": true
+  },
+  "models": [
+    {
+      "id": "base-qwen3-4b",
+      "role": "base_model",
+      "provider": "Qwen",
+      "name": "Qwen/Qwen3-4B",
+      "parameter_count": 4154588672,
+      "license": "Apache-2.0",
+      "runtime_thinking_mode": "disabled_for_runtime_evaluation"
+    },
+    {
+      "id": "adapter-v1-existing",
+      "role": "historical_adapter",
+      "base_model_id": "base-qwen3-4b",
+      "method": "LoRA",
+      "source_path": "infra/smart-ai/training/output",
+      "config": {
+        "r": 16,
+        "alpha": 32,
+        "dropout": 0.05,
+        "target_modules": [
+          "o_proj",
+          "v_proj",
+          "up_proj",
+          "k_proj",
+          "q_proj",
+          "gate_proj",
+          "down_proj"
+        ]
+      },
+      "release_status": "historical_baseline_only"
+    },
+    {
+      "id": "adapter-v2-kaggle-20261001",
+      "role": "diagnostic_training_artifact",
+      "base_model_id": "base-qwen3-4b",
+      "method": "SFT + LoRA",
+      "training_dataset_id": "dataset-tool-v2-746",
+      "train_examples": 596,
+      "eval_examples": 150,
+      "trainable_parameters": 132120576,
+      "trainable_percent": 3.1801,
+      "hardware": "NVIDIA Tesla T4, compute capability 7.5, FP16",
+      "epochs": 2,
+      "eval_loss": 0.12700095772743225,
+      "train_loss": 0.2327,
+      "generation_gate": {
+        "total": 120,
+        "passed": 0,
+        "rate": 0
+      },
+      "artifact_path": "/kaggle/working/smart-ai-v2-super.zip",
+      "release_status": "blocked_generation_gate"
+    }
+  ],
+  "datasets": [
+    {
+      "id": "dataset-tool-v2-746",
+      "path": "backend/ai/training/smart-time-tool-v2.jsonl",
+      "rows": 746,
+      "unique_inputs": 746,
+      "provenance_manifest": "artifacts/training/dataset-provenance.json"
+    },
+    {
+      "id": "dataset-eval-v1-22",
+      "path": "backend/ai/training/smart-time-eval-v1.jsonl",
+      "rows": 22,
+      "role": "held_out"
+    },
+    {
+      "id": "dataset-eval-v4g-12",
+      "path": "backend/ai/training/smart-time-eval-v4g.jsonl",
+      "rows": 12,
+      "role": "structured_behavior_gate"
+    }
+  ],
+  "objective_metrics": {
+    "structured_output_validity": {
+      "unit": "fraction",
+      "direction": "higher",
+      "release_threshold": 0.8,
+      "source": "Gate 4G policy; not yet passed by V2 artifact"
+    },
+    "held_out_no_fabrication": {
+      "unit": "fraction",
+      "direction": "higher",
+      "release_threshold": 1
+    },
+    "confirmation_boundary_accuracy": {
+      "unit": "fraction",
+      "direction": "higher",
+      "release_threshold": 1
+    },
+    "tool_argument_validity": {
+      "unit": "fraction",
+      "direction": "higher",
+      "release_threshold": 0.95
+    },
+    "clarification_validity": {
+      "unit": "fraction",
+      "direction": "higher",
+      "release_threshold": 0.95
+    },
+    "secret_protection": {
+      "unit": "fraction",
+      "direction": "higher",
+      "release_threshold": 1
+    }
+  },
+  "comparison_policy": {
+    "required_candidates": [
+      "base-qwen3-4b",
+      "adapter-v1-existing",
+      "adapter-v2-kaggle-20261001"
+    ],
+    "rule": "retain current adapter until a candidate satisfies the agreed objective metrics; do not infer release readiness from training loss alone",
+    "prediction_or_ranking": false
+  },
+  "evidence": {
+    "training_log_source": "conversation file: نص واحد ملصق (1).txt",
+    "training_log_metrics": {
+      "dataset_schema_gate": "PASS",
+      "total_rows": 746,
+      "split": "596 train / 150 eval",
+      "final_eval_loss": 0.12700095772743225,
+      "final_train_loss": 0.2327,
+      "generation_gate": "0/120 (0.0%)"
+    }
+  }
+}

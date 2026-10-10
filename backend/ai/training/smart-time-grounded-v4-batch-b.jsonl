@@ -1,0 +1,200 @@
+{"input": "والنبي سجلي 100 جنيه منظفات دلوقتي", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 100, "type": "منظفات", "date": "2026-10-01"}, "requiresConfirmation": true}}
+{"input": "والنبي سجلي 800 جنيه غاز دلوقتي", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 800, "type": "غاز", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "ازيك يا لهلوبة عاملة ايه", "expected": {"intent": "conversation", "tool": null, "arguments": {}, "requiresConfirmation": false}}
+{"input": "صرفت 100 جنيه على مدرسة امبارح", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 100, "type": "مدرسة", "date": "2026-09-29"}, "requiresConfirmation": true}}
+{"input": "بقولك ايه عايزة ارتب الدولاب امبارح نسيته", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "ارتب الدولاب", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "اعمليلي مصروف لحمة 650 جنيه بكرا", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 650, "type": "لحمة", "date": "2026-10-01"}, "requiresConfirmation": true}}
+{"input": "اعمليلي منبه اخد الدوا كل يوم الساعة 12:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اخد الدوا", "date": "2026-09-30", "time": "12:00"}, "requiresConfirmation": false}}
+{"input": "اعمليلي مصروف لحمة 800 جنيه بكرا", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 800, "type": "لحمة", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "شوفيلي صرفت كام this_month", "expected": {"intent": "expense", "tool": "finance.get_summary", "arguments": {"period": "this_month"}, "requiresConfirmation": false}}
+{"input": "والنبي سجلي 300 جنيه مدرسة دلوقتي", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 300, "type": "مدرسة", "date": "2026-10-01"}, "requiresConfirmation": true}}
+{"input": "يا لهلوبة فكريني ادفع الايجار بكرا الساعة 22:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "ادفع الايجار", "date": "2026-10-05", "time": "22:00"}, "requiresConfirmation": false}}
+{"input": "ايه الاخبار", "expected": {"intent": "conversation", "tool": null, "arguments": {}, "requiresConfirmation": false}}
+{"input": "الغي مصروف الدروس اللي سجلتيه غلط", "expected": {"intent": "expense", "tool": "finance.transaction.delete", "arguments": {"expenseId": "expense_3"}, "requiresConfirmation": true}}
+{"input": "بقولك ايه عايزة اذاكر انجليزي للواد امبارح نسيته", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اذاكر انجليزي للواد", "date": "2026-10-01"}, "requiresConfirmation": true}}
+{"input": "حللي ملف file_595", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_595"}, "requiresConfirmation": false}}
+{"input": "والنبي منبه ادفع الايجار الساعة 10:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "ادفع الايجار", "date": "2026-10-01", "time": "10:00"}, "requiresConfirmation": false}}
+{"input": "حطيلي مهمة اروح السوق النهاردة", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اروح السوق", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "شوفيلي الملف ده file_674 فيه ايه", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_674"}, "requiresConfirmation": false}}
+{"input": "دوريلي على النت طريقة عمل الكيكة", "expected": {"intent": "web_research", "tool": "web_search", "arguments": {"query": "طريقة عمل الكيكة"}, "requiresConfirmation": false}}
+{"input": "يا لهلوبة فكريني اطفي الغسالة بكرا الساعة 07:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اطفي الغسالة", "date": "2026-09-30", "time": "07:00"}, "requiresConfirmation": false}}
+{"input": "شوفيلي على النت طريقة عمل الكيكة", "expected": {"intent": "web_research", "tool": "web_search", "arguments": {"query": "طريقة عمل الكيكة"}, "requiresConfirmation": false}}
+{"input": "والنبي منبه اجيب العيش الساعة 07:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اجيب العيش", "date": "2026-10-05", "time": "07:00"}, "requiresConfirmation": false}}
+{"input": "دوريلي على النت مواعيد المترو", "expected": {"intent": "web_research", "tool": "web_search", "arguments": {"query": "مواعيد المترو"}, "requiresConfirmation": false}}
+{"input": "يا لهلوبة ابحثيلي عن طريقة عمل البيتزا", "expected": {"intent": "web_research", "tool": "web_search", "arguments": {"query": "طريقة عمل البيتزا"}, "requiresConfirmation": false}}
+{"input": "شوفيلي على النت ازاي انضف البوتجاز", "expected": {"intent": "web_research", "tool": "web_search", "arguments": {"query": "ازاي انضف البوتجاز"}, "requiresConfirmation": false}}
+{"input": "اعمليلي مصروف دروس 200 جنيه بكرا", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 200, "type": "دروس", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "اعمليلي منبه اشرب ماية كل يوم الساعة 09:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اشرب ماية", "date": "2026-09-30", "time": "09:00"}, "requiresConfirmation": false}}
+{"input": "بقولك ايه عايزة اشتري خضار امبارح نسيته", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اشتري خضار", "date": "2026-10-03"}, "requiresConfirmation": true}}
+{"input": "اقريلي الملف file_675 يا لهلوبة", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_675"}, "requiresConfirmation": false}}
+{"input": "انتي شاطرة اوي", "expected": {"intent": "conversation", "tool": null, "arguments": {}, "requiresConfirmation": false}}
+{"input": "خلصيلي تاسك اعمل محشي", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اعمل محشي", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "دوريلي على النت طريقة المذاكرة للعيال", "expected": {"intent": "web_research", "tool": "web_search", "arguments": {"query": "طريقة المذاكرة للعيال"}, "requiresConfirmation": false}}
+{"input": "سيرشيلي على طريقة عمل البسبوسة", "expected": {"intent": "web_research", "tool": "web_search", "arguments": {"query": "طريقة عمل البسبوسة"}, "requiresConfirmation": false}}
+{"input": "يا لهلوبة فكريني اغسل السجاد بعد بكرا", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اغسل السجاد", "date": "2026-10-03"}, "requiresConfirmation": true}}
+{"input": "اعمليلي منبه اصحي بدري كل يوم الساعة 09:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اصحي بدري", "date": "2026-10-05", "time": "09:00"}, "requiresConfirmation": false}}
+{"input": "فكريني اطفي الغسالة النهاردة الساعة 19:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اطفي الغسالة", "date": "2026-09-30", "time": "19:00"}, "requiresConfirmation": false}}
+{"input": "بقولك ايه عايزة اغسل المواعين امبارح نسيته", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اغسل المواعين", "date": "2026-10-03"}, "requiresConfirmation": true}}
+{"input": "شوفيلي صرفت كام today", "expected": {"intent": "expense", "tool": "finance.get_summary", "arguments": {"period": "today"}, "requiresConfirmation": false}}
+{"input": "صرفت 300 جنيه على أكل امبارح", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 300, "type": "أكل", "date": "2026-10-01"}, "requiresConfirmation": true}}
+{"input": "اعمليلي منبه انيم العيال كل يوم الساعة 07:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "انيم العيال", "date": "2026-10-01", "time": "07:00"}, "requiresConfirmation": false}}
+{"input": "يا لهلوبة فكريني اروح عند ماما بعد بكرا", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اروح عند ماما", "date": "2026-10-01"}, "requiresConfirmation": true}}
+{"input": "اعمليلي تاسك اشتري خضار بكرا", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اشتري خضار", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "شوفيلي الملف ده file_934 فيه ايه", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_934"}, "requiresConfirmation": false}}
+{"input": "يا لهلوبة ابحثيلي عن اعراض البرد عند الاطفال", "expected": {"intent": "web_research", "tool": "web_search", "arguments": {"query": "اعراض البرد عند الاطفال"}, "requiresConfirmation": false}}
+{"input": "اعمليلي منبه اروح الجيم كل يوم الساعة 19:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اروح الجيم", "date": "2026-10-05", "time": "19:00"}, "requiresConfirmation": false}}
+{"input": "بقولك ايه عايزة انضف التلاجة امبارح نسيته", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "انضف التلاجة", "date": "2026-10-02"}, "requiresConfirmation": true}}
+{"input": "والنبي منبه ادي ماما الدوا الساعة 21:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "ادي ماما الدوا", "date": "2026-09-30", "time": "21:00"}, "requiresConfirmation": false}}
+{"input": "والنبي منبه اجيب العيش الساعة 22:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اجيب العيش", "date": "2026-10-01", "time": "22:00"}, "requiresConfirmation": false}}
+{"input": "فكريني ادفع النت النهاردة الساعة 19:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "ادفع النت", "date": "2026-10-05", "time": "19:00"}, "requiresConfirmation": false}}
+{"input": "فكريني اصحي بدري النهاردة الساعة 07:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اصحي بدري", "date": "2026-10-05", "time": "07:00"}, "requiresConfirmation": false}}
+{"input": "بقولك ايه حطي 300 جنيه مصاريف لبس العيال", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 300, "type": "لبس العيال", "date": "2026-10-01"}, "requiresConfirmation": true}}
+{"input": "حللي ملف file_382", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_382"}, "requiresConfirmation": false}}
+{"input": "اعمليلي منبه اصحي العيال للمدرسة كل يوم الساعة 10:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اصحي العيال للمدرسة", "date": "2026-10-05", "time": "10:00"}, "requiresConfirmation": false}}
+{"input": "يا لهلوبة فكريني اعمل الشاي بكرا الساعة 19:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اعمل الشاي", "date": "2026-10-05", "time": "19:00"}, "requiresConfirmation": false}}
+{"input": "يا لهلوبة سجلي 120 جنيه دروس النهاردة", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 120, "type": "دروس", "date": "2026-09-29"}, "requiresConfirmation": true}}
+{"input": "الغي مصروف الدروس اللي سجلتيه غلط", "expected": {"intent": "expense", "tool": "finance.transaction.delete", "arguments": {"expenseId": "expense_5"}, "requiresConfirmation": true}}
+{"input": "حطيلي مهمة انشر الغسيل النهاردة", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "انشر الغسيل", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "حطيلي مهمة انشر الغسيل النهاردة", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "انشر الغسيل", "date": "2026-10-01"}, "requiresConfirmation": true}}
+{"input": "امسحي مصروف السوبر ماركت بتاع امبارح", "expected": {"intent": "expense", "tool": "finance.transaction.delete", "arguments": {"expenseId": "expense_0"}, "requiresConfirmation": true}}
+{"input": "يا لهلوبة فكريني انشر الغسيل بعد بكرا", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "انشر الغسيل", "date": "2026-10-02"}, "requiresConfirmation": true}}
+{"input": "صرفت 200 جنيه على غاز امبارح", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 200, "type": "غاز", "date": "2026-09-29"}, "requiresConfirmation": true}}
+{"input": "يا لهلوبة حلليلي ملف المصاريف ده file_780", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_780"}, "requiresConfirmation": false}}
+{"input": "بقولك ايه عايزة اروح السوق امبارح نسيته", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اروح السوق", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "سيرشيلي على مواعيد المترو", "expected": {"intent": "web_research", "tool": "web_search", "arguments": {"query": "مواعيد المترو"}, "requiresConfirmation": false}}
+{"input": "بقولك ايه حطي 450 جنيه مصاريف سوبر ماركت", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 450, "type": "سوبر ماركت", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "حللي ملف file_333", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_333"}, "requiresConfirmation": false}}
+{"input": "يا لهلوبة فكريني ارتب الدولاب بعد بكرا", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "ارتب الدولاب", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "اعمليلي تاسك اعمل كيكة بكرا", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اعمل كيكة", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "خلصيلي تاسك اعمل محشي", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اعمل محشي", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "كام مصروف الشهر ده يا لهلوبة", "expected": {"intent": "expense", "tool": "finance.get_summary", "arguments": {"period": "this_month"}, "requiresConfirmation": false}}
+{"input": "حللي ملف file_426", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_426"}, "requiresConfirmation": false}}
+{"input": "يا لهلوبة فكريني اروح السوق بعد بكرا", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اروح السوق", "date": "2026-10-02"}, "requiresConfirmation": true}}
+{"input": "اقريلي الملف file_895 يا لهلوبة", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_895"}, "requiresConfirmation": false}}
+{"input": "والنبي منبه ادي ماما الدوا الساعة 19:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "ادي ماما الدوا", "date": "2026-10-05", "time": "19:00"}, "requiresConfirmation": false}}
+{"input": "بقولك ايه حطي 200 جنيه مصاريف مواصلات", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 200, "type": "مواصلات", "date": "2026-09-29"}, "requiresConfirmation": true}}
+{"input": "بقولك ايه عايزة اروح عند ماما امبارح نسيته", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اروح عند ماما", "date": "2026-10-03"}, "requiresConfirmation": true}}
+{"input": "شكرا يا لهلوبة", "expected": {"intent": "conversation", "tool": null, "arguments": {}, "requiresConfirmation": false}}
+{"input": "حللي ملف file_521", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_521"}, "requiresConfirmation": false}}
+{"input": "اعمليلي تاسك اغسل المواعين بكرا", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اغسل المواعين", "date": "2026-10-03"}, "requiresConfirmation": true}}
+{"input": "يا لهلوبة فكريني ادي ماما الدوا بكرا الساعة 09:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "ادي ماما الدوا", "date": "2026-09-30", "time": "09:00"}, "requiresConfirmation": false}}
+{"input": "ربنا يخليكي ليا", "expected": {"intent": "conversation", "tool": null, "arguments": {}, "requiresConfirmation": false}}
+{"input": "اعمليلي منبه ادفع النت كل يوم الساعة 21:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "ادفع النت", "date": "2026-10-01", "time": "21:00"}, "requiresConfirmation": false}}
+{"input": "اعمليلي تاسك اذاكر انجليزي للواد بكرا", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اذاكر انجليزي للواد", "date": "2026-10-02"}, "requiresConfirmation": true}}
+{"input": "تسلم ايدك", "expected": {"intent": "conversation", "tool": null, "arguments": {}, "requiresConfirmation": false}}
+{"input": "اعمليلي تاسك اغسل المواعين بكرا", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اغسل المواعين", "date": "2026-10-01"}, "requiresConfirmation": true}}
+{"input": "يا لهلوبة حلليلي ملف المصاريف ده file_799", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_799"}, "requiresConfirmation": false}}
+{"input": "يا لهلوبة سجلي 150 جنيه منظفات النهاردة", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 150, "type": "منظفات", "date": "2026-09-29"}, "requiresConfirmation": true}}
+{"input": "دوريلي على النت اعراض البرد عند الاطفال", "expected": {"intent": "web_research", "tool": "web_search", "arguments": {"query": "اعراض البرد عند الاطفال"}, "requiresConfirmation": false}}
+{"input": "حطيلي مهمة اعمل كيكة النهاردة", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اعمل كيكة", "date": "2026-10-03"}, "requiresConfirmation": true}}
+{"input": "والنبي منبه اعمل الشاي الساعة 09:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اعمل الشاي", "date": "2026-10-05", "time": "09:00"}, "requiresConfirmation": false}}
+{"input": "حللي ملف file_558", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_558"}, "requiresConfirmation": false}}
+{"input": "امسحي اخر مصروف عملته", "expected": {"intent": "expense", "tool": "finance.transaction.delete", "arguments": {"expenseId": "expense_6"}, "requiresConfirmation": true}}
+{"input": "الغي مصروف الدروس اللي سجلتيه غلط", "expected": {"intent": "expense", "tool": "finance.transaction.delete", "arguments": {"expenseId": "expense_2"}, "requiresConfirmation": true}}
+{"input": "شوفيلي على النت سعر الذهب النهاردة", "expected": {"intent": "web_research", "tool": "web_search", "arguments": {"query": "سعر الذهب النهاردة"}, "requiresConfirmation": false}}
+{"input": "يا لهلوبة حلليلي ملف المصاريف ده file_454", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_454"}, "requiresConfirmation": false}}
+{"input": "اعمليلي منبه اطفي الغسالة كل يوم الساعة 08:30", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اطفي الغسالة", "date": "2026-10-01", "time": "08:30"}, "requiresConfirmation": false}}
+{"input": "يا لهلوبة فكريني اصحي بدري بكرا الساعة 10:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اصحي بدري", "date": "2026-10-01", "time": "10:00"}, "requiresConfirmation": false}}
+{"input": "اعمليلي مصروف لبس العيال 350 جنيه بكرا", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 350, "type": "لبس العيال", "date": "2026-09-29"}, "requiresConfirmation": true}}
+{"input": "اعمليلي مصروف لبس العيال 300 جنيه بكرا", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 300, "type": "لبس العيال", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "تسلم ايدك", "expected": {"intent": "conversation", "tool": null, "arguments": {}, "requiresConfirmation": false}}
+{"input": "اعمليلي تاسك اذاكر انجليزي للواد بكرا", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اذاكر انجليزي للواد", "date": "2026-10-02"}, "requiresConfirmation": true}}
+{"input": "فكريني انيم العيال النهاردة الساعة 10:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "انيم العيال", "date": "2026-09-30", "time": "10:00"}, "requiresConfirmation": false}}
+{"input": "اقريلي الملف file_148 يا لهلوبة", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_148"}, "requiresConfirmation": false}}
+{"input": "فكريني اروح الجيم النهاردة الساعة 09:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اروح الجيم", "date": "2026-10-01", "time": "09:00"}, "requiresConfirmation": false}}
+{"input": "امسحي اخر مصروف عملته", "expected": {"intent": "expense", "tool": "finance.transaction.delete", "arguments": {"expenseId": "expense_8"}, "requiresConfirmation": true}}
+{"input": "اعمليلي مصروف لحمة 650 جنيه بكرا", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 650, "type": "لحمة", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "ربنا يخليكي ليا", "expected": {"intent": "conversation", "tool": null, "arguments": {}, "requiresConfirmation": false}}
+{"input": "اعمليلي مصروف غاز 150 جنيه بكرا", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 150, "type": "غاز", "date": "2026-10-01"}, "requiresConfirmation": true}}
+{"input": "حللي ملف file_531", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_531"}, "requiresConfirmation": false}}
+{"input": "فكريني اعمل الشاي النهاردة الساعة 19:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اعمل الشاي", "date": "2026-09-30", "time": "19:00"}, "requiresConfirmation": false}}
+{"input": "بقولك ايه حطي 650 جنيه مصاريف غاز", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 650, "type": "غاز", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "اعمليلي تاسك اروح لدكتور السنان بكرا", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اروح لدكتور السنان", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "يا لهلوبة شيلي مصروف نت الاخير", "expected": {"intent": "expense", "tool": "finance.transaction.delete", "arguments": {"expenseId": "expense_4"}, "requiresConfirmation": true}}
+{"input": "سيرشيلي على سعر الدولار النهاردة", "expected": {"intent": "web_research", "tool": "web_search", "arguments": {"query": "سعر الدولار النهاردة"}, "requiresConfirmation": false}}
+{"input": "شكرا يا لهلوبة", "expected": {"intent": "conversation", "tool": null, "arguments": {}, "requiresConfirmation": false}}
+{"input": "بقولك ايه عايزة اغسل السجاد امبارح نسيته", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اغسل السجاد", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "والنبي منبه اصحي العيال للمدرسة الساعة 07:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اصحي العيال للمدرسة", "date": "2026-10-05", "time": "07:00"}, "requiresConfirmation": false}}
+{"input": "يا لهلوبة فكريني ادي ماما الدوا بكرا الساعة 22:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "ادي ماما الدوا", "date": "2026-09-30", "time": "22:00"}, "requiresConfirmation": false}}
+{"input": "يا لهلوبة سجلي 350 جنيه كهربا النهاردة", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 350, "type": "كهربا", "date": "2026-09-29"}, "requiresConfirmation": true}}
+{"input": "خلصيلي تاسك انضف التلاجة", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "انضف التلاجة", "date": "2026-10-01"}, "requiresConfirmation": true}}
+{"input": "صرفت كام على الاكل الشهر ده", "expected": {"intent": "expense", "tool": "finance.get_summary", "arguments": {"period": "this_week"}, "requiresConfirmation": false}}
+{"input": "عامله ايه يا حبيبتي", "expected": {"intent": "conversation", "tool": null, "arguments": {}, "requiresConfirmation": false}}
+{"input": "والنبي سجلي 350 جنيه خضار دلوقتي", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 350, "type": "خضار", "date": "2026-10-01"}, "requiresConfirmation": true}}
+{"input": "يا لهلوبة فكريني انشر الغسيل بعد بكرا", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "انشر الغسيل", "date": "2026-10-03"}, "requiresConfirmation": true}}
+{"input": "فكريني اجيب العيش النهاردة الساعة 22:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اجيب العيش", "date": "2026-09-30", "time": "22:00"}, "requiresConfirmation": false}}
+{"input": "اقريلي الملف file_806 يا لهلوبة", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_806"}, "requiresConfirmation": false}}
+{"input": "شوفيلي الملف ده file_752 فيه ايه", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_752"}, "requiresConfirmation": false}}
+{"input": "كام مصروف الشهر ده يا لهلوبة", "expected": {"intent": "expense", "tool": "finance.get_summary", "arguments": {"period": "last_month"}, "requiresConfirmation": false}}
+{"input": "يا لهلوبة فكريني انيم العيال بكرا الساعة 10:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "انيم العيال", "date": "2026-10-05", "time": "10:00"}, "requiresConfirmation": false}}
+{"input": "اعمليلي مصروف علاج 400 جنيه بكرا", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 400, "type": "علاج", "date": "2026-10-01"}, "requiresConfirmation": true}}
+{"input": "دوريلي على النت طريقة المذاكرة للعيال", "expected": {"intent": "web_research", "tool": "web_search", "arguments": {"query": "طريقة المذاكرة للعيال"}, "requiresConfirmation": false}}
+{"input": "حللي ملف file_728", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_728"}, "requiresConfirmation": false}}
+{"input": "اعمليلي منبه انيم العيال كل يوم الساعة 22:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "انيم العيال", "date": "2026-09-30", "time": "22:00"}, "requiresConfirmation": false}}
+{"input": "فكريني اخد الدوا النهاردة الساعة 08:30", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اخد الدوا", "date": "2026-09-30", "time": "08:30"}, "requiresConfirmation": false}}
+{"input": "شوفيلي الملف ده file_439 فيه ايه", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_439"}, "requiresConfirmation": false}}
+{"input": "حللي ملف file_872", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_872"}, "requiresConfirmation": false}}
+{"input": "اعمليلي تاسك اشتري خضار بكرا", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اشتري خضار", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "اعمليلي مصروف فراخ 150 جنيه بكرا", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 150, "type": "فراخ", "date": "2026-10-01"}, "requiresConfirmation": true}}
+{"input": "يا لهلوبة سجلي 120 جنيه لحمة النهاردة", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 120, "type": "لحمة", "date": "2026-10-01"}, "requiresConfirmation": true}}
+{"input": "يا لهلوبة سجلي 100 جنيه مدرسة النهاردة", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 100, "type": "مدرسة", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "شوفيلي على النت طريقة عمل البسبوسة", "expected": {"intent": "web_research", "tool": "web_search", "arguments": {"query": "طريقة عمل البسبوسة"}, "requiresConfirmation": false}}
+{"input": "يا لهلوبة سجلي 100 جنيه خضار النهاردة", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 100, "type": "خضار", "date": "2026-09-29"}, "requiresConfirmation": true}}
+{"input": "حطيلي مهمة اعمل محشي النهاردة", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اعمل محشي", "date": "2026-10-02"}, "requiresConfirmation": true}}
+{"input": "يا لهلوبة ابحثيلي عن ازاي انضف البوتجاز", "expected": {"intent": "web_research", "tool": "web_search", "arguments": {"query": "ازاي انضف البوتجاز"}, "requiresConfirmation": false}}
+{"input": "صرفت 250 جنيه على كهربا امبارح", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 250, "type": "كهربا", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "بقولك ايه حطي 250 جنيه مصاريف منظفات", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 250, "type": "منظفات", "date": "2026-09-29"}, "requiresConfirmation": true}}
+{"input": "يا لهلوبة سجلي 200 جنيه كهربا النهاردة", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 200, "type": "كهربا", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "والنبي منبه ادفع الايجار الساعة 19:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "ادفع الايجار", "date": "2026-10-05", "time": "19:00"}, "requiresConfirmation": false}}
+{"input": "بقولك ايه حطي 400 جنيه مصاريف دروس", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 400, "type": "دروس", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "اعمليلي منبه اخد الدوا كل يوم الساعة 07:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اخد الدوا", "date": "2026-10-01", "time": "07:00"}, "requiresConfirmation": false}}
+{"input": "بقولك ايه حطي 500 جنيه مصاريف سوبر ماركت", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 500, "type": "سوبر ماركت", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "حطيلي مهمة اكنس الشقة النهاردة", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اكنس الشقة", "date": "2026-10-02"}, "requiresConfirmation": true}}
+{"input": "والنبي منبه انيم العيال الساعة 12:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "انيم العيال", "date": "2026-10-05", "time": "12:00"}, "requiresConfirmation": false}}
+{"input": "والنبي منبه اطفي الغسالة الساعة 19:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اطفي الغسالة", "date": "2026-09-30", "time": "19:00"}, "requiresConfirmation": false}}
+{"input": "بقولك ايه عايزة اروح عند ماما امبارح نسيته", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اروح عند ماما", "date": "2026-10-01"}, "requiresConfirmation": true}}
+{"input": "والنبي سجلي 650 جنيه علاج دلوقتي", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 650, "type": "علاج", "date": "2026-10-01"}, "requiresConfirmation": true}}
+{"input": "بقولك ايه حطي 400 جنيه مصاريف منظفات", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 400, "type": "منظفات", "date": "2026-09-29"}, "requiresConfirmation": true}}
+{"input": "اقريلي الملف file_856 يا لهلوبة", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_856"}, "requiresConfirmation": false}}
+{"input": "يا لهلوبة يا جامدة", "expected": {"intent": "conversation", "tool": null, "arguments": {}, "requiresConfirmation": false}}
+{"input": "اقريلي الملف file_195 يا لهلوبة", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_195"}, "requiresConfirmation": false}}
+{"input": "اعمليلي مصروف خضار 800 جنيه بكرا", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 800, "type": "خضار", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "يا لهلوبة فكريني اطفي الغسالة بكرا الساعة 07:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اطفي الغسالة", "date": "2026-09-30", "time": "07:00"}, "requiresConfirmation": false}}
+{"input": "خلصيلي تاسك اعمل كيكة", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اعمل كيكة", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "والنبي سجلي 250 جنيه علاج دلوقتي", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 250, "type": "علاج", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "اعمليلي مصروف نت 650 جنيه بكرا", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 650, "type": "نت", "date": "2026-09-29"}, "requiresConfirmation": true}}
+{"input": "يا لهلوبة يا جامدة", "expected": {"intent": "conversation", "tool": null, "arguments": {}, "requiresConfirmation": false}}
+{"input": "يا لهلوبة فكريني اشرب ماية بكرا الساعة 22:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "اشرب ماية", "date": "2026-09-30", "time": "22:00"}, "requiresConfirmation": false}}
+{"input": "صرفت كام على الاكل الشهر ده", "expected": {"intent": "expense", "tool": "finance.get_summary", "arguments": {"period": "this_week"}, "requiresConfirmation": false}}
+{"input": "بقولك ايه حطي 120 جنيه مصاريف كهربا", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 120, "type": "كهربا", "date": "2026-10-01"}, "requiresConfirmation": true}}
+{"input": "حطيلي مهمة اروح عند ماما النهاردة", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اروح عند ماما", "date": "2026-10-03"}, "requiresConfirmation": true}}
+{"input": "اعمليلي منبه ادفع الايجار كل يوم الساعة 09:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "ادفع الايجار", "date": "2026-10-01", "time": "09:00"}, "requiresConfirmation": false}}
+{"input": "عامل ايه", "expected": {"intent": "conversation", "tool": null, "arguments": {}, "requiresConfirmation": false}}
+{"input": "صرفت 300 جنيه على علاج امبارح", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 300, "type": "علاج", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "حللي ملف file_133", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_133"}, "requiresConfirmation": false}}
+{"input": "خلصيلي تاسك اروح لدكتور السنان", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اروح لدكتور السنان", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "يا لهلوبة شيلي مصروف لبس العيال الاخير", "expected": {"intent": "expense", "tool": "finance.transaction.delete", "arguments": {"expenseId": "expense_7"}, "requiresConfirmation": true}}
+{"input": "بقولك ايه عايزة اذاكر انجليزي للواد امبارح نسيته", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اذاكر انجليزي للواد", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "بقولك ايه حطي 800 جنيه مصاريف فراخ", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 800, "type": "فراخ", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "يا لهلوبة شيلي مصروف سوبر ماركت الاخير", "expected": {"intent": "expense", "tool": "finance.transaction.delete", "arguments": {"expenseId": "expense_9"}, "requiresConfirmation": true}}
+{"input": "دوريلي على النت سعر الذهب النهاردة", "expected": {"intent": "web_research", "tool": "web_search", "arguments": {"query": "سعر الذهب النهاردة"}, "requiresConfirmation": false}}
+{"input": "بقولك ايه حطي 200 جنيه مصاريف منظفات", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 200, "type": "منظفات", "date": "2026-09-29"}, "requiresConfirmation": true}}
+{"input": "شوفيلي الملف ده file_270 فيه ايه", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_270"}, "requiresConfirmation": false}}
+{"input": "يا لهلوبة فكريني انضف التلاجة بعد بكرا", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "انضف التلاجة", "date": "2026-10-03"}, "requiresConfirmation": true}}
+{"input": "حطيلي مهمة اروح لدكتور السنان النهاردة", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اروح لدكتور السنان", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "يا لهلوبة ابحثيلي عن طريقة عمل البيتزا", "expected": {"intent": "web_research", "tool": "web_search", "arguments": {"query": "طريقة عمل البيتزا"}, "requiresConfirmation": false}}
+{"input": "صرفت 50 جنيه على خضار امبارح", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 50, "type": "خضار", "date": "2026-10-01"}, "requiresConfirmation": true}}
+{"input": "صرفت 500 جنيه على خضار امبارح", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 500, "type": "خضار", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "يا لهلوبة سجلي 450 جنيه غاز النهاردة", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 450, "type": "غاز", "date": "2026-09-29"}, "requiresConfirmation": true}}
+{"input": "امسحي اخر مصروف عملته", "expected": {"intent": "expense", "tool": "finance.transaction.delete", "arguments": {"expenseId": "expense_1"}, "requiresConfirmation": true}}
+{"input": "اعمليلي مصروف مدرسة 250 جنيه بكرا", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 250, "type": "مدرسة", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "يا لهلوبة سجلي 200 جنيه فراخ النهاردة", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 200, "type": "فراخ", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "يا لهلوبة حلليلي ملف المصاريف ده file_147", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_147"}, "requiresConfirmation": false}}
+{"input": "يا لهلوبة فكريني انشر الغسيل بعد بكرا", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "انشر الغسيل", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "خلصيلي تاسك اروح لدكتور السنان", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اروح لدكتور السنان", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "اعمليلي تاسك ادفع فاتورة الكهربا بكرا", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "ادفع فاتورة الكهربا", "date": "2026-10-01"}, "requiresConfirmation": true}}
+{"input": "صرفت 350 جنيه على كهربا امبارح", "expected": {"intent": "expense", "tool": "finance.transaction.create", "arguments": {"amount": 350, "type": "كهربا", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "اعمليلي تاسك انضف التلاجة بكرا", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "انضف التلاجة", "date": "2026-09-30"}, "requiresConfirmation": true}}
+{"input": "والنبي منبه ادفع الايجار الساعة 07:00", "expected": {"intent": "reminder", "tool": "reminder.create", "arguments": {"title": "ادفع الايجار", "date": "2026-09-30", "time": "07:00"}, "requiresConfirmation": false}}
+{"input": "اقريلي الملف file_945 يا لهلوبة", "expected": {"intent": "file_analysis", "tool": "analyze_file", "arguments": {"fileId": "file_945"}, "requiresConfirmation": false}}
+{"input": "يا لهلوبة فكريني اروح السوق بعد بكرا", "expected": {"intent": "task", "tool": "task.create", "arguments": {"title": "اروح السوق", "date": "2026-10-02"}, "requiresConfirmation": true}}

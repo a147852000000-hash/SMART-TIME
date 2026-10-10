@@ -1,0 +1,23 @@
+name: Phase 11 voice foundation verification
+
+on:
+  push:
+    branches:
+      - "feat/v3-next"
+    paths:
+      - "docs/SHUBRA_VOICE_SPEC.md"
+      - "infra/smart-voice/phase11-voice-manifest.json"
+      - "scripts/verify-phase11-voice-foundation.mjs"
+      - ".github/workflows/phase11-voice-foundation-verify.yml"
+
+jobs:
+  phase11-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Verify Phase 11 voice foundation contract
+        run: node scripts/verify-phase11-voice-foundation.mjs

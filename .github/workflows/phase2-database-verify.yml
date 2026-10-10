@@ -1,0 +1,35 @@
+name: Phase 2 - Database Migration Integrity
+
+on:
+  push:
+    branches: [phase/02-database-migration-integrity]
+  pull_request:
+    branches: [feat/v3-next]
+
+jobs:
+  phase2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Canonical schema ownership
+        run: npm run verify:canonical-schema
+
+      - name: Database and migration integrity gate
+        run: npm run test:phase2-db
+
+      - name: Type check
+        run: npm run lint
+
+      - name: Existing AI regression tests
+        run: npm run test:open-mind
+
+      - name: Production build
+        run: npm run build

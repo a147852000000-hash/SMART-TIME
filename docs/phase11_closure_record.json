@@ -1,0 +1,51 @@
+{
+  "phase": 11,
+  "name": "Voice Foundation — Shubra Voice Specification",
+  "branch": "feat/v3-next",
+  "status": "FORMALLY_CLOSED",
+  "technical_gate": "PASS",
+  "training_run_started": false,
+  "training_authorized_by_phase": false,
+  "evidence": {
+    "voice_specification": "docs/SHUBRA_VOICE_SPEC.md",
+    "voice_manifest": "infra/smart-voice/phase11-voice-manifest.json",
+    "verification_script": "scripts/verify-phase11-voice-foundation.mjs",
+    "ci_workflow": ".github/workflows/phase11-voice-foundation-verify.yml",
+    "sample_quality": "infra/smart-voice/phase11-voice-manifest.json",
+    "security_reproducibility_ci": "Phase 11 Voice Security Verify #3",
+    "security_reproducibility_run_id": 36965270460,
+    "security_reproducibility_commit": "fc0ae8b692a9202cce02b45d0d81dcdf4d215581",
+    "security_reproducibility_result": "PASS",
+    "owner_signoff": "Owner approval recorded in chat",
+    "closure_manifest_commit": "b7a5373ef11ff87adbb15899fbd1401e32168b02"
+  },
+  "checks": {
+    "voice_specification_committed": true,
+    "profile_contract_declared": true,
+    "consent_contract_declared": true,
+    "measurable_acceptance_criteria_declared": true,
+    "raw_audio_git_policy_declared": true,
+    "training_blocked": true,
+    "approved_sample_package_present": true,
+    "sample_hashes_present": true,
+    "sample_quality_evidence_present": true,
+    "security_evidence_complete": true,
+    "reproducibility_evidence_complete": true,
+    "owner_signoff": true
+  },
+  "blockers": [],
+  "downstream_not_claimed_as_done": [
+    "real STT",
+    "production TTS runtime validation",
+    "Voice DNA cloning benchmark",
+    "Voice E2E"
+  ],
+  "next_phase_authorized": true,
+  "owner_signoff": {
+    "status": "APPROVED",
+    "approved_by_owner": true,
+    "approved_in_chat": true,
+    "approved_at": "2026-10-02"
+  },
+  "next_phase_number": 12
+}

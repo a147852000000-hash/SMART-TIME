@@ -1,0 +1,24 @@
+name: OPEN MIND AI CI
+
+on:
+  push:
+    branches: [feat/v6-finance-ui, feat/v3-next]
+  pull_request:
+    branches: [feat/v6-finance-ui]
+
+jobs:
+  open-mind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run test:open-mind
+      - run: npm run test:groq-provider
+      - run: npm run test:turnstile
+      - run: npm run verify:phase-a2-stt
+      - run: npm run build

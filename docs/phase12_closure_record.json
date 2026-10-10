@@ -1,0 +1,89 @@
+{
+  "phase": 12,
+  "name": "Real STT + ASR Corpus",
+  "branch": "feat/v3-next",
+  "status": "IN_PROGRESS",
+  "technical_gate": "STATIC_IMPLEMENTATION_PASS_RUNTIME_CORPUS_GATES_OPEN",
+  "training_run_started": false,
+  "training_authorized_by_phase": false,
+  "next_phase_authorized": false,
+  "next_phase_number": 13,
+  "evidence": {
+    "contract": "docs/PHASE_12_REAL_STT_ASR_CORPUS.md",
+    "corpus_manifest": "infra/smart-voice/phase12-asr-corpus-manifest.json",
+    "verifier": "scripts/verify-phase12-stt-corpus.mjs",
+    "ci_workflow": ".github/workflows/phase12-stt-corpus-verify.yml",
+    "real_microphone_test": {
+      "status": "PASS",
+      "artifact": "docs/phase12_runtime_case_results.json",
+      "completed_cases": [
+        "ar-eg",
+        "code-switch",
+        "numbers-dates",
+        "permission-denial",
+        "provider-network-failure",
+        "noisy-ambiguous"
+      ],
+      "remaining_cases": [],
+      "voice_conversation_test": {
+        "status": "OPEN",
+        "artifact": "docs/phase12_runtime_case_results.json",
+        "remaining": [
+          "smart-ai-voice-conversation"
+        ]
+      }
+    },
+    "behavioral_evidence": {
+      "status": "PASS",
+      "artifact": "docs/phase12_runtime_case_results.json"
+    },
+    "security_evidence": null,
+    "reproducibility_evidence": null,
+    "static_verification": {
+      "workflow_run_id": 37009267231,
+      "commit": "6dcf65330e016bc6d1d01cff5f56c4190b231b98",
+      "conclusion": "success"
+    },
+    "runtime_evidence_schema": "docs/PHASE_12_RUNTIME_EVIDENCE_SCHEMA.json",
+    "egyspeak_acquisition_validator": "scripts/acquire_validate_egyspeak_phase12.py",
+    "user_audio_artifact_verification": {
+      "status": "PASS",
+      "artifact": "docs/phase12_user_audio_evidence.json",
+      "verifier": "scripts/verify-phase12-user-audio.py",
+      "raw_audio_in_git": false
+    },
+    "voice_conversation_implementation": {
+      "status": "IMPLEMENTED",
+      "commit": "6dcf65330e016bc6d1d01cff5f56c4190b231b98",
+      "service_route": "/services/smart-ai",
+      "component": "src/components/SmartAiVoiceConversationModal.tsx",
+      "entry_component": "components/smart-ai/SmartAIDemo.tsx",
+      "runtime_test_status": "OPEN"
+    }
+  },
+  "blockers": [
+    "audio artifact integrity verified; transcript/audio pairing remains unverified",
+    "SMART AI voice conversation runtime test not yet captured on the deployed /services/smart-ai route",
+    "SMART_AI_LOCAL_URL is not configured in the Phase 12 preview environment, so end-to-end SMART AI reply/audio runtime evidence cannot be marked PASS yet",
+    "final security/reproducibility closure evidence not yet complete",
+    "owner sign-off not yet recorded"
+  ],
+  "owner_signoff": {
+    "status": "NOT_REQUESTED",
+    "approved_by_owner": false
+  },
+  "closure_rule": "Phase 13 remains unauthorized until every Phase 12 gate is PASS and owner sign-off is recorded.",
+  "real_microphone_test": {
+    "status": "PASS",
+    "completed_cases": [
+      "ar-eg",
+      "code-switch",
+      "numbers-dates",
+      "permission-denial",
+      "provider-network-failure",
+      "noisy-ambiguous"
+    ],
+    "remaining": []
+  },
+  "behavioral_evidence": "PASS"
+}

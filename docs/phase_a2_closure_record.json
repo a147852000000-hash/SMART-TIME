@@ -1,0 +1,45 @@
+{
+  "phase": "A2",
+  "name": "Real Groq STT",
+  "status": "IN_PROGRESS",
+  "branch": "feat/v3-next",
+  "implementation": {
+    "server_endpoint": "POST /api/ai/stt",
+    "provider": "Groq Whisper",
+    "model_env": "GROQ_STT_MODEL",
+    "default_model": "whisper-large-v3-turbo",
+    "client_capture": "MediaRecorder",
+    "browser_web_speech_primary": false,
+    "shared_client_transport": "src/services/groqSttService.ts",
+    "smart_ai_voice_conversation_migrated": true
+  },
+  "security": {
+    "authenticated": true,
+    "server_secret_only": true,
+    "raw_audio_persisted": false,
+    "max_audio_bytes": "STT_MAX_AUDIO_BYTES",
+    "per_user_rate_limit": "STT_MAX_REQUESTS_PER_MINUTE"
+  },
+  "automation": {
+    "phase12_static_contract": "PASS",
+    "main_ai_ci": "PASS",
+    "regression_workflows": "PASS"
+  },
+  "runtime": {
+    "required_cases": 7,
+    "completed_cases": 0,
+    "blocker": "Real browser/microphone runtime evidence is still required. Connected tooling cannot operate the user's physical microphone/authenticated browser session."
+  },
+  "external_audio_evidence": {
+    "recordings": [
+      "الكلام العادى.wav",
+      "كلام عادى.aac",
+      "مصراوى.aac",
+      "ارقام وتواريخ.aac",
+      "عفوى.aac"
+    ],
+    "raw_audio_in_git": false,
+    "prior_validation": "captured/validated locally; not sufficient alone for live provider runtime closure"
+  },
+  "closure_rule": "Do not mark A2 PASS until all seven runtime cases have reproducible evidence and the closing CI run is green."
+}

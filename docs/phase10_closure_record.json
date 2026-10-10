@@ -1,0 +1,68 @@
+{
+  "phase": 10,
+  "name": "Voice-First Architecture + Execution Order",
+  "branch": "feat/v3-next",
+  "status": "FORMALLY_CLOSED",
+  "technical_gate": "PASS",
+  "training_run_started": false,
+  "training_authorized_by_phase": false,
+  "evidence": {
+    "architecture_contract": "docs/VOICE_FIRST_ARCHITECTURE.md",
+    "evaluation_plan": "docs/AI_EVALUATION.md",
+    "training_manifest": "infra/smart-ai/training/phase10-training-manifest.json",
+    "verification_script": "scripts/verify-phase10-architecture.mjs",
+    "ci_workflow": ".github/workflows/phase10-architecture-verify.yml",
+    "verification_run": {
+      "id": 36925204907,
+      "conclusion": "success",
+      "commit": "334e48e4e68b75ac84de5e5abd0fed4584f81e25",
+      "url": "https://github.com/msm147852/SMART-TIME-/actions/runs/36925204907"
+    },
+    "security_reproducibility_verifier": "scripts/verify-phase10-security-repro.mjs",
+    "security_reproducibility_verification_run": {
+      "id": 36925576099,
+      "conclusion": "success",
+      "commit": "e84c30c5cb47e60275bc125b675e01db46451873",
+      "url": "https://github.com/msm147852/SMART-TIME-/actions/runs/36925576099"
+    },
+    "latest_phase10_verification": {
+      "id": 36925921458,
+      "conclusion": "success",
+      "commit": "d89155e60d8d1be9148cd66c800b11a660cdb1c9",
+      "url": "https://github.com/msm147852/SMART-TIME-/actions/runs/36925921458"
+    }
+  },
+  "checks": {
+    "architecture_contract": true,
+    "canonical_runtime_order": true,
+    "canonical_evaluation_order": true,
+    "training_manifest_present": true,
+    "phase10_training_blocked": true,
+    "verifier_executed_in_ci": true,
+    "verifier_passed": true,
+    "security_boundary_documented": true,
+    "reproducibility_contract_documented": true,
+    "security_boundary_verified_in_ci": true,
+    "reproducibility_contract_verified_in_ci": true,
+    "training_readiness_fields_complete": true,
+    "evaluation_suite_versioned": true,
+    "expected_gates_declared": true,
+    "runtime_versions_declared": true
+  },
+  "downstream_not_claimed_as_done": [
+    "real STT",
+    "real TTS provider",
+    "Voice E2E",
+    "central policy/schema validator implementation",
+    "general agent loop"
+  ],
+  "owner_signoff": {
+    "required": true,
+    "status": "APPROVED",
+    "approved_by_owner": true
+  },
+  "next_phase_authorized": true,
+  "closure_rule": "Phase 10 is formally closed after owner sign-off. Phase 11 is authorized but must not be started unless explicitly requested.",
+  "next_phase_number": 11,
+  "next_phase_rule": "Authorizes only Phase 11 after this closure; no later phase is authorized by this record."
+}

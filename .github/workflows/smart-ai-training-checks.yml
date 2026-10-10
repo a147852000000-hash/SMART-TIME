@@ -1,0 +1,38 @@
+name: SMART AI training data checks
+
+on:
+  pull_request:
+    paths:
+      - "backend/ai/training/**"
+      - "scripts/audit-smart-ai-training.mjs"
+      - "scripts/smart-ai-training-stats.mjs"
+      - "scripts/validate-smart-ai-datasets.mjs"
+      - "infra/smart-ai/training/**"
+      - "package.json"
+  push:
+    branches:
+      - "feat/smart-ai"
+      - "feat/smart-voice-dna-local"
+    paths:
+      - "backend/ai/training/**"
+      - "scripts/audit-smart-ai-training.mjs"
+      - "scripts/smart-ai-training-stats.mjs"
+      - "scripts/validate-smart-ai-datasets.mjs"
+      - "infra/smart-ai/training/**"
+      - "package.json"
+
+jobs:
+  dataset-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Validate SMART AI datasets
+        run: npm run validate:smart-ai
+      - name: Audit SMART AI training data
+        run: npm run audit:smart-ai
+      - name: Print dataset stats
+        run: npm run stats:smart-ai

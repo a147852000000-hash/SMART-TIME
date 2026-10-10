@@ -1,0 +1,18 @@
+name: Phase 3 - Verify StorageKeys Registry
+on:
+  push:
+    branches: [feat/v3-next, feat/v6-finance-ui]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install deps
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Verify Phase 3 registry
+        run: npm run verify:phase3-storage-keys
+      - name: Build
+        run: npm run build

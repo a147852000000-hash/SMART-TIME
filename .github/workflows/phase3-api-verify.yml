@@ -1,0 +1,32 @@
+name: Phase 3 - Real Backend API
+
+on:
+  push:
+    branches: [phase/03-real-backend-api]
+  pull_request:
+    branches: [feat/v3-next]
+
+jobs:
+  phase3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: API smoke and E2E
+        run: npm run test:phase3-api
+
+      - name: Type check
+        run: npm run lint
+
+      - name: Existing AI regression tests
+        run: npm run test:open-mind
+
+      - name: Production build
+        run: npm run build

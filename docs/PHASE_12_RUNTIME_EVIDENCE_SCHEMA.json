@@ -1,0 +1,69 @@
+{
+  "phase": 12,
+  "purpose": "Recorded evidence contract for Phase 12 behavioral and corpus closure.",
+  "privacy": {
+    "store_raw_audio": false,
+    "store_raw_audio_in_repo": false,
+    "store_full_transcripts_in_logs": false,
+    "record_only_metadata_and_transcript_excerpt": true
+  },
+  "required_cases": [
+    {
+      "id": "ar-eg",
+      "type": "microphone",
+      "input": "Egyptian Arabic utterance",
+      "expected": "final non-empty transcript; ar-EG"
+    },
+    {
+      "id": "code-switch",
+      "type": "microphone",
+      "input": "Egyptian Arabic with common English code-switch",
+      "expected": "final non-empty transcript; no fabricated text"
+    },
+    {
+      "id": "numbers-dates",
+      "type": "microphone",
+      "input": "Egyptian Arabic containing numbers and dates",
+      "expected": "final transcript preserves the spoken numeric/date content as returned by STT"
+    },
+    {
+      "id": "permission-denial",
+      "type": "permission",
+      "input": "deny microphone permission",
+      "expected": "not-allowed error is surfaced; no transcript is fabricated; no action executes"
+    },
+    {
+      "id": "provider-network-failure",
+      "type": "provider_failure",
+      "input": "force/observe STT network failure",
+      "expected": "network/service error is surfaced; no transcript is fabricated; no action executes"
+    },
+    {
+      "id": "noisy-ambiguous",
+      "type": "microphone",
+      "input": "Egyptian Arabic utterance under realistic noise/ambiguity",
+      "expected": "observed final transcript is recorded as returned by STT; no fabricated text or automatic action"
+    },
+    {
+      "id": "smart-ai-voice-conversation",
+      "type": "voice_conversation",
+      "input": "Egyptian Arabic multi-sentence turn in SMART AI voice conversation mode",
+      "expected": "conversation listens until speech ends, submits only the observed final transcript to SMART AI, waits for the AI response, speaks the response, then returns to listening without fabricated text or automatic action"
+    }
+  ],
+  "corpus_validation": {
+    "required": [
+      "acquisition source and license recorded",
+      "audio files present outside Git",
+      "transcript metadata present",
+      "audio/transcript pair count matches",
+      "missing audio rejected",
+      "missing transcript rejected",
+      "unsupported audio format rejected",
+      "sample rate and channel count recorded",
+      "sha256 recorded for acquired artifacts",
+      "duplicate detection result recorded"
+    ]
+  },
+  "closure_rule": "No field may be marked PASS without an attached reproducible artifact or recorded runtime result."
+}

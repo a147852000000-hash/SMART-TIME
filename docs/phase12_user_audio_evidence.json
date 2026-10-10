@@ -1,0 +1,73 @@
+{
+  "phase": 12,
+  "artifact": "user-provided-real-audio-corpus",
+  "status": "EVIDENCE_CAPTURED_NOT_CLOSURE",
+  "source": "conversation-uploaded audio",
+  "raw_audio_in_git": false,
+  "conversion": {
+    "performed": true,
+    "container": "WAV",
+    "codec": "PCM signed 16-bit little-endian",
+    "sample_rate_hz": 48000
+  },
+  "files": [
+    {
+      "id": "ar-eg-general-1",
+      "file": "الكلام العادى.wav",
+      "duration_s": 27.989333,
+      "channels": 2,
+      "sha256": "1574bed8dbc233413ddeea284fca825cc54fe3c01e3695bc8b3e2c4108328d26"
+    },
+    {
+      "id": "ar-eg-general-2",
+      "file": "كلام عادى.wav",
+      "duration_s": 18.090667,
+      "channels": 1,
+      "sha256": "26fbb99538b56b58aeb995c6ab670aefd847f739f412f07f282443c7b2995030"
+    },
+    {
+      "id": "ar-eg-masri",
+      "file": "مصراوى.wav",
+      "duration_s": 22.528,
+      "channels": 1,
+      "sha256": "3b1f1b156e179e5ac7dafa37938a9a2250fafe20fba280ebdee4878471d75153"
+    },
+    {
+      "id": "numbers-dates",
+      "file": "ارقام وتواريخ.wav",
+      "duration_s": 29.824,
+      "channels": 1,
+      "sha256": "6a26ffe9eccbc522dee9789b6ded16ac45f69b36d33d7a3de46e7da3b5d2de73"
+    },
+    {
+      "id": "spontaneous",
+      "file": "عفوى.wav",
+      "duration_s": 58.709333,
+      "channels": 1,
+      "sha256": "2328a730a3f532252031c10f913363f45b2b9630940a5f0eef8df47833d26049"
+    }
+  ],
+  "gates": {
+    "audio_format_verified": true,
+    "technical_metadata_verified": true,
+    "transcript_pairing_verified": false,
+    "runtime_stt_behavior_verified": false,
+    "permission_denial_verified": false,
+    "provider_failure_verified": false,
+    "security_reproducibility_closure_verified": false
+  },
+  "note": "This artifact records the five user-provided recordings as reproducible local evidence. Raw audio remains outside Git.",
+  "verification": {
+    "local_artifact_verification": {
+      "status": "PASS",
+      "verifier": "scripts/verify-phase12-user-audio.py",
+      "verifier_commit": "6e7ea17b63699d6770552b311e87d7b0fbcf22d1",
+      "verified_against_manifest": true,
+      "raw_audio_uploaded_to_git": false
+    },
+    "transcript_pairing": {
+      "status": "NOT_VERIFIED",
+      "reason": "No transcript artifacts were supplied/validated for these five recordings."
+    }
+  }
+}

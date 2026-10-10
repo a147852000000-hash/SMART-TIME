@@ -1,0 +1,27 @@
+name: Phase 10 architecture verification
+
+on:
+  push:
+    branches:
+      - "feat/v3-next"
+    paths:
+      - "docs/VOICE_FIRST_ARCHITECTURE.md"
+      - "docs/AI_EVALUATION.md"
+      - "infra/smart-ai/training/phase10-training-manifest.json"
+      - "scripts/verify-phase10-architecture.mjs"
+      - "scripts/verify-phase10-security-repro.mjs"
+      - ".github/workflows/phase10-architecture-verify.yml"
+
+jobs:
+  phase10-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Verify Phase 10 architecture contract
+        run: node scripts/verify-phase10-architecture.mjs
+      - name: Verify Phase 10 security and reproducibility contract
+        run: node scripts/verify-phase10-security-repro.mjs
