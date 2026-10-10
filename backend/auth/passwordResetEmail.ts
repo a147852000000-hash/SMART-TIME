@@ -65,7 +65,7 @@ export async function sendPasswordResetEmail(email: string, code: string, ttlMin
     }
     const secureSetting = String(process.env.SMTP_SECURE || "").trim().toLowerCase();
     const secure = secureSetting ? secureSetting === "true" : port === 465;
-    const from = String(process.env.SMTP_FROM || user).trim();
+    const from = String(process.env.EMAIL_FROM || process.env.SMTP_FROM || user).trim();
     const nodemailer = (await import("nodemailer")).default;
     const transporter = nodemailer.createTransport({
       host,
