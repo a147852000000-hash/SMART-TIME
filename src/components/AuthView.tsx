@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Eye, EyeOff, LockKeyhole, Mail, UserRound } from 'lucide-react';
 import { forgotPassword, loginWithIdentifier, registerWithEmail, resetPassword, selectLoginRole } from '../services/authService';
 import { apiUrl } from '../services/apiConfig';
+import { renderTurnstile, resetTurnstile } from '../services/turnstileService';
 
 interface Props {
   onAuthenticated: () => void;
@@ -26,6 +27,32 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
   const [roleChoiceTicket, setRoleChoiceTicket] = useState('');
   const [showRoleChoice, setShowRoleChoice] = useState(false);
   const [emailExistsInRailway, setEmailExistsInRailway] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const turnstileContainerRef = useRef<HTMLDivElement | null>(null);
+  const turnstileWidgetId = useRef<string | number | null>(null);
+  const turnstileEnabled = String(import.meta.env.VITE_TURNSTILE_ENABLED || '').trim().toLowerCase() === 'true';
+
+  useEffect(() => {
+    if (!turnstileEnabled || !turnstileContainerRef.current) return;
+    let cancelled = false;
+    void renderTurnstile(
+      turnstileContainerRef.current,
+      token => { if (!cancelled) setTurnstileToken(token); },
+      () => { if (!cancelled) setTurnstileToken(''); },
+    ).then(widgetId => {
+      if (cancelled) resetTurnstile(widgetId);
+      else turnstileWidgetId.current = widgetId;
+    }).catch(() => {
+      if (!cancelled) setError('تعذر تحميل خطوة التحقق الأمني. حدّث الصفحة وحاول مرة أخرى.');
+    });
+    return () => {
+      cancelled = true;
+      resetTurnstile(turnstileWidgetId.current);
+      turnstileWidgetId.current = null;
+      setTurnstileToken('');
+    };
+  }, [turnstileEnabled, mode, resetSent]);
+
 
   useEffect(() => {
     const normalizedEmail = email.trim().toLowerCase();
@@ -70,12 +97,13 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
   }, [email, mode]);
 
   const clearError = () => setError('');
-  const switchMode = (next: Mode) => { setMode(next); clearError(); setCode(''); setResetSent(false); };
+  const switchMode = (next: Mode) => { setMode(next); clearError(); setCode(''); setResetSent(false); setTurnstileToken(''); if (turnstileWidgetId.current !== null) resetTurnstile(turnstileWidgetId.current); };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setError(''); setBusy(true);
     try {
-      const challenge = '';
+      const challenge = turnstileToken;
+      if (turnstileEnabled && !challenge) throw new Error('أكمل خطوة التحقق الأمني قبل المتابعة.');
       if (mode === 'register') {
         if (emailExistsInRailway) throw new Error('هذا البريد مسجل بالفعل، يرجى تسجيل الدخول');
         if (name.trim().length < 2) throw new Error('اكتب اسمًا صحيحًا.');
@@ -88,7 +116,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
       }
       if (mode === 'forgot') {
         if (!resetSent) {
-          const d:any = await forgotPassword(email.trim());
+          const d:any = await forgotPassword(email.trim(), challenge);
           if (!d.ok && !d.emailSent) {
             throw new Error(d.message || 'تعذر إرسال رمز الاستعادة حاليًا. حاول لاحقًا.');
           }
@@ -124,7 +152,11 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
         }
       }
     }
-    finally { setBusy(false); }
+    finally {
+      setBusy(false);
+      if (turnstileEnabled && turnstileWidgetId.current !== null) resetTurnstile(turnstileWidgetId.current);
+      setTurnstileToken('');
+    }
   };
 
   const chooseRole = async (role: 'owner' | 'user') => {
@@ -207,6 +239,8 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
                 </div>
               </label>
             ) : null}
+
+            {turnstileEnabled && <div className="flex justify-center py-2"><div ref={turnstileContainerRef} /></div>}
 
             {error && <div role="alert" className={`rounded-xl p-3 text-sm font-medium ${error.includes('تم ') ? 'border border-emerald-200 bg-emerald-50 text-emerald-700' : 'border border-red-200 bg-red-50 text-red-700'}`}>{error}</div>}
 

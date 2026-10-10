@@ -29,6 +29,17 @@ try {
   );
 
 
+  process.env.EMAIL_PROVIDER = "smtp";
+  process.env.SMTP_HOST = "smtp.gmail.com";
+  process.env.SMTP_PORT = "465";
+  process.env.SMTP_SECURE = "true";
+  process.env.SMTP_USER = "sender@example.com";
+  delete process.env.SMTP_PASS;
+  await assert.rejects(
+    () => sendPasswordResetEmail("user@example.com", "123456", 15),
+    /SMTP_PASS مطلوب/
+  );
+
   process.env.EMAIL_PROVIDER = "oracle-relay";
   process.env.ORACLE_EMAIL_RELAY_URL = "https://smart-time-ai.duckdns.org/api/internal/send-reset";
   process.env.ORACLE_EMAIL_RELAY_SECRET = "unit-test-secret";
