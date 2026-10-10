@@ -98,7 +98,7 @@ app.use("/api/chat", chatRouter);
 
 
 
-const TRIAL_MODE = String(process.env.TRIAL_MODE || 'true').trim().toLowerCase() !== 'false';
+const TRIAL_MODE = String(process.env.TRIAL_MODE || 'false').trim().toLowerCase() === 'true';
 const TRIAL_USER_ID = 'smart-time-trial-user';
 const AUTH_SESSION_DAYS = 30;
 const PASSWORD_RESET_MINUTES = 15;
@@ -280,8 +280,6 @@ app.get('/api/trial/session', (req,res) => {
         "INSERT INTO users (id,email,username,password_hash,display_name,created_at,phone,phone_verified,activation_status,trip_free_searches,wallet_balance) VALUES (?,?,?,?,?,?,?,?,?,?,?)"
       ).run(TRIAL_USER_ID, email, username, hashPassword(crypto.randomBytes(24).toString('hex')), 'SMART TIME', now, null, 0, 'active', TRIP_WELCOME_FREE_SEARCHES, 0);
       row = db.prepare('SELECT * FROM users WHERE id=?').get(TRIAL_USER_ID) as any;
-    } else {
-      db.prepare("UPDATE users SET activation_status='active', phone_verified=0, phone=NULL WHERE id=?").run(TRIAL_USER_ID);
     }
     const token = createSession(TRIAL_USER_ID);
     res.json({ token, user: publicUser({ ...row, name: row.display_name, phoneVerified: false, activation_status: 'active' }) });
