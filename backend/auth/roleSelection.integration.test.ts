@@ -63,7 +63,7 @@ try {
 
   child = spawn(process.execPath, ['--import', 'tsx', 'server.ts'], {
     cwd: process.cwd(),
-    env: { ...process.env, PORT: String(port), SMART_TIME_DB_PATH: dbPath, JWT_SECRET: secret, OWNER_EMAILS: `${ownerEmail},${adminEmail}`, TURNSTILE_ENFORCE: 'false' },
+    env: { ...process.env, PORT: String(port), SMART_TIME_DB_PATH: dbPath, JWT_SECRET: secret, OWNER_EMAILS: `${ownerEmail},${adminEmail}`, TURNSTILE_ENFORCE: 'false', EMAIL_PROVIDER: '', SMTP_HOST: '', SMTP_USER: '', SMTP_PASS: '', RESEND_API_KEY: '', ALLOW_DEV_EMAIL_CODE: 'false' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let serverOutput = '';
