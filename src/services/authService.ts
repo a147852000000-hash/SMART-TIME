@@ -151,6 +151,17 @@ export async function saveUserSettings(settings: Record<string, unknown>): Promi
   return request('/api/user/settings', { settings });
 }
 
+export async function getUserSettings(): Promise<{ settings: Record<string, unknown>; updatedAt: string | null }> {
+  const response = await api('/api/user/settings', { method: 'GET' });
+  const data: any = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'تعذر تحميل إعدادات الحساب.');
+  return { settings: data.settings && typeof data.settings === 'object' ? data.settings : {}, updatedAt: data.updatedAt || null };
+}
+
+export async function saveUserSettings(settings: Record<string, unknown>): Promise<{ ok: true; updatedAt: string }> {
+  return request('/api/user/settings', { settings });
+}
+
 export async function registerWithEmail(name: string, username: string, email: string, password: string, turnstileToken?: string): Promise<any> {
   const data = await request('/api/auth/register', { name, username, email, password, deviceId: getDeviceId(), turnstileToken: turnstileToken || '' });
   if (!data.token) return data;
