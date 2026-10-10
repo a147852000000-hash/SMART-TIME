@@ -25,6 +25,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
   const [error, setError] = useState('');
   const [resetSent, setResetSent] = useState(false);
   const [roleChoiceTicket, setRoleChoiceTicket] = useState('');
+  const [availableRoles, setAvailableRoles] = useState<string[]>([]);
   const [showRoleChoice, setShowRoleChoice] = useState(false);
   const [emailExistsInRailway, setEmailExistsInRailway] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState('');
@@ -97,7 +98,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
   }, [email, mode]);
 
   const clearError = () => setError('');
-  const switchMode = (next: Mode) => { setMode(next); clearError(); setCode(''); setResetSent(false); setTurnstileToken(''); if (turnstileWidgetId.current !== null) resetTurnstile(turnstileWidgetId.current); };
+  const switchMode = (next: Mode) => { setMode(next); clearError(); setCode(''); setResetSent(false); setShowRoleChoice(false); setRoleChoiceTicket(''); setAvailableRoles([]); setTurnstileToken(''); if (turnstileWidgetId.current !== null) resetTurnstile(turnstileWidgetId.current); };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setError(''); setBusy(true);
@@ -134,6 +135,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
       const result = await loginWithIdentifier(email.trim(), password, challenge);
       if ('requiresRoleChoice' in result && result.requiresRoleChoice) {
         setRoleChoiceTicket(result.roleChoiceTicket || '');
+        setAvailableRoles(Array.isArray(result.availableRoles) ? result.availableRoles.filter((role: string) => ['owner', 'admin', 'user'].includes(role)) : ['user']);
         setShowRoleChoice(true);
         setError('');
         return;
@@ -159,7 +161,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
     }
   };
 
-  const chooseRole = async (role: 'owner' | 'user') => {
+  const chooseRole = async (role: 'owner' | 'admin' | 'user') => {
     setError(''); setBusy(true);
     try {
       if (!roleChoiceTicket) throw new Error('انتهت صلاحية اختيار نوع الدخول. سجّل الدخول مرة أخرى.');
@@ -192,8 +194,9 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
               <div className="text-lg font-semibold text-black">Choose sign-in type</div>
               <p className="mt-1 text-sm text-gray-600">Choose how to enter for this session.</p>
             </div>
-            <button type="button" disabled={busy} onClick={() => chooseRole('owner')} className="w-full rounded-xl bg-black p-3.5 font-medium text-[#C5A059] transition hover:bg-gray-900 disabled:opacity-50">Continue as Owner</button>
-            <button type="button" disabled={busy} onClick={() => chooseRole('user')} className="w-full rounded-xl border border-gray-300 bg-white p-3.5 font-medium text-black transition hover:bg-gray-50 disabled:opacity-50">Continue as User</button>
+            {availableRoles.includes('owner') && <button type="button" disabled={busy} onClick={() => chooseRole('owner')} className="w-full rounded-xl bg-black p-3.5 font-medium text-[#C5A059] transition hover:bg-gray-900 disabled:opacity-50">Continue as Owner</button>}
+            {availableRoles.includes('admin') && <button type="button" disabled={busy} onClick={() => chooseRole('admin')} className="w-full rounded-xl bg-black p-3.5 font-medium text-[#C5A059] transition hover:bg-gray-900 disabled:opacity-50">Continue as Admin</button>}
+            {availableRoles.includes('user') && <button type="button" disabled={busy} onClick={() => chooseRole('user')} className="w-full rounded-xl border border-gray-300 bg-white p-3.5 font-medium text-black transition hover:bg-gray-50 disabled:opacity-50">Continue as User</button>}
             {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
           </div>
         ) : (
@@ -225,7 +228,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
             {mode === 'forgot' && resetSent && (
               <label className="block">
                 <span className="mb-2 block text-[15px] sm:text-[17px] font-medium text-gray-900">Reset code</span>
-                <input required dir="ltr" value={code} onChange={e=>setCode(e.target.value)} className="h-[60px] sm:h-[68px] w-full rounded-[14px] border border-[#D4AF37]/50 bg-white px-4 text-center tracking-[.3em] outline-none focus:border-[#C5A059] focus:ring-2 focus:ring-[#C5A059]/20" placeholder="Enter the code from your email" />
+                <input required dir="ltr" value={code} onChange={e=>setCode(e.target.value)} className="h-[60px] sm:h-[68px] w-full rounded-[14px] border border-[#D4AF37]/50 bg-white px-4 text-center tracking-[.3em] outline-none focus:border-[#C5A059] focus:ring-2 focus:ring-[#C5A059]/20" placeholder="Paste the 64-character reset token from your email" />
               </label>
             )}
 
