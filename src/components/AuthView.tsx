@@ -138,17 +138,17 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
   };
 
   return (
-    <main style={{ backgroundColor: '#FFFFFF' }} className="min-h-screen w-full bg-white text-black flex items-center justify-center px-4 py-6 sm:px-6 sm:py-10 font-sans" dir="ltr">
+    <main style={{ backgroundColor: '#FFFFFF' }} className="min-h-screen w-full bg-[#FFFFFF] text-black flex items-center justify-center px-4 py-6 sm:px-6 sm:py-10 font-sans" dir="ltr">
       {/* Transparent card - pure white background */}
-      <section style={{ backgroundColor: 'transparent' }} className="w-full max-w-[600px] bg-transparent px-1 py-2 sm:px-4 sm:py-4 border-0 shadow-none">
+      <section style={{ backgroundColor: 'transparent' }} className="w-full max-w-[440px] bg-transparent p-6 sm:p-8 border-0 shadow-none">
         <header className="mb-7 sm:mb-8 flex flex-col items-center text-center">
           <img
             src="/logo-smarttime-original.png"
             alt="SmartTime TIME GOLD"
-            className="mb-1 h-auto w-[460px] max-w-full object-contain drop-shadow-[0_8px_14px_rgba(197,160,89,0.08)]"
+            className="mb-2 h-auto w-[360px] max-w-full object-contain"
           />
           {/* Eng.mamdouh saad in GOLD */}
-          <p className="mt-1 font-serif text-[25px] sm:text-[32px] font-medium tracking-wide text-[#B88A32]">Eng.mamdouh saad</p>
+          <p className="mt-1 font-serif text-[24px] font-medium tracking-wide text-[#C5A059]">Eng.mamdouh saad</p>
           <h1 className="mt-4 sm:mt-5 font-serif text-[34px] sm:text-[42px] font-medium leading-tight text-black">
             {mode === 'login' ? 'Welcome back' : mode === 'register' ? 'Create account' : 'Forgot password?'}
           </h1>
@@ -173,12 +173,12 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
                 <span className="mb-2 block text-[15px] sm:text-[17px] font-medium text-gray-900">Full name</span>
                 <div className="relative">
                   <UserRound className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
-                  <input required value={name} onChange={e=>setName(e.target.value)} autoComplete="name" className="h-[60px] sm:h-[68px] w-full rounded-[14px] border border-[#C5A059]/75 bg-white pl-12 pr-4 text-[16px] sm:text-[18px] outline-none transition focus:border-[#B88A32] focus:ring-2 focus:ring-[#C5A059]/20" placeholder="Your name" />
+                  <input required value={name} onChange={e=>setName(e.target.value)} autoComplete="name" className="h-[60px] sm:h-[68px] w-full rounded-[14px] border border-[#D4AF37]/50 bg-white pl-12 pr-4 text-[16px] sm:text-[18px] outline-none transition focus:border-[#B88A32] focus:ring-2 focus:ring-[#C5A059]/20" placeholder="Your name" />
                 </div>
               </label>
               <label className="block">
                 <span className="mb-2 block text-[15px] sm:text-[17px] font-medium text-gray-900">Username</span>
-                <input required dir="ltr" value={username} onChange={e=>setUsername(e.target.value.replace(/\s/g,'').slice(0,30))} autoComplete="username" className="h-[60px] sm:h-[68px] w-full rounded-[14px] border border-[#C5A059]/75 bg-white px-4 text-[16px] sm:text-[18px] outline-none transition focus:border-[#B88A32] focus:ring-2 focus:ring-[#C5A059]/20" placeholder="username" />
+                <input required dir="ltr" value={username} onChange={e=>setUsername(e.target.value.replace(/\s/g,'').slice(0,30))} autoComplete="username" className="h-[60px] sm:h-[68px] w-full rounded-[14px] border border-[#D4AF37]/50 bg-white px-4 text-[16px] sm:text-[18px] outline-none transition focus:border-[#B88A32] focus:ring-2 focus:ring-[#C5A059]/20" placeholder="username" />
               </label>
             </>}
 
@@ -193,7 +193,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
             {mode === 'forgot' && resetSent && (
               <label className="block">
                 <span className="mb-2 block text-[15px] sm:text-[17px] font-medium text-gray-900">Reset code</span>
-                <input required dir="ltr" value={code} onChange={e=>setCode(e.target.value)} className="h-[60px] sm:h-[68px] w-full rounded-[14px] border border-[#C5A059]/75 bg-white px-4 text-center tracking-[.3em] outline-none focus:border-[#C5A059] focus:ring-2 focus:ring-[#C5A059]/20" placeholder="Enter the code from your email" />
+                <input required dir="ltr" value={code} onChange={e=>setCode(e.target.value)} className="h-[60px] sm:h-[68px] w-full rounded-[14px] border border-[#D4AF37]/50 bg-white px-4 text-center tracking-[.3em] outline-none focus:border-[#C5A059] focus:ring-2 focus:ring-[#C5A059]/20" placeholder="Enter the code from your email" />
               </label>
             )}
 
@@ -202,7 +202,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
                 <span className="mb-2 block text-[15px] sm:text-[17px] font-medium text-gray-900">{mode === 'forgot' ? 'New password' : 'Password'}</span>
                 <div className="relative">
                   <LockKeyhole className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
-                  <input required minLength={8} type={show?'text':'password'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={e=>setPassword(e.target.value)} className="h-[60px] sm:h-[68px] w-full rounded-[14px] border border-[#C5A059]/75 bg-white pl-12 pr-12 text-[16px] sm:text-[18px] outline-none transition placeholder:text-gray-400 focus:border-[#B88A32] focus:ring-2 focus:ring-[#C5A059]/20" placeholder="••••••••" />
+                  <input required minLength={8} type={show?'text':'password'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={e=>setPassword(e.target.value)} className="h-[60px] sm:h-[68px] w-full rounded-[14px] border border-[#D4AF37]/50 bg-white pl-12 pr-12 text-[16px] sm:text-[18px] outline-none transition placeholder:text-gray-400 focus:border-[#B88A32] focus:ring-2 focus:ring-[#C5A059]/20" placeholder="••••••••" />
                   <button type="button" aria-label={show?'Hide password':'Show password'} onClick={()=>setShow(!show)} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-black focus:outline-none focus:ring-2 focus:ring-[#C5A059]/40">{show?<EyeOff className="h-5 w-5"/>:<Eye className="h-5 w-5"/>}</button>
                 </div>
               </label>
@@ -231,7 +231,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
                     <span>or continue with</span>
                     <span className="h-px flex-1 bg-[#D4AF37]/40"/>
                   </div>
-                  <button type="button" onClick={()=>setError('Google sign-in is not configured on this deployment yet.')} className="flex min-h-[60px] sm:min-h-[68px] w-full items-center justify-center gap-3 rounded-[14px] border border-[#A88B52] bg-white px-4 py-3 text-[17px] sm:text-[20px] shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#C5A059]/40">
+                  <button type="button" onClick={()=>setError('Google sign-in is not configured on this deployment yet.')} className="flex min-h-[60px] sm:min-h-[68px] w-full items-center justify-center gap-3 rounded-[14px] border border-[#D4AF37]/50 bg-white px-4 py-3 text-[17px] sm:text-[20px] shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#C5A059]/40">
                     <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24">
                       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                       <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -244,7 +244,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
 
                 {/* Guest directly after Google - no second divider */}
                 <div className="pt-3">
-                  <button type="button" onClick={onGuest} className="flex min-h-[60px] sm:min-h-[68px] w-full items-center justify-center gap-3 rounded-[14px] border border-[#A88B52] bg-white px-3 text-[15px] sm:text-[18px] text-gray-900 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#C5A059]/40">
+                  <button type="button" onClick={onGuest} className="flex min-h-[60px] sm:min-h-[68px] w-full items-center justify-center gap-3 rounded-[14px] border border-[#D4AF37]/50 bg-white px-3 text-[15px] sm:text-[18px] text-gray-900 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#C5A059]/40">
                     <UserRound className="h-5 w-5 shrink-0 text-[#C5A059]"/>
                     <span>الدخول كزائر — Continue as Guest</span>
                   </button>
@@ -258,7 +258,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
             {/* Guest for register/forgot modes */}
             {mode !== 'login' && (
               <div className="pt-3">
-                <button type="button" onClick={onGuest} className="flex min-h-[60px] sm:min-h-[68px] w-full items-center justify-center gap-3 rounded-[14px] border border-[#A88B52] bg-white px-3 text-[15px] sm:text-[18px] text-gray-900 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#C5A059]/40">
+                <button type="button" onClick={onGuest} className="flex min-h-[60px] sm:min-h-[68px] w-full items-center justify-center gap-3 rounded-[14px] border border-[#D4AF37]/50 bg-white px-3 text-[15px] sm:text-[18px] text-gray-900 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#C5A059]/40">
                   <UserRound className="h-5 w-5 shrink-0 text-[#C5A059]"/>
                   <span>الدخول كزائر — Continue as Guest</span>
                 </button>
