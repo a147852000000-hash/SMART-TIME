@@ -77,7 +77,7 @@ export async function loginWithIdentifier(identifier: string, password: string, 
 }
 
 
-export async function selectLoginRole(roleChoiceTicket: string, role: 'owner' | 'user'): Promise<AuthSession> {
+export async function selectLoginRole(roleChoiceTicket: string, role: 'owner' | 'admin' | 'user'): Promise<AuthSession> {
   const data = await request('/api/auth/select-role', { roleChoiceTicket, role });
   const session: AuthSession = { token: data.token, user: data.user };
   saveSession(session); applyUserToProfile(session.user); return session;
