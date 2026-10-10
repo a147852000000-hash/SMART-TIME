@@ -99,10 +99,10 @@ export default function App() {
   const loadCloudSettings = useCallback(async () => {
     const result = await getUserSettings();
     const settings = result.settings || {};
-    if (settings.language === 'ar' || settings.language === 'en' || settings.language === 'fr') setLanguage(settings.language);
-    if (settings.theme === 'light' || settings.theme === 'dark') setTheme(settings.theme);
-    if (['ocean', 'facebook', 'whatsapp', 'telegram', 'instagram', 'youtube', 'gold'].includes(String(settings.colorTheme))) setColorTheme(settings.colorTheme as ColorTheme);
-    if (['classic', 'soft', 'bold', 'glow'].includes(String(settings.iconStyle))) setIconStyle(settings.iconStyle as IconStyle);
+    setLanguage(settings.language === 'ar' || settings.language === 'en' || settings.language === 'fr' ? settings.language : 'ar');
+    setTheme(settings.theme === 'light' || settings.theme === 'dark' ? settings.theme : 'light');
+    setColorTheme(['ocean', 'facebook', 'whatsapp', 'telegram', 'instagram', 'youtube', 'gold'].includes(String(settings.colorTheme)) ? settings.colorTheme as ColorTheme : 'ocean');
+    setIconStyle(['classic', 'soft', 'bold', 'glow'].includes(String(settings.iconStyle)) ? settings.iconStyle as IconStyle : 'classic');
     setCloudSettingsReady(true);
   }, []);
 
