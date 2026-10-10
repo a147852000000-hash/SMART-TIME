@@ -1,0 +1,28 @@
+name: Server Authoritative Role Security
+
+on:
+  push:
+    branches: [fix/server-authoritative-roles]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  role-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Server role security invariants
+        run: node scripts/verify-server-role-security.mjs
+      - name: Type check
+        run: npm run lint
+      - name: Production build
+        run: npm run build
