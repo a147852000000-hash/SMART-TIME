@@ -169,7 +169,7 @@ export default function App() {
         if (!active) return;
         setAuthenticated(Boolean(session));
         if (session) setUserProfile(UserRepository.getProfile());
-        if (session && session.user.role !== 'guest') {
+        if (session && session.user.role !== 'guest' && session.user.id !== 'smart-time-trial-user') {
           try { await loadCloudSettings(); } catch { if (active) setCloudSettingsReady(false); }
         } else {
           setCloudSettingsReady(false);
@@ -186,7 +186,7 @@ export default function App() {
 
   useEffect(() => {
     const session = getStoredSession();
-    if (!authChecked || !authenticated || !cloudSettingsReady || !session?.token || session.user.role === 'guest') return;
+    if (!authChecked || !authenticated || !cloudSettingsReady || !session?.token || session.user.role === 'guest' || session.user.id === 'smart-time-trial-user') return;
     const timeout = window.setTimeout(() => {
       void saveUserSettings({ language, theme, colorTheme, iconStyle }).catch((error) => {
         console.error('Cloud settings save failed:', error);
@@ -200,7 +200,7 @@ export default function App() {
     const session = await restoreSession();
     setAuthenticated(Boolean(session));
     if (session) setUserProfile(UserRepository.getProfile());
-    if (session && session.user.role !== 'guest') {
+    if (session && session.user.role !== 'guest' && session.user.id !== 'smart-time-trial-user') {
       try { await loadCloudSettings(); } catch { setCloudSettingsReady(false); }
     }
   }, [loadCloudSettings]);
