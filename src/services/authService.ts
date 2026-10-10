@@ -93,7 +93,7 @@ export async function loginWithPhone(phone: string, code: string, turnstileToken
 
 const API_BASE = 'https://smart-time-ai.duckdns.org';
 
-export async function forgotPassword(email: string) {
+export async function forgotPassword(email: string, turnstileToken?: string) {
   const normalizedEmail = email.trim();
   if (!normalizedEmail) throw new Error('أدخل بريدك الإلكتروني.');
 
@@ -104,7 +104,7 @@ export async function forgotPassword(email: string) {
     response = await fetch(apiUrl('/api/auth/forgot-password'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: normalizedEmail }),
+      body: JSON.stringify({ email: normalizedEmail, turnstileToken: turnstileToken || '' }),
       signal: controller.signal,
     });
   } catch {
