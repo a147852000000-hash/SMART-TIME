@@ -191,7 +191,7 @@ try {
   db.prepare('INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at')
     .run(userEmail, crypto.createHash('sha256').update(wrongGuessToken).digest('hex'), new Date(Date.now() + 60 * 60_000).toISOString(), 0, new Date().toISOString());
   for (let i = 0; i < 5; i++) {
-    const wrongGuess = await post('/api/auth/reset-password', { email: userEmail, code: 'f'.repeat(64), newPassword: 'AnotherPassword!123' });
+    const wrongGuess = await post('/api/auth/reset-password', { email: userEmail, code: '111111', newPassword: 'AnotherPassword!123' });
     assert.equal(wrongGuess.status, 400, 'the first five wrong reset-token guesses must be rejected');
   }
   const sixthGuess = await post('/api/auth/reset-password', { email: userEmail, code: 'f'.repeat(64), newPassword: 'AnotherPassword!123' });
