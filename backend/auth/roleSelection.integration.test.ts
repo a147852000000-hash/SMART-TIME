@@ -63,7 +63,7 @@ try {
 
   child = spawn(process.execPath, ['--import', 'tsx', 'server.ts'], {
     cwd: process.cwd(),
-    env: { ...process.env, PORT: String(port), SMART_TIME_DB_PATH: dbPath, JWT_SECRET: secret, OWNER_EMAILS: `${ownerEmail},${adminEmail}`, TURNSTILE_ENFORCE: 'false', EMAIL_PROVIDER: '', SMTP_HOST: '', SMTP_USER: '', SMTP_PASS: '', RESEND_API_KEY: '', ALLOW_DEV_EMAIL_CODE: 'false' },
+    env: { ...process.env, PORT: String(port), SMART_TIME_DB_PATH: dbPath, JWT_SECRET: secret, OWNER_EMAILS: `${ownerEmail},${adminEmail}`, TURNSTILE_ENFORCE: 'false', EMAIL_PROVIDER: '', SMTP_HOST: '', SMTP_USER: '', SMTP_PASS: '', RESEND_API_KEY: '', ALLOW_DEV_EMAIL_CODE: 'true' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let serverOutput = '';
@@ -121,11 +121,30 @@ try {
   assert.equal(newPasswordLogin.status, 200);
 
   const unknownForgot = await post('/api/auth/forgot-password', { email: 'unknown@example.test' });
+  assert.equal(unknownForgot.status, 404);
+  assert.equal(unknownForgot.body.code, 'EMAIL_NOT_REGISTERED');
+  assert.equal(unknownForgot.body.message, 'البريد غير مسجل، يجب التسجيل أولاً');
   const knownForgot = await post('/api/auth/forgot-password', { email: userEmail });
-  assert.deepEqual(unknownForgot.body, knownForgot.body, 'forgot-password must not reveal account existence');
-  assert.equal(unknownForgot.body.ok, true);
+  assert.equal(knownForgot.status, 200);
+  assert.equal(knownForgot.body.ok, true);
+  assert.equal(JSON.stringify(knownForgot.body).includes('code'), false, 'reset token must not be included in the API response');
+  assert.equal(JSON.stringify(knownForgot.body).includes('a'.repeat(64)), false, 'reset token must not be included in the API response');
+  assert.equal((await post('/api/auth/forgot-password', { email: userEmail })).status, 200);
+  assert.equal((await post('/api/auth/forgot-password', { email: userEmail })).status, 200);
+  const rateLimited = await post('/api/auth/forgot-password', { email: userEmail });
+  assert.equal(rateLimited.status, 429, 'fourth reset request in the 15-minute window must be rate limited');
 
-  console.log('AUTH_SECURITY_INTEGRATION_PASS: role escalation blocked; DB role authoritative; JWT session revocation; settings isolation; reset token one-use; generic forgot-password response.');
+  const wrongGuessToken = crypto.randomBytes(32).toString('hex');
+  db.prepare('INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at')
+    .run(userEmail, crypto.createHash('sha256').update(wrongGuessToken).digest('hex'), new Date(Date.now() + 60 * 60_000).toISOString(), 0, new Date().toISOString());
+  for (let i = 0; i < 5; i++) {
+    const wrongGuess = await post('/api/auth/reset-password', { email: userEmail, code: 'f'.repeat(64), newPassword: 'AnotherPassword!123' });
+    assert.equal(wrongGuess.status, 400, 'the first five wrong reset-token guesses must be rejected');
+  }
+  const sixthGuess = await post('/api/auth/reset-password', { email: userEmail, code: 'f'.repeat(64), newPassword: 'AnotherPassword!123' });
+  assert.equal(sixthGuess.status, 429, 'the sixth reset-token guess must be rate limited');
+
+  console.log('AUTH_SECURITY_INTEGRATION_PASS: role escalation blocked; DB role authoritative; JWT session revocation; settings isolation; explicit unknown-email response; reset token one-use; request and guess limits.');
 } catch (error) {
   console.error('AUTH_SECURITY_INTEGRATION_FAIL', error);
   if (child) child.kill('SIGTERM');
