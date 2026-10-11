@@ -67,6 +67,65 @@ chmod 600 /home/ubuntu/smart-time-ai/data/smart-time-migration-test.db
 
 The output is a staging auth database, not yet a complete replacement for the whole application's data. Before production use, compare the entire schema used by `backend/database.ts`, verify all application tables and related records, and test a copy of the DB with the exact built server version. Never configure `SMART_TIME_DB_PATH` to this file until that review passes.
 
+## 4B. Build and run the GitHub server on localhost:3001 (no production cutover)
+
+After the PR branch's CI is green, run the following on Oracle. This creates a separate checkout and a separate SQLite file; it does not stop or change the current PM2 service or Caddy. If the repository is private, use the server's existing authenticated Git setup rather than placing a token in the URL.
+
+```bash
+set -euo pipefail
+LIVE=/home/ubuntu/smart-time-ai
+STAGE=/home/ubuntu/smart-time-github-staging
+BRANCH=feat/oracle-json-sqlite-unification
+DB="$STAGE/data/oracle-migration-staging.db"
+
+test -d "$LIVE"
+test ! -e "$STAGE"
+git clone --single-branch --branch "$BRANCH" \
+  https://github.com/a147852000000-hash/SMART-TIME.git "$STAGE"
+cd "$STAGE"
+
+# Reuse runtime configuration without copying or printing secrets.
+if [ -f "$LIVE/.env" ]; then ln -s "$LIVE/.env" .env; fi
+
+npm install --ignore-scripts --no-audit --no-fund
+npm run test:password-reset-email
+npm run test:auth-security
+npm run test:turnstile
+npm run test:legacy-json-migration
+npm run lint
+npm run build
+
+SESSION_ARGS=()
+if [ -f "$LIVE/sessions.json" ]; then SESSION_ARGS=(--sessions "$LIVE/sessions.json"); fi
+node scripts/migrate-legacy-json-to-sqlite.cjs \
+  --users "$LIVE/users.json" "${SESSION_ARGS[@]}"
+mkdir -p "$STAGE/data"
+test ! -e "$DB"
+node scripts/migrate-legacy-json-to-sqlite.cjs \
+  --users "$LIVE/users.json" "${SESSION_ARGS[@]}" \
+  --apply --output "$DB"
+chmod 600 "$DB"
+
+# Run in the foreground, restricted to loopback. Leave the existing PM2 app and Caddy untouched.
+NODE_ENV=production HOST=127.0.0.1 PORT=3001 SMART_TIME_DB_PATH="$DB" node dist/server.cjs
+```
+
+Keep this SSH terminal open. From a second SSH terminal, test only localhost:
+
+```bash
+curl -fsS http://127.0.0.1:3001/api/health
+curl -sS -o /tmp/smart-time-reset-check.json -w 'HTTP %{http_code}\n' \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"definitely-not-registered-20261011@example.invalid"}' \
+  http://127.0.0.1:3001/api/auth/forgot-password
+cat /tmp/smart-time-reset-check.json
+rm -f /tmp/smart-time-reset-check.json
+```
+
+The expected unknown-email response is HTTP 404 with `EMAIL_NOT_REGISTERED`. Do not test a real email until the staging mail provider is confirmed. Do not open port 3001 in Oracle security rules. Stop the staging process with Ctrl+C in its first terminal. The production service remains unchanged.
+
+The staging database contains only the migrated authentication users/sessions initially; the GitHub server initializes the rest of its application schema when it starts. This does **not** migrate unrelated application data stored outside those JSON files. Do not switch Caddy/PM2 until all required data stores have been inventoried and migrated.
+
 ## 5. Required pre-cutover checks
 
 - `npm ci`, `npm run lint`, `npm run build`, and repository CI all pass.
