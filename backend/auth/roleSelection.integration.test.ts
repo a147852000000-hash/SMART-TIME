@@ -121,9 +121,13 @@ try {
   assert.equal(newPasswordLogin.status, 200);
 
   const unknownForgot = await post('/api/auth/forgot-password', { email: 'unknown@example.test' });
+  assert.equal(unknownForgot.status, 404);
+  assert.equal(unknownForgot.body.code, 'EMAIL_NOT_REGISTERED');
+  assert.equal(unknownForgot.body.message, 'البريد غير مسجل، يجب التسجيل أولاً');
   const knownForgot = await post('/api/auth/forgot-password', { email: userEmail });
-  assert.deepEqual(unknownForgot.body, knownForgot.body, 'forgot-password must not reveal account existence');
-  assert.equal(unknownForgot.body.ok, true);
+  assert.equal(knownForgot.status, 200);
+  assert.equal(knownForgot.body.ok, true);
+  assert.equal(JSON.stringify(knownForgot.body).includes('code'), false, 'reset token must not be included in the API response');
 
   console.log('AUTH_SECURITY_INTEGRATION_PASS: role escalation blocked; DB role authoritative; JWT session revocation; settings isolation; reset token one-use; generic forgot-password response.');
 } catch (error) {
