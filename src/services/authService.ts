@@ -115,7 +115,9 @@ export async function forgotPassword(email: string, turnstileToken?: string) {
 
   const data: any = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.message || data.error || 'تعذر إرسال كود استعادة كلمة المرور. حاول مرة أخرى.');
+    const error: any = new Error(data.message || data.error || 'تعذر إرسال كود استعادة كلمة المرور. حاول مرة أخرى.');
+    error.code = data.code;
+    throw error;
   }
 
   // Oracle is the authority for the reset-code store and email delivery.
