@@ -456,7 +456,8 @@ app.post('/api/auth/forgot-password',async(req,res)=>{
       await sendPasswordResetEmail(email,code);
       return res.json({ok:true,message:'تم إرسال تعليمات الاستعادة إلى بريدك الإلكتروني.'});
     } catch(mailErr:any) {
-      db.prepare('DELETE FROM password_resets WHERE email=?').run(email);
+      // Delete only the token created by this request; a concurrent newer request may have replaced it.
+      db.prepare('DELETE FROM password_resets WHERE email=? AND code_hash=?').run(email,otpHash(code));
       console.error('PASSWORD_RESET_EMAIL_FAILED',{code:String(mailErr?.code||'MAIL_SEND_FAILED')});
       return res.status(503).json({code:'EMAIL_DELIVERY_FAILED',message:'تعذر إرسال رسالة الاستعادة الآن. حاول لاحقًا.'});
     }
