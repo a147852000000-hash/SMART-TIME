@@ -60,6 +60,7 @@ test('apply writes an isolated SQLite DB, hashes plaintext password, and downgra
       assert.notEqual(resetOnly.password_hash, '');
       assert.equal(db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n, 1);
     } finally { db.close(); }
+    assert.equal(fs.statSync(output).mode & 0o777, 0o600, 'migration database must not be readable by other users');
     const second = run(['--users', users, '--apply', '--output', output]);
     assert.notEqual(second.status, 0);
     assert.match(second.stderr, /refusing to overwrite/);
@@ -128,4 +129,24 @@ test('duplicate normalized usernames and phone numbers stop before creating outp
       assert.equal(fs.existsSync(output), false);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   }
+});
+
+
+test('duplicate session tokens stop before creating output', () => {
+  const dir = tempDir();
+  try {
+    const users = path.join(dir, 'users.json');
+    const sessions = path.join(dir, 'sessions.json');
+    const output = path.join(dir, 'staging.db');
+    const expiry = new Date(Date.now() + 60 * 60_000).toISOString();
+    fs.writeFileSync(users, JSON.stringify([{ id: 'u1', email: 'person@example.com', password: 'secret' }]), { mode: 0o600 });
+    fs.writeFileSync(sessions, JSON.stringify([
+      { token: 'duplicate-session', userId: 'u1', expiresAt: expiry },
+      { token: 'duplicate-session', userId: 'u1', expiresAt: expiry },
+    ]), { mode: 0o600 });
+    const result = run(['--users', users, '--sessions', sessions, '--apply', '--output', output]);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Duplicate session token detected/);
+    assert.equal(fs.existsSync(output), false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
