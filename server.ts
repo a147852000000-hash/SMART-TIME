@@ -533,9 +533,9 @@ app.post('/api/auth/forgot-password',async(req,res)=>{
     }
     const row=db.prepare('SELECT id FROM users WHERE email=?').get(email) as any;
     if(!row) {
-      return res.status(404).json({code:'EMAIL_NOT_REGISTERED',message:'البريد غير مسجل، يجب التسجيل أولاً'});
+      return res.status(404).json({code:'ACCOUNT_NOT_FOUND',message:'هذا البريد غير مسجل، أنشئ حساباً',registerUrl:'/register'});
     }
-    const code=crypto.randomBytes(32).toString('hex');
+    const code=String(crypto.randomInt(100000, 1000000));
     const expires=new Date(Date.now()+PASSWORD_RESET_MINUTES*60000).toISOString();
     db.prepare(`INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at`)
       .run(email,otpHash(code),expires,0,new Date().toISOString());
@@ -560,7 +560,7 @@ app.post('/api/auth/forgot-password',async(req,res)=>{
     const code=String(req.body?.code||req.body?.token||'').trim();
     const newPassword=String(req.body?.newPassword||'');
     if(newPassword.length<8) return res.status(400).json({error:'كلمة المرور يجب أن تكون 8 أحرف على الأقل'});
-    if(!email||email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!/^[a-f0-9]{64}$/i.test(code)) {
+    if(!email||email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!/^\d{6}$/.test(code)) {
       return res.status(400).json({error:'رمز الاستعادة غير صحيح أو منتهي.'});
     }
 
