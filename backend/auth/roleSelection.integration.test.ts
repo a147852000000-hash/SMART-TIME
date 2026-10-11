@@ -14,6 +14,7 @@ const adminEmail = 'admin@example.test';
 const userEmail = 'user@example.test';
 process.env.SMART_TIME_DB_PATH = dbPath;
 process.env.JWT_SECRET = secret;
+process.env.OTP_HMAC_SECRET = secret;
 process.env.OWNER_EMAILS = ownerEmail;
 process.env.TURNSTILE_ENFORCE = 'false';
 
@@ -63,7 +64,7 @@ try {
 
   child = spawn(process.execPath, ['--import', 'tsx', 'server.ts'], {
     cwd: process.cwd(),
-    env: { ...process.env, PORT: String(port), SMART_TIME_DB_PATH: dbPath, JWT_SECRET: secret, OWNER_EMAILS: ownerEmail, ALLOWED_ORIGINS: 'https://app.example.test', TURNSTILE_ENFORCE: 'false', EMAIL_PROVIDER: '', SMTP_HOST: '', SMTP_USER: '', SMTP_PASS: '', RESEND_API_KEY: '', ALLOW_DEV_EMAIL_CODE: 'true' },
+    env: { ...process.env, OTP_HMAC_SECRET: secret, PORT: String(port), SMART_TIME_DB_PATH: dbPath, JWT_SECRET: secret, OWNER_EMAILS: ownerEmail, ALLOWED_ORIGINS: 'https://app.example.test', TURNSTILE_ENFORCE: 'false', EMAIL_PROVIDER: '', SMTP_HOST: '', SMTP_USER: '', SMTP_PASS: '', RESEND_API_KEY: '', ALLOW_DEV_EMAIL_CODE: 'true' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let serverOutput = '';
@@ -85,7 +86,7 @@ try {
 
   const adminLogin = await post('/api/auth/login', { identifier: adminEmail, password });
   assert.equal(adminLogin.status, 200);
-  assert.equal(adminLogin.body.requiresRoleChoice, true);
+  assert.equal(adminLogin.body.requiresRoleChoice, true, 'DB admins must receive role-choice ticket even when not in OWNER_EMAILS');
   const adminEscalation = await post('/api/auth/select-role', { roleChoiceTicket: adminLogin.body.roleChoiceTicket, role: 'owner' });
   assert.equal(adminEscalation.status, 403, 'a DB admin must not select owner');
   const adminSession = await post('/api/auth/select-role', { roleChoiceTicket: adminLogin.body.roleChoiceTicket, role: 'admin' });
@@ -144,7 +145,7 @@ try {
 
   const token = '482619';
   db.prepare('INSERT INTO sessions(id,user_id,expires_at,created_at) VALUES(?,?,?,?)').run('pre-reset-session', 'test-user', new Date(Date.now() + 60 * 60_000).toISOString(), new Date().toISOString());
-  db.prepare('INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?)').run(userEmail, crypto.createHash('sha256').update(token).digest('hex'), new Date(Date.now() + 60 * 60_000).toISOString(), 0, new Date().toISOString());
+  db.prepare('INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?)').run(userEmail, crypto.createHmac('sha256', secret).update(token).digest('hex'), new Date(Date.now() + 60 * 60_000).toISOString(), 0, new Date().toISOString());
   const reset = await post('/api/auth/reset-password', { email: userEmail, code: token, newPassword: 'UpdatedPassword!123' });
   assert.equal(reset.status, 200);
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM sessions WHERE user_id=?').get('test-user').count, 0, 'password reset must revoke all existing sessions');
@@ -157,7 +158,7 @@ try {
 
   const concurrentToken = '583104';
   db.prepare('INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at')
-    .run(userEmail, crypto.createHash('sha256').update(concurrentToken).digest('hex'), new Date(Date.now() + 60 * 60_000).toISOString(), 0, new Date().toISOString());
+    .run(userEmail, crypto.createHmac('sha256', secret).update(concurrentToken).digest('hex'), new Date(Date.now() + 60 * 60_000).toISOString(), 0, new Date().toISOString());
   const concurrentResults = await Promise.all([
     post('/api/auth/reset-password', { email: userEmail, code: concurrentToken, newPassword: 'ConcurrentPassword!123' }),
     post('/api/auth/reset-password', { email: userEmail, code: concurrentToken, newPassword: 'AnotherConcurrentPassword!123' }),
@@ -176,7 +177,8 @@ try {
   assert.equal(JSON.stringify(knownForgot.body).includes('code'), false, 'reset token must not be included in the API response');
   assert.equal(JSON.stringify(knownForgot.body).includes('a'.repeat(64)), false, 'reset token must not be included in the API response');
   const storedReset = db.prepare('SELECT code_hash, attempts FROM password_resets WHERE email=?').get(userEmail);
-  assert.match(storedReset.code_hash, /^[a-f0-9]{64}$/i, 'database stores only a SHA-256 hash');
+  assert.match(storedReset.code_hash, /^[a-f0-9]{64}$/i, 'database stores a fixed-length HMAC-SHA256 digest');
+  assert.match(serverSource, /createHmac\\('sha256',secret\\)/, 'OTP hashes must be keyed by OTP_HMAC_SECRET');
   assert.doesNotMatch(JSON.stringify(knownForgot.body), /\b\d{6}\b/, 'reset code must not be returned in the response');
   const serverSource = fs.readFileSync(path.join(process.cwd(), 'server.ts'), 'utf8');
   assert.match(serverSource, /crypto\.randomInt\(100000, 1000000\)/, 'reset code generation uses crypto.randomInt for six digits');
@@ -189,7 +191,7 @@ try {
 
   const wrongGuessToken = '694217';
   db.prepare('INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at')
-    .run(userEmail, crypto.createHash('sha256').update(wrongGuessToken).digest('hex'), new Date(Date.now() + 60 * 60_000).toISOString(), 0, new Date().toISOString());
+    .run(userEmail, crypto.createHmac('sha256', secret).update(wrongGuessToken).digest('hex'), new Date(Date.now() + 60 * 60_000).toISOString(), 0, new Date().toISOString());
   for (let i = 0; i < 5; i++) {
     const wrongGuess = await post('/api/auth/reset-password', { email: userEmail, code: '111111', newPassword: 'AnotherPassword!123' });
     assert.equal(wrongGuess.status, 400, 'the first five wrong reset-token guesses must be rejected');
