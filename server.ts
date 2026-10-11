@@ -1880,10 +1880,11 @@ async function startServer() {
   const httpServer = http.createServer(app);
   setupChatWebSocket(httpServer);
 
-  httpServer.listen(PORT, "0.0.0.0", () => {
+  const listenHost = String(process.env.HOST || "0.0.0.0").trim() || "0.0.0.0";
+  httpServer.listen(PORT, listenHost, () => {
     setServiceStatus("backend", "LIVE", "express", `Listening on port ${PORT}`);
     setServiceStatus("chat_realtime", "LIVE", "websocket", "Realtime chat WebSocket ready on /ws/chat");
-    console.log(`[SMART TIME V8] Server & Chat WebSocket running on http://0.0.0.0:${PORT}`);
+    console.log(`[SMART TIME V8] Server & Chat WebSocket running on http://${listenHost}:${PORT}`);
   });
 }
 
