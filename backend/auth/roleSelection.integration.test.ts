@@ -99,6 +99,14 @@ try {
   const staleOwnerSession = await request('/api/auth/me', { headers: { authorization: `Bearer ${ownerSession.body.token}` } });
   assert.equal(staleOwnerSession.status, 401, 'owner JWT must be rejected after the account email changes');
   db.prepare('UPDATE users SET email=? WHERE id=?').run(ownerEmail, 'test-owner');
+  
+  // Legacy bearer sessions must not retain admin privileges after the email leaves the allowlist.
+  db.prepare('INSERT INTO sessions(id,user_id,expires_at,created_at,session_role) VALUES(?,?,?,?,?)')
+    .run('legacy-admin-session', 'test-admin', new Date(Date.now() + 60 * 60_000).toISOString(), new Date().toISOString(), 'admin');
+  db.prepare('UPDATE users SET email=? WHERE id=?').run('renamed-admin@example.test', 'test-admin');
+  const staleLegacyAdmin = await request('/api/auth/me', { headers: { authorization: 'Bearer legacy-admin-session' } });
+  assert.equal(staleLegacyAdmin.status, 401, 'legacy admin session must be rejected when its email is no longer allowlisted');
+  db.prepare('UPDATE users SET email=? WHERE id=?').run(adminEmail, 'test-admin');
   await post('/api/auth/logout', {}, ownerSession.body.token);
   const revoked = await request('/api/auth/me', { headers: { authorization: `Bearer ${ownerSession.body.token}` } });
   assert.equal(revoked.status, 401, 'logout must revoke JWT-backed sessions');
