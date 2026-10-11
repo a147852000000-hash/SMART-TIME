@@ -22,5 +22,6 @@ jobs:
       - run: npm run test:auth-security
       - run: npm run test:turnstile
       - run: npm run test:legacy-json-migration
+      - run: bash -n scripts/oracle-sqlite-backup.sh scripts/oracle-sqlite-restore-test.sh
       - run: npm run lint
       - run: npm run build
