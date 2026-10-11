@@ -184,7 +184,7 @@ const VALID_APP_ROLES = new Set(['owner', 'admin', 'user']);
 function rolesForDbRole(role: string): string[] { if (role === 'owner') return ['owner', 'admin', 'user']; if (role === 'admin') return ['admin', 'user']; return ['user']; }
 function issueRoleSelectionTicket(row: any): string {
   const now = Math.floor(Date.now() / 1000);
-  const availableRoles = rolesForDbRole(String(row.role)).filter(role => role === 'user' || OWNER_EMAILS.has(String(row.email).toLowerCase()));
+  const availableRoles = rolesForDbRole(String(row.role)).filter(role => role === 'user' || (role === 'admin' && ['admin', 'owner'].includes(String(row.role))) || (role === 'owner' && String(row.role) === 'owner' && OWNER_EMAILS.has(String(row.email).toLowerCase())));
   return signJwt({ purpose: 'role_selection', sub: row.id, email: row.email, actualRoleInDB: row.role, availableRoles, iat: now, exp: now + 300 });
 }
 function authUser(req: express.Request) {
