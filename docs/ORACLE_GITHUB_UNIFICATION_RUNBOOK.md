@@ -95,15 +95,12 @@ npm run test:legacy-json-migration
 npm run lint
 npm run build
 
-SESSION_ARGS=()
-if [ -f "$LIVE/sessions.json" ]; then SESSION_ARGS=(--sessions "$LIVE/sessions.json"); fi
-node scripts/migrate-legacy-json-to-sqlite.cjs \
-  --users "$LIVE/users.json" "${SESSION_ARGS[@]}"
+MIGRATE_ARGS=(--users "$LIVE/users.json")
+if [ -f "$LIVE/sessions.json" ]; then MIGRATE_ARGS+=(--sessions "$LIVE/sessions.json"); fi
+node scripts/migrate-legacy-json-to-sqlite.cjs "${MIGRATE_ARGS[@]}"
 mkdir -p "$STAGE/data"
 test ! -e "$DB"
-node scripts/migrate-legacy-json-to-sqlite.cjs \
-  --users "$LIVE/users.json" "${SESSION_ARGS[@]}" \
-  --apply --output "$DB"
+node scripts/migrate-legacy-json-to-sqlite.cjs "${MIGRATE_ARGS[@]}" --apply --output "$DB"
 chmod 600 "$DB"
 
 # Run in the foreground, restricted to loopback. Leave the existing PM2 app and Caddy untouched.
