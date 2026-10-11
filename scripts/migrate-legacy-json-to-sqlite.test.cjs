@@ -20,7 +20,7 @@ test('dry run reports counts without writing a database or mutating source JSON'
     const output = path.join(dir, 'should-not-exist.db');
     const userSource = JSON.stringify([{ id: 'u1', email: 'person@example.com', name: 'Person', password: 'plain-secret', role: 'owner' }]);
     fs.writeFileSync(users, userSource, { mode: 0o600 });
-    fs.writeFileSync(sessions, JSON.stringify([{ token: 'session-token', userId: 'u1' }]), { mode: 0o600 });
+    fs.writeFileSync(sessions, JSON.stringify([{ token: 'session-token', userId: 'u1', expiresAt: new Date(Date.now() + 60 * 60_000).toISOString() }]), { mode: 0o600 });
     const result = run(['--users', users, '--sessions', sessions]);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /DRY_RUN_READ_ONLY/);
@@ -77,4 +77,55 @@ test('invalid input stops without creating a database', () => {
     assert.equal(fs.existsSync(output), false);
     assert.match(result.stderr, /no valid email/);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+
+test('missing, invalid, and expired legacy sessions are never made valid during migration', () => {
+  const dir = tempDir();
+  try {
+    const users = path.join(dir, 'users.json');
+    const sessions = path.join(dir, 'sessions.json');
+    fs.writeFileSync(users, JSON.stringify([{ id: 'u1', email: 'person@example.com', password: 'plain-secret' }]), { mode: 0o600 });
+    fs.writeFileSync(sessions, JSON.stringify([
+      { token: 'no-expiry', userId: 'u1' },
+      { token: 'bad-expiry', userId: 'u1', expiresAt: 'not-a-date' },
+      { token: 'expired', userId: 'u1', expiresAt: new Date(Date.now() - 60_000).toISOString() },
+      { token: 'valid', userId: 'u1', expiresAt: new Date(Date.now() + 60 * 60_000).toISOString() },
+    ]), { mode: 0o600 });
+    const result = run(['--users', users, '--sessions', sessions]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /"importableSessions": 1/);
+    assert.match(result.stdout, /"invalidOrOrphanSessionsSkipped": 3/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('duplicate normalized usernames and phone numbers stop before creating output', () => {
+  const cases = [
+    {
+      rows: [
+        { id: 'u1', email: 'one@example.com', username: 'SameName', password: 'secret1' },
+        { id: 'u2', email: 'two@example.com', username: 'samename', password: 'secret2' },
+      ],
+      message: /Duplicate username detected/,
+    },
+    {
+      rows: [
+        { id: 'u1', email: 'one@example.com', phone: '+20 100-200-3000', password: 'secret1' },
+        { id: 'u2', email: 'two@example.com', phone: '+201002003000', password: 'secret2' },
+      ],
+      message: /Duplicate phone detected/,
+    },
+  ];
+  for (const item of cases) {
+    const dir = tempDir();
+    try {
+      const users = path.join(dir, 'users.json');
+      const output = path.join(dir, 'staging.db');
+      fs.writeFileSync(users, JSON.stringify(item.rows), { mode: 0o600 });
+      const result = run(['--users', users, '--apply', '--output', output]);
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, item.message);
+      assert.equal(fs.existsSync(output), false);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  }
 });
