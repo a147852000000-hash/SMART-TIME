@@ -150,3 +150,27 @@ test('duplicate session tokens stop before creating output', () => {
     assert.equal(fs.existsSync(output), false);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+
+test('a dangling symlink at the output path is treated as existing and is never overwritten', (t) => {
+  const dir = tempDir();
+  try {
+    const users = path.join(dir, 'users.json');
+    const output = path.join(dir, 'staging.db');
+    fs.writeFileSync(users, JSON.stringify([{ id: 'u1', email: 'person@example.com', password: 'secret' }]), { mode: 0o600 });
+    const target = path.join(dir, 'missing-target.db');
+    try {
+      fs.symlinkSync(target, output);
+    } catch (error) {
+      if (error && (error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'ENOTSUP')) {
+        return t.skip('Symlink creation is unavailable in this environment');
+      }
+      throw error;
+    }
+    const result = run(['--users', users, '--apply', '--output', output]);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /refusing to overwrite/i);
+    assert.equal(fs.lstatSync(output).isSymbolicLink(), true);
+    assert.equal(fs.existsSync(target), false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
