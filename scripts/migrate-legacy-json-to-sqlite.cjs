@@ -69,7 +69,7 @@ function normalizeUser(row, index) {
   const role = 'user';
   const createdAt = iso(first(row, ['created_at', 'createdAt', 'created', 'registeredAt']), new Date(0).toISOString());
   const phoneRaw = String(first(row, ['phone', 'mobile'], '')).trim();
-  const phone = phoneRaw ? phoneRaw.replace(/[\\s()-]/g, '') : null;
+  const phone = phoneRaw ? phoneRaw.replace(/[\s()-]/g, '') : null;
   const phoneVerified = ['true', '1', 'yes'].includes(String(first(row, ['phone_verified', 'phoneVerified'], 'false')).toLowerCase()) ? 1 : 0;
   const activationStatus = String(first(row, ['activation_status', 'activationStatus'], 'active')).slice(0, 40);
   const avatar = String(first(row, ['avatar', 'avatarUrl'], '')).trim() || null;
