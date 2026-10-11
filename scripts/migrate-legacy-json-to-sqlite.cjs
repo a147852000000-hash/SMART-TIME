@@ -68,7 +68,8 @@ function normalizeUser(row, index) {
   // All migrated accounts start as least-privilege user; owner/admin promotion is a separate reviewed DB operation.
   const role = 'user';
   const createdAt = iso(first(row, ['created_at', 'createdAt', 'created', 'registeredAt']), new Date(0).toISOString());
-  const phone = String(first(row, ['phone', 'mobile'], '')).trim() || null;
+  const phoneRaw = String(first(row, ['phone', 'mobile'], '')).trim();
+  const phone = phoneRaw ? phoneRaw.replace(/[\\s()-]/g, '') : null;
   const phoneVerified = ['true', '1', 'yes'].includes(String(first(row, ['phone_verified', 'phoneVerified'], 'false')).toLowerCase()) ? 1 : 0;
   const activationStatus = String(first(row, ['activation_status', 'activationStatus'], 'active')).slice(0, 40);
   const avatar = String(first(row, ['avatar', 'avatarUrl'], '')).trim() || null;
@@ -84,11 +85,15 @@ function normalizeSession(row, index, usersByEmail) {
   if (!userId) return null;
   const token = String(first(row, ['id', 'token', 'sessionToken', 'session_id'], '')).trim();
   if (!token) return null;
+  const expiresRaw = first(row, ['expires_at', 'expiresAt', 'expiry'], '');
+  const expiresDate = expiresRaw ? new Date(expiresRaw) : null;
+  // Never turn a missing/invalid/expired legacy session into a fresh valid session.
+  if (!expiresDate || Number.isNaN(expiresDate.getTime()) || expiresDate.getTime() <= Date.now()) return null;
   const now = new Date().toISOString();
   return {
     id: token,
     userId,
-    expiresAt: iso(first(row, ['expires_at', 'expiresAt', 'expiry']), new Date(Date.now() + 30 * 86400000).toISOString()),
+    expiresAt: expiresDate.toISOString(),
     createdAt: iso(first(row, ['created_at', 'createdAt', 'created']), now),
   };
 }
@@ -100,10 +105,16 @@ function main() {
   const users = rawUsers.map(normalizeUser);
   const emailSet = new Set();
   const idSet = new Set();
+  const usernameSet = new Set();
+  const phoneSet = new Set();
   for (const u of users) {
     if (emailSet.has(u.email)) throw new Error('Duplicate email detected (value hidden); migration stopped.');
     if (idSet.has(u.id)) throw new Error('Duplicate user id detected; migration stopped.');
+    if (u.username && usernameSet.has(u.username)) throw new Error('Duplicate username detected (value hidden); migration stopped.');
+    if (u.phone && phoneSet.has(u.phone)) throw new Error('Duplicate phone detected (value hidden); migration stopped.');
     emailSet.add(u.email); idSet.add(u.id);
+    if (u.username) usernameSet.add(u.username);
+    if (u.phone) phoneSet.add(u.phone);
   }
   const usersByEmail = new Map(users.map(u => [u.email, u]));
   const rawSessions = readJson(sessionsFile, 'sessions.json');
