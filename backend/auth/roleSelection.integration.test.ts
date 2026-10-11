@@ -95,6 +95,13 @@ try {
   assert.equal(ownerSession.body.user.role, 'owner');
   const me = await request('/api/auth/me', { headers: { authorization: `Bearer ${ownerSession.body.token}` } });
   assert.equal(me.status, 200);
+
+  // A privileged JWT must be invalidated if its account email changes after issuance.
+  db.prepare('UPDATE users SET email=? WHERE id=?').run('renamed-owner@example.test', 'test-owner');
+  const staleOwnerSession = await request('/api/auth/me', { headers: { authorization: `Bearer ${ownerSession.body.token}` } });
+  assert.equal(staleOwnerSession.status, 401, 'owner JWT must be rejected after the account email changes');
+  db.prepare('UPDATE users SET email=? WHERE id=?').run(ownerEmail, 'test-owner');
+
   await post('/api/auth/logout', {}, ownerSession.body.token);
   const revoked = await request('/api/auth/me', { headers: { authorization: `Bearer ${ownerSession.body.token}` } });
   assert.equal(revoked.status, 401, 'logout must revoke JWT-backed sessions');
