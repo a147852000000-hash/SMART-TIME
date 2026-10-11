@@ -239,7 +239,8 @@ function authUser(req: express.Request) {
 function publicUser(row:any){const selectedRole=row.selectedRole||'user';return {id:row.id,email:row.email,username:row.username||undefined,name:row.name||row.display_name||'',phone:row.phone||undefined,phoneVerified:!!row.phoneVerified,role:selectedRole,selectedRole,activationStatus:row.activation_status||row.activationStatus||'pending'};}
 function normalizePhone(phone:string){return String(phone||'').replace(/[\s()-]/g,'');}
 function normalizeUsername(username:string){return String(username||'').trim().toLowerCase();}
-function otpHash(code:string){const secret=String(process.env.OTP_HMAC_SECRET||'');if(!secret)throw new Error('OTP_HMAC_SECRET is required');return crypto.createHmac('sha256',secret).update(code).digest('hex');}
+function otpHash(code:string){return crypto.createHash('sha256').update(code).digest('hex');}
+function passwordResetHash(code:string){const secret=String(process.env.PASSWORD_RESET_HMAC_SECRET||'');if(!secret)throw new Error('PASSWORD_RESET_HMAC_SECRET is required');return crypto.createHmac('sha256',secret).update(code).digest('hex');}
 async function sendSms(phone:string, code:string){
   const provider=String(process.env.SMS_PROVIDER||'').trim().toLowerCase();
   const body=`رمز التحقق من SMART TIME هو: ${code}. صالح لمدة 5 دقائق.`;
@@ -538,14 +539,14 @@ app.post('/api/auth/forgot-password',async(req,res)=>{
     const code=String(crypto.randomInt(100000, 1000000));
     const expires=new Date(Date.now()+PASSWORD_RESET_MINUTES*60000).toISOString();
     db.prepare(`INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at`)
-      .run(email,otpHash(code),expires,0,new Date().toISOString());
+      .run(email,passwordResetHash(code),expires,0,new Date().toISOString());
     try {
       console.log('PASSWORD_RESET_EMAIL_ATTEMPT',{recipient:email.replace(/^(.).+(@.*)$/,'$1***$2')});
       await sendPasswordResetEmail(email,code);
       return res.json({ok:true,message:'تم إرسال تعليمات الاستعادة إلى بريدك الإلكتروني.'});
     } catch(mailErr:any) {
       // Delete only the token created by this request; a concurrent newer request may have replaced it.
-      db.prepare('DELETE FROM password_resets WHERE email=? AND code_hash=?').run(email,otpHash(code));
+      db.prepare('DELETE FROM password_resets WHERE email=? AND code_hash=?').run(email,passwordResetHash(code));
       console.error('PASSWORD_RESET_EMAIL_FAILED',{code:String(mailErr?.code||'MAIL_SEND_FAILED')});
       return res.status(503).json({code:'EMAIL_DELIVERY_FAILED',message:'تعذر إرسال رسالة الاستعادة الآن. حاول لاحقًا.'});
     }
@@ -578,7 +579,7 @@ app.post('/api/auth/forgot-password',async(req,res)=>{
         return res.status(429).json({error:'تم تجاوز عدد المحاولات.'});
       }
       db.prepare('UPDATE password_resets SET attempts=attempts+1 WHERE email=?').run(email);
-      const providedHash=Buffer.from(otpHash(code),'hex');
+      const providedHash=Buffer.from(passwordResetHash(code),'hex');
       const storedHash=Buffer.from(String(reset.code_hash||''),'hex');
       if(storedHash.length!==providedHash.length) { db.exec('COMMIT'); return res.status(400).json({error:'رمز الاستعادة غير صحيح أو منتهي.'}); }
       if(!crypto.timingSafeEqual(providedHash,storedHash)) {
