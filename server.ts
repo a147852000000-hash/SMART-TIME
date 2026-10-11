@@ -181,6 +181,16 @@ function verifyJwt(token: string): any | null {
 }
 const OWNER_EMAILS = new Set(String(process.env.OWNER_EMAILS || '').split(',').map(v => v.trim().toLowerCase()).filter(Boolean));
 const VALID_APP_ROLES = new Set(['owner', 'admin', 'user']);
+try { db.exec(`CREATE TABLE IF NOT EXISTS role_audit_log (
+  id TEXT PRIMARY KEY,
+  actor_user_id TEXT NOT NULL,
+  actor_email TEXT NOT NULL,
+  target_user_id TEXT NOT NULL,
+  target_email TEXT NOT NULL,
+  action TEXT NOT NULL CHECK(action IN ('admin_appointed','admin_revoked')),
+  created_at TEXT NOT NULL
+)`); } catch {}
+
 function rolesForDbRole(role: string): string[] { if (role === 'owner') return ['owner', 'admin', 'user']; if (role === 'admin') return ['admin', 'user']; return ['user']; }
 function issueRoleSelectionTicket(row: any): string {
   const now = Math.floor(Date.now() / 1000);
@@ -437,6 +447,58 @@ app.post('/api/auth/trips/verify-phone',async(req,res)=>{
 app.post('/api/auth/login',async(req,res)=>{try{if(!(await requireAuthTurnstile(req,res)))return;const identifier=String(req.body.identifier||req.body.email||'').trim(),normalizedEmail=identifier.toLowerCase(),normalizedUsername=normalizeUsername(identifier),password=String(req.body.password||'');let row:any=null;if(identifier.includes('@')) row=db.prepare('SELECT * FROM users WHERE email=?').get(normalizedEmail) as any;else row=db.prepare('SELECT * FROM users WHERE username=?').get(normalizedUsername) as any;if(!row||!verifyPassword(password,row.password_hash))return res.status(401).json({error:'بيانات الدخول غير صحيحة. تأكد من البريد أو اسم المستخدم وكلمة المرور.'});const dbRole=String(row.role||'user').toLowerCase();if(!VALID_APP_ROLES.has(dbRole))return res.status(403).json({error:'دور الحساب غير صالح.'});if(OWNER_EMAILS.has(String(row.email).toLowerCase())&&['owner','admin'].includes(dbRole)){const roleChoiceTicket=issueRoleSelectionTicket({...row,role:dbRole});const claims=verifyJwt(roleChoiceTicket);return res.json({requiresRoleChoice:true,roleChoiceTicket,actualRoleInDB:dbRole,availableRoles:claims?.availableRoles||['user']});}const user={...row,name:row.display_name,phoneVerified:row.phone_verified,selectedRole:'user'};res.json({token:createSession(row.id),user:publicUser(user)});}catch(e:any){res.status(500).json({error:'تعذر تسجيل الدخول'});}});
 app.post('/api/auth/select-role',(req,res)=>{try{const claims=verifyJwt(String(req.body.roleChoiceTicket||'')),requestedRole=String(req.body.role||'').trim().toLowerCase();if(!claims||claims.purpose!=='role_selection'||!claims.sub)return res.status(401).json({error:'انتهت صلاحية اختيار نوع الدخول. سجّل الدخول مرة أخرى.'});if(!VALID_APP_ROLES.has(requestedRole))return res.status(400).json({error:'نوع الدخول غير صالح.'});const row=db.prepare('SELECT * FROM users WHERE id=?').get(String(claims.sub)) as any;if(!row)return res.status(401).json({error:'الحساب غير موجود.'});const dbRole=String(row.role||'user').toLowerCase();if(dbRole!==String(claims.actualRoleInDB)||String(row.email).toLowerCase()!==String(claims.email).toLowerCase())return res.status(403).json({error:'تم تغيير صلاحيات الحساب. سجّل الدخول مرة أخرى.'});if(requestedRole==='owner'&&dbRole!=='owner')return res.status(403).json({error:'لا تملك صلاحية الدخول كمالك.'});if(requestedRole==='admin'&&dbRole!=='admin'&&dbRole!=='owner')return res.status(403).json({error:'لا تملك صلاحية الدخول كمسؤول.'});if(!rolesForDbRole(dbRole).includes(requestedRole))return res.status(403).json({error:'نوع الدخول غير مسموح لهذا الحساب.'});if(requestedRole!=='user'&&!OWNER_EMAILS.has(String(row.email).toLowerCase()))return res.status(403).json({error:'هذا الحساب غير مخوّل لاختيار هذا النوع من الدخول.'});const now=Math.floor(Date.now()/1000),sid=createSession(row.id),token=signJwt({purpose:'app_session',sub:row.id,sid,email:row.email,role:dbRole,selectedRole:requestedRole,iat:now,exp:now+AUTH_SESSION_DAYS*86400});db.prepare('UPDATE sessions SET session_role=? WHERE id=?').run(requestedRole,sid);res.json({token,user:publicUser({...row,name:row.display_name,phoneVerified:row.phone_verified,selectedRole:requestedRole})});}catch(e:any){res.status(500).json({error:'تعذر اختيار نوع الدخول.'});}});
 app.get('/api/auth/me',(req,res)=>{const user=authUser(req);if(!user)return res.status(401).json({error:'جلسة الدخول منتهية'});res.json({user:publicUser(user)});});
+app.post('/api/auth/owner/admin-role', (req,res) => {
+  const actor = authUser(req);
+  if (!actor || actor.role !== 'owner' || String(actor.actualRoleInDB) !== 'owner' || !OWNER_EMAILS.has(String(actor.email || '').toLowerCase())) {
+    return res.status(403).json({ code: 'OWNER_REQUIRED', message: 'هذا الإجراء مخصص للمالك فقط.' });
+  }
+  const targetEmail = String(req.body?.email || '').trim().toLowerCase();
+  const action = String(req.body?.action || '').trim().toLowerCase();
+  if (!targetEmail || targetEmail.length > 254 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(targetEmail) || !['appoint','revoke'].includes(action)) {
+    return res.status(400).json({ code: 'INVALID_REQUEST', message: 'البيانات غير صحيحة.' });
+  }
+  if (targetEmail === String(actor.email).toLowerCase()) {
+    return res.status(400).json({ code: 'SELF_APPOINTMENT_FORBIDDEN', message: 'لا يمكن تغيير صلاحيات حساب المالك نفسه.' });
+  }
+  try {
+    const target = db.prepare('SELECT id,email,role FROM users WHERE email=?').get(targetEmail) as any;
+    if (!target) return res.status(404).json({ code: 'ACCOUNT_NOT_FOUND', message: 'الحساب غير موجود.' });
+    if (String(target.role) === 'owner') return res.status(409).json({ code: 'OWNER_ROLE_PROTECTED', message: 'لا يمكن خفض صلاحية المالك.' });
+    if (action === 'appoint' && String(target.role) === 'admin') {
+      return res.status(200).json({ ok: true, role: 'admin', unchanged: true });
+    }
+    if (action === 'revoke' && String(target.role) !== 'admin') {
+      return res.status(200).json({ ok: true, role: String(target.role || 'user'), unchanged: true });
+    }
+    const now = new Date().toISOString();
+    const auditId = crypto.randomUUID();
+    const tx = db.transaction(() => {
+      if (action === 'appoint') {
+        db.prepare("UPDATE users SET role='admin' WHERE id=? AND role='user'").run(String(target.id));
+      } else {
+        db.prepare("UPDATE users SET role='user' WHERE id=? AND role='admin'").run(String(target.id));
+        // Revoke all target sessions immediately; role changes must not wait for JWT expiry.
+        db.prepare('DELETE FROM sessions WHERE user_id=?').run(String(target.id));
+      }
+      db.prepare('INSERT INTO role_audit_log(id,actor_user_id,actor_email,target_user_id,target_email,action,created_at) VALUES(?,?,?,?,?,?,?)')
+        .run(auditId, String(actor.id), String(actor.email).toLowerCase(), String(target.id), targetEmail, action === 'appoint' ? 'admin_appointed' : 'admin_revoked', now);
+    });
+    tx();
+    return res.json({ ok: true, email: targetEmail, role: action === 'appoint' ? 'admin' : 'user', sessionsRevoked: action === 'revoke' });
+  } catch (err:any) {
+    console.error('OWNER_ADMIN_ROLE_CHANGE_FAILED', { actorId: String(actor.id), code: String(err?.code || 'UNKNOWN') });
+    return res.status(500).json({ code: 'ROLE_CHANGE_FAILED', message: 'تعذر تحديث الصلاحيات.' });
+  }
+});
+app.get('/api/auth/owner/admin-role/audit', (req,res) => {
+  const actor = authUser(req);
+  if (!actor || actor.role !== 'owner' || String(actor.actualRoleInDB) !== 'owner' || !OWNER_EMAILS.has(String(actor.email || '').toLowerCase())) {
+    return res.status(403).json({ code: 'OWNER_REQUIRED', message: 'هذا الإجراء مخصص للمالك فقط.' });
+  }
+  const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 50));
+  const rows = db.prepare('SELECT id,actor_user_id,actor_email,target_user_id,target_email,action,created_at FROM role_audit_log ORDER BY created_at DESC LIMIT ?').all(limit);
+  return res.json({ ok: true, entries: rows });
+});
 app.post('/api/auth/owner/activate',(req,res)=>{try{const ownerEmail=String(req.body.ownerEmail||'').trim().toLowerCase(),key=String(req.body.activationKey||'').trim(),userEmail=String(req.body.userEmail||'').trim().toLowerCase();if(ownerEmail!==PROGRAM_OWNER_EMAIL)return res.status(403).json({error:'هذا الإجراء مخصص لصاحب البرنامج.'});if(!PROGRAM_OWNER_ACTIVATION_KEY||key!==PROGRAM_OWNER_ACTIVATION_KEY)return res.status(403).json({error:'مفتاح تفعيل المالك غير صحيح أو غير مُكوّن.'});const user=db.prepare('SELECT id FROM users WHERE email=?').get(userEmail) as any;if(!user)return res.status(404).json({error:'الحساب غير موجود.'});db.prepare("UPDATE users SET activation_status='active',activated_by=?,activated_at=? WHERE id=?").run(ownerEmail,new Date().toISOString(),user.id);res.json({ok:true,message:'تم اعتماد الحساب بنجاح.'});}catch(e:any){res.status(500).json({error:e.message||'تعذر اعتماد الحساب'});}});
 app.post('/api/auth/phone-login/request-otp',async(req,res)=>{try{const phone=normalizePhone(req.body.phone);if(phone.length<8)return res.status(400).json({error:'رقم الهاتف غير صحيح'});const row=db.prepare('SELECT id FROM users WHERE phone=? AND phone_verified=1').get(phone) as any;if(!row)return res.status(404).json({error:'هذا الرقم غير مرتبط بحساب موثق.'});try{const otpResult=await requestPhoneOtp(phone);res.json({ok:true,expiresAt:otpResult.expires,devCode:otpResult.devCode,smsProvider:otpResult.provider});}catch(err:any){return res.status(503).json({error:err.message||'تعذر إرسال SMS'});}}catch(e:any){res.status(500).json({error:e.message||'تعذر إرسال رمز SMS'});}});
 app.post('/api/auth/phone-login',async(req,res)=>{try{const phone=normalizePhone(req.body.phone),code=String(req.body.code||'').trim();const check=await checkPhoneOtp(phone,code);if(!check.ok)return res.status(check.status).json({error:check.error});const row=db.prepare('SELECT * FROM users WHERE phone=? AND phone_verified=1').get(phone) as any;if(!row)return res.status(404).json({error:'هذا الرقم غير مرتبط بحساب موثق.'});db.prepare('DELETE FROM phone_otps WHERE phone=?').run(phone);res.json({token:createSession(row.id),user:publicUser({...row,name:row.display_name,phoneVerified:row.phone_verified})});}catch(e:any){res.status(500).json({error:e.message||'تعذر تسجيل الدخول بالهاتف'});}});
