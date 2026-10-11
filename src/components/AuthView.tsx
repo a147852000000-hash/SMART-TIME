@@ -23,6 +23,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [showRegisterLink, setShowRegisterLink] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [roleChoiceTicket, setRoleChoiceTicket] = useState('');
   const [availableRoles, setAvailableRoles] = useState<string[]>([]);
@@ -98,7 +99,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
   }, [email, mode]);
 
   const clearError = () => setError('');
-  const switchMode = (next: Mode) => { setMode(next); clearError(); setCode(''); setResetSent(false); setShowRoleChoice(false); setRoleChoiceTicket(''); setAvailableRoles([]); setTurnstileToken(''); if (turnstileWidgetId.current !== null) resetTurnstile(turnstileWidgetId.current); };
+  const switchMode = (next: Mode) => { setMode(next); setShowRegisterLink(false); clearError(); setCode(''); setResetSent(false); setShowRoleChoice(false); setRoleChoiceTicket(''); setAvailableRoles([]); setTurnstileToken(''); if (turnstileWidgetId.current !== null) resetTurnstile(turnstileWidgetId.current); };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setError(''); setBusy(true);
@@ -143,8 +144,9 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
       onAuthenticated();
     } catch (err:any) {
       const message = err?.message || 'تعذر تنفيذ العملية.';
-      if (mode === 'forgot' && message.includes('غير مسجل')) {
-        setError('لو البريد الإلكتروني مرتبط بحساب، هيوصلك كود استعادة كلمة المرور.');
+      if (mode === 'forgot' && err?.code === 'ACCOUNT_NOT_FOUND') {
+        setShowRegisterLink(true);
+        setError('هذا البريد غير مسجل، أنشئ حساباً');
       } else {
         if (mode === 'register' && /مسجل بالفعل|already exists/i.test(message)) {
           setEmailExistsInRailway(true);
@@ -245,7 +247,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
 
             {turnstileEnabled && <div className="flex justify-center py-2"><div ref={turnstileContainerRef} /></div>}
 
-            {error && <div role="alert" className={`rounded-xl p-3 text-sm font-medium ${error.includes('تم ') ? 'border border-emerald-200 bg-emerald-50 text-emerald-700' : 'border border-red-200 bg-red-50 text-red-700'}`}>{error}</div>}
+            {error && <div role="alert" className={`rounded-xl p-3 text-sm font-medium ${error.includes('تم ') ? 'border border-emerald-200 bg-emerald-50 text-emerald-700' : 'border border-red-200 bg-red-50 text-red-700'}`}>{error}{showRegisterLink && <div className="mt-2"><button type="button" onClick={() => switchMode('register')} className="font-semibold underline">إنشاء حساب جديد</button></div>}</div>}
 
             <button disabled={busy || (mode === 'register' && emailExistsInRailway)} className="flex h-10 sm:h-[72px] w-full items-center justify-center rounded-full bg-[#090909] px-4 font-semibold text-[14px] sm:text-[24px] text-[#D6AD52] shadow-[0_8px_20px_rgba(0,0,0,0.08)] transition hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C5A059] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
               {busy?'Please wait…':mode==='register'?'Create account':mode==='forgot'?(resetSent?'Reset password':'Send reset code'):'Sign In'}
