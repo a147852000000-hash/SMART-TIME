@@ -87,7 +87,9 @@ cd "$STAGE"
 # Do NOT symlink or copy the live .env into staging; that would expose production credentials
 # to the staging checkout and could send real email or call production integrations.
 # Tests below use isolated test configuration. Configure a dedicated staging mail provider
-# separately only when ready to perform an actual inbox-delivery check.
+# separately only when ready to perform an actual inbox-delivery check. With outbound mail
+# suppressed, password-reset requests are not proof of delivery and a human cannot complete
+# the passwordless-account recovery test; perform that gate only after staging SMTP is configured.
 
 npm install --ignore-scripts --no-audit --no-fund
 npm run test:password-reset-email
