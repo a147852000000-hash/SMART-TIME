@@ -142,7 +142,7 @@ try {
   const isolated = await request('/api/user/settings', { headers: { authorization: `Bearer ${otherLogin.body.token}` } });
   assert.deepEqual(isolated.body.settings, {}, 'settings must be isolated by user id');
 
-  const token = crypto.randomBytes(32).toString('hex');
+  const token = '482619';
   db.prepare('INSERT INTO sessions(id,user_id,expires_at,created_at) VALUES(?,?,?,?)').run('pre-reset-session', 'test-user', new Date(Date.now() + 60 * 60_000).toISOString(), new Date().toISOString());
   db.prepare('INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?)').run(userEmail, crypto.createHash('sha256').update(token).digest('hex'), new Date(Date.now() + 60 * 60_000).toISOString(), 0, new Date().toISOString());
   const reset = await post('/api/auth/reset-password', { email: userEmail, code: token, newPassword: 'UpdatedPassword!123' });
@@ -155,7 +155,7 @@ try {
   const newPasswordLogin = await post('/api/auth/login', { identifier: userEmail, password: 'UpdatedPassword!123' });
   assert.equal(newPasswordLogin.status, 200);
 
-  const concurrentToken = crypto.randomBytes(32).toString('hex');
+  const concurrentToken = '583104';
   db.prepare('INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at')
     .run(userEmail, crypto.createHash('sha256').update(concurrentToken).digest('hex'), new Date(Date.now() + 60 * 60_000).toISOString(), 0, new Date().toISOString());
   const concurrentResults = await Promise.all([
@@ -167,19 +167,27 @@ try {
 
   const unknownForgot = await post('/api/auth/forgot-password', { email: 'unknown@example.test' });
   assert.equal(unknownForgot.status, 404);
-  assert.equal(unknownForgot.body.code, 'EMAIL_NOT_REGISTERED');
-  assert.equal(unknownForgot.body.message, 'البريد غير مسجل، يجب التسجيل أولاً');
+  assert.equal(unknownForgot.body.code, 'ACCOUNT_NOT_FOUND');
+  assert.equal(unknownForgot.body.message, 'هذا البريد غير مسجل، أنشئ حساباً');
+  assert.equal(unknownForgot.body.registerUrl, '/register', 'response must include the registration route');
   const knownForgot = await post('/api/auth/forgot-password', { email: userEmail });
   assert.equal(knownForgot.status, 200);
   assert.equal(knownForgot.body.ok, true);
   assert.equal(JSON.stringify(knownForgot.body).includes('code'), false, 'reset token must not be included in the API response');
   assert.equal(JSON.stringify(knownForgot.body).includes('a'.repeat(64)), false, 'reset token must not be included in the API response');
+  const storedReset = db.prepare('SELECT code_hash, attempts FROM password_resets WHERE email=?').get(userEmail);
+  assert.match(storedReset.code_hash, /^[a-f0-9]{64}$/i, 'database stores only a SHA-256 hash');
+  assert.doesNotMatch(JSON.stringify(knownForgot.body), /\b\d{6}\b/, 'reset code must not be returned in the response');
+  const serverSource = fs.readFileSync(path.join(process.cwd(), 'server.ts'), 'utf8');
+  assert.match(serverSource, /crypto\.randomInt\(100000, 1000000\)/, 'reset code generation uses crypto.randomInt for six digits');
+  assert.match(serverSource, /timingSafeEqual\(providedHash,storedHash\)/, 'reset path uses constant-time comparison');
+  assert.match(serverSource, /Number\(reset\.attempts\|\|0\)>=5/, 'reset path caps attempts');
   assert.equal((await post('/api/auth/forgot-password', { email: userEmail })).status, 200);
   assert.equal((await post('/api/auth/forgot-password', { email: userEmail })).status, 200);
   const rateLimited = await post('/api/auth/forgot-password', { email: userEmail });
   assert.equal(rateLimited.status, 429, 'fourth reset request in the 15-minute window must be rate limited');
 
-  const wrongGuessToken = crypto.randomBytes(32).toString('hex');
+  const wrongGuessToken = '694217';
   db.prepare('INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at')
     .run(userEmail, crypto.createHash('sha256').update(wrongGuessToken).digest('hex'), new Date(Date.now() + 60 * 60_000).toISOString(), 0, new Date().toISOString());
   for (let i = 0; i < 5; i++) {
