@@ -181,6 +181,7 @@ try {
   assert.doesNotMatch(JSON.stringify(knownForgot.body), /\b\d{6}\b/, 'reset code must not be returned in the response');
   const serverSource = fs.readFileSync(path.join(process.cwd(), 'server.ts'), 'utf8');
   assert.match(serverSource, /crypto\.randomInt\(100000, 1000000\)/, 'reset code generation uses crypto.randomInt for six digits');
+  assert.equal(serverSource.includes('storedHash.length!==providedHash.length'), true, 'buffer lengths must be checked before timingSafeEqual');
   assert.match(serverSource, /timingSafeEqual\(providedHash,storedHash\)/, 'reset path uses constant-time comparison');
   assert.match(serverSource, /Number\(reset\.attempts\|\|0\)>=5/, 'reset path caps attempts');
   assert.equal(serverSource.includes("crypto.createHmac('sha256',secret)"), true, 'OTP hashes must be keyed by OTP_HMAC_SECRET');
@@ -192,7 +193,8 @@ try {
   assert.equal((await post('/api/auth/forgot-password', { email: 'other@example.test' })).status, 200);
   assert.equal((await post('/api/auth/reset-password', { email: 'other@example.test', code: oldCode, newPassword: 'AnotherPassword!123' })).status, 400, 'a new reset request invalidates the previous code');
   const mailSource = fs.readFileSync(path.join(process.cwd(), 'backend/auth/passwordResetEmail.ts'), 'utf8');
-  assert.doesNotMatch(mailSource, /console\\.error\\([^\\n]*error:\\s*message/, 'SMTP/provider error logs must not print raw provider error messages');
+  assert.equal(mailSource.includes('error: message'), false, 'SMTP/provider error logs must not print raw provider error messages');
+  assert.doesNotMatch(serverOutput, /\\b\\d{6}\\b/, 'application logs must not contain six-digit reset codes');
   assert.match(serverSource, /PASSWORD_RESET_EMAIL_FAILED/, 'application mail-failure path logs a generic code only');
   const rateLimited = await post('/api/auth/forgot-password', { email: userEmail });
   assert.equal(rateLimited.status, 429, 'fourth reset request in the 15-minute window must be rate limited');
