@@ -189,8 +189,12 @@ function authUser(req: express.Request) {
     const claims = verifyJwt(token);
     if (!claims || claims.purpose !== 'app_session' || !claims.sub || !VALID_APP_ROLES.has(String(claims.selectedRole))) return null;
     const row = db.prepare("SELECT u.id,u.email,u.username,u.display_name as name,u.phone,u.phone_verified as phoneVerified,u.activation_status,u.role,s.id as session_id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=? AND s.user_id=? AND julianday(s.expires_at)>julianday('now')").get(String(claims.sid||''),String(claims.sub)) as any;
-    if (!row || row.role !== claims.role || !rolesForDbRole(String(row.role)).includes(String(claims.selectedRole))) return null;
-    return { ...row, actualRoleInDB: row.role, selectedRole: claims.selectedRole, role: claims.selectedRole };
+    if (!row || row.role !== claims.role || String(row.email).toLowerCase() !== String(claims.email || '').toLowerCase()) return null;
+    const selectedRole = String(claims.selectedRole || '').toLowerCase();
+    if (!VALID_APP_ROLES.has(selectedRole) || !rolesForDbRole(String(row.role)).includes(selectedRole)) return null;
+    // Revalidate elevated sessions against the current allowlist on every request.
+    if (selectedRole !== 'user' && !OWNER_EMAILS.has(String(row.email).toLowerCase())) return null;
+    return { ...row, actualRoleInDB: row.role, selectedRole, role: selectedRole };
   }
   const legacy = db.prepare(`SELECT u.id,u.email,u.username,u.display_name as name,u.phone,u.phone_verified as phoneVerified,u.activation_status,u.role,s.session_role as selectedRole,s.id as session_id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=? AND julianday(s.expires_at) > julianday('now')`).get(token) as any || null;
   if (!legacy) return null;
