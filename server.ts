@@ -467,7 +467,7 @@ app.post('/api/auth/forgot-password',async(req,res)=>{
     const code=String(req.body?.code||req.body?.token||'').trim();
     const newPassword=String(req.body?.newPassword||'');
     if(newPassword.length<8) return res.status(400).json({error:'كلمة المرور يجب أن تكون 8 أحرف على الأقل'});
-    if(!email||email.length>254||!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)||!/^[a-f0-9]{64}$/i.test(code)) {
+    if(!email||email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!/^[a-f0-9]{64}$/i.test(code)) {
       return res.status(400).json({error:'رمز الاستعادة غير صحيح أو منتهي.'});
     }
 
