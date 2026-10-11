@@ -70,17 +70,22 @@ function consumeVoiceDnaQuota(userId: string): boolean {
   return true;
 }
 
-// CORS for the Vercel-hosted frontend talking to the Railway API.
-// Keep credentials disabled; SMART TIME auth uses bearer tokens explicitly.
+// CORS: allow only explicitly configured exact origins. Do not trust wildcard
+// Vercel subdomains or a missing allowlist in production.
+const configuredCorsOrigins = new Set(
+  String(process.env.ALLOWED_ORIGINS || "")
+    .split(",").map(value => value.trim()).filter(Boolean)
+);
+if (process.env.NODE_ENV !== "production") {
+  configuredCorsOrigins.add("http://localhost:5173");
+  configuredCorsOrigins.add("http://127.0.0.1:5173");
+}
 app.use((req, res, next) => {
-  const origin = String(req.headers.origin || "");
-  const allowed =
-    !origin ||
-    /^https:\/\/([a-z0-9-]+\.)*vercel\.app$/i.test(origin) ||
-    /^https?:\/\/localhost(?::\\d+)?$/i.test(origin) ||
-    /^https?:\/\/127\.0\.0\.1(?::\\d+)?$/i.test(origin);
-
-  if (allowed && origin) {
+  const origin = String(req.headers.origin || "").trim();
+  if (origin && !configuredCorsOrigins.has(origin)) {
+    return res.status(403).json({ code: "ORIGIN_NOT_ALLOWED", message: "Origin not allowed" });
+  }
+  if (origin) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
   }
@@ -174,7 +179,7 @@ function verifyJwt(token: string): any | null {
     return payload.exp && Number(payload.exp) > Math.floor(Date.now() / 1000) ? payload : null;
   } catch { return null; }
 }
-const OWNER_EMAILS = new Set(String(process.env.OWNER_EMAILS || 'eng.mamdouh2009@gmail.com,mamdouh.oracle.2026@gmail.com').split(',').map(v => v.trim().toLowerCase()).filter(Boolean));
+const OWNER_EMAILS = new Set(String(process.env.OWNER_EMAILS || '').split(',').map(v => v.trim().toLowerCase()).filter(Boolean));
 const VALID_APP_ROLES = new Set(['owner', 'admin', 'user']);
 function rolesForDbRole(role: string): string[] { if (role === 'owner') return ['owner', 'admin', 'user']; if (role === 'admin') return ['admin', 'user']; return ['user']; }
 function issueRoleSelectionTicket(row: any): string {
@@ -193,14 +198,16 @@ function authUser(req: express.Request) {
     const selectedRole = String(claims.selectedRole || '').toLowerCase();
     if (!VALID_APP_ROLES.has(selectedRole) || !rolesForDbRole(String(row.role)).includes(selectedRole)) return null;
     // Revalidate elevated sessions against the current allowlist on every request.
-    if (selectedRole !== 'user' && !OWNER_EMAILS.has(String(row.email).toLowerCase())) return null;
+    if (selectedRole === 'owner' && (String(row.role) !== 'owner' || !OWNER_EMAILS.has(String(row.email).toLowerCase()))) return null;
+    if (selectedRole === 'admin' && !['admin', 'owner'].includes(String(row.role))) return null;
     return { ...row, actualRoleInDB: row.role, selectedRole, role: selectedRole };
   }
   const legacy = db.prepare(`SELECT u.id,u.email,u.username,u.display_name as name,u.phone,u.phone_verified as phoneVerified,u.activation_status,u.role,s.session_role as selectedRole,s.id as session_id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=? AND julianday(s.expires_at) > julianday('now')`).get(token) as any || null;
   if (!legacy) return null;
   const selectedRole = String(legacy.selectedRole || 'user').toLowerCase();
   if (!VALID_APP_ROLES.has(selectedRole) || !rolesForDbRole(String(legacy.role || 'user')).includes(selectedRole)) return null;
-  if (selectedRole !== 'user' && !OWNER_EMAILS.has(String(legacy.email || '').toLowerCase())) return null;
+  if (selectedRole === 'owner' && (String(legacy.role || 'user') !== 'owner' || !OWNER_EMAILS.has(String(legacy.email || '').toLowerCase()))) return null;
+  if (selectedRole === 'admin' && !['admin', 'owner'].includes(String(legacy.role || 'user'))) return null;
   return { ...legacy, selectedRole, role: selectedRole, actualRoleInDB: String(legacy.role || 'user') };
 }
 function publicUser(row:any){const selectedRole=row.selectedRole||'user';return {id:row.id,email:row.email,username:row.username||undefined,name:row.name||row.display_name||'',phone:row.phone||undefined,phoneVerified:!!row.phoneVerified,role:selectedRole,selectedRole,activationStatus:row.activation_status||row.activationStatus||'pending'};}
