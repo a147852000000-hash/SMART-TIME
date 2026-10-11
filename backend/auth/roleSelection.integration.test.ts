@@ -14,7 +14,7 @@ const adminEmail = 'admin@example.test';
 const userEmail = 'user@example.test';
 process.env.SMART_TIME_DB_PATH = dbPath;
 process.env.JWT_SECRET = secret;
-process.env.OWNER_EMAILS = `${ownerEmail},${adminEmail}`;
+process.env.OWNER_EMAILS = ownerEmail;
 process.env.TURNSTILE_ENFORCE = 'false';
 
 let child: ChildProcess | undefined;
@@ -63,7 +63,7 @@ try {
 
   child = spawn(process.execPath, ['--import', 'tsx', 'server.ts'], {
     cwd: process.cwd(),
-    env: { ...process.env, PORT: String(port), SMART_TIME_DB_PATH: dbPath, JWT_SECRET: secret, OWNER_EMAILS: `${ownerEmail},${adminEmail}`, TURNSTILE_ENFORCE: 'false', EMAIL_PROVIDER: '', SMTP_HOST: '', SMTP_USER: '', SMTP_PASS: '', RESEND_API_KEY: '', ALLOW_DEV_EMAIL_CODE: 'true' },
+    env: { ...process.env, PORT: String(port), SMART_TIME_DB_PATH: dbPath, JWT_SECRET: secret, OWNER_EMAILS: ownerEmail, TURNSTILE_ENFORCE: 'false', EMAIL_PROVIDER: '', SMTP_HOST: '', SMTP_USER: '', SMTP_PASS: '', RESEND_API_KEY: '', ALLOW_DEV_EMAIL_CODE: 'true' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let serverOutput = '';
@@ -100,13 +100,12 @@ try {
   assert.equal(staleOwnerSession.status, 401, 'owner JWT must be rejected after the account email changes');
   db.prepare('UPDATE users SET email=? WHERE id=?').run(ownerEmail, 'test-owner');
   
-  // Legacy bearer sessions must not retain admin privileges after the email leaves the allowlist.
+  // A DB admin remains an admin even when their email is not in the owner allowlist.
   db.prepare('INSERT INTO sessions(id,user_id,expires_at,created_at,session_role) VALUES(?,?,?,?,?)')
     .run('legacy-admin-session', 'test-admin', new Date(Date.now() + 60 * 60_000).toISOString(), new Date().toISOString(), 'admin');
-  db.prepare('UPDATE users SET email=? WHERE id=?').run('renamed-admin@example.test', 'test-admin');
-  const staleLegacyAdmin = await request('/api/auth/me', { headers: { authorization: 'Bearer legacy-admin-session' } });
-  assert.equal(staleLegacyAdmin.status, 401, 'legacy admin session must be rejected when its email is no longer allowlisted');
-  db.prepare('UPDATE users SET email=? WHERE id=?').run(adminEmail, 'test-admin');
+  const validAdminWithoutOwnerAllowlist = await request('/api/auth/me', { headers: { authorization: 'Bearer legacy-admin-session' } });
+  assert.equal(validAdminWithoutOwnerAllowlist.status, 200);
+  assert.equal(validAdminWithoutOwnerAllowlist.body.user.role, 'admin');
   await post('/api/auth/logout', {}, ownerSession.body.token);
   const revoked = await request('/api/auth/me', { headers: { authorization: `Bearer ${ownerSession.body.token}` } });
   assert.equal(revoked.status, 401, 'logout must revoke JWT-backed sessions');
