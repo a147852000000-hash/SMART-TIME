@@ -201,7 +201,7 @@ function authUser(req: express.Request) {
   if (!legacy) return null;
   const selectedRole = String(legacy.selectedRole || 'user').toLowerCase();
   if (!VALID_APP_ROLES.has(selectedRole) || !rolesForDbRole(String(legacy.role || 'user')).includes(selectedRole)) return null;
-  if (selectedRole === 'owner' && !OWNER_EMAILS.has(String(legacy.email || '').toLowerCase())) return null;
+  if (selectedRole !== 'user' && !OWNER_EMAILS.has(String(legacy.email || '').toLowerCase())) return null;
   return { ...legacy, selectedRole, role: selectedRole, actualRoleInDB: String(legacy.role || 'user') };
 }
 function publicUser(row:any){const selectedRole=row.selectedRole||'user';return {id:row.id,email:row.email,username:row.username||undefined,name:row.name||row.display_name||'',phone:row.phone||undefined,phoneVerified:!!row.phoneVerified,role:selectedRole,selectedRole,activationStatus:row.activation_status||row.activationStatus||'pending'};}
