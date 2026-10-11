@@ -42,7 +42,7 @@ test('apply writes an isolated SQLite DB, hashes plaintext password, and downgra
       { id: 'u1', email: 'person@example.com', name: 'Person', password: 'plain-secret', role: 'owner' },
       { id: 'u2', email: 'reset@example.com', name: 'Reset Only', password: '', autoCreated: true }
     ]), { mode: 0o600 });
-    fs.writeFileSync(sessions, JSON.stringify([{ token: 'session-token', userId: 'u1' }]), { mode: 0o600 });
+    fs.writeFileSync(sessions, JSON.stringify([{ token: 'session-token', userId: 'u1', expiresAt: new Date(Date.now() + 60 * 60_000).toISOString() }]), { mode: 0o600 });
     const result = run(['--users', users, '--sessions', sessions, '--apply', '--output', output]);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /"verified": true/);
