@@ -14,7 +14,7 @@ const adminEmail = 'admin@example.test';
 const userEmail = 'user@example.test';
 process.env.SMART_TIME_DB_PATH = dbPath;
 process.env.JWT_SECRET = secret;
-process.env.OTP_HMAC_SECRET = secret;
+process.env.PASSWORD_RESET_HMAC_SECRET = secret;
 process.env.OWNER_EMAILS = ownerEmail;
 process.env.TURNSTILE_ENFORCE = 'false';
 
@@ -64,7 +64,7 @@ try {
 
   child = spawn(process.execPath, ['--import', 'tsx', 'server.ts'], {
     cwd: process.cwd(),
-    env: { ...process.env, OTP_HMAC_SECRET: secret, PORT: String(port), SMART_TIME_DB_PATH: dbPath, JWT_SECRET: secret, OWNER_EMAILS: ownerEmail, ALLOWED_ORIGINS: 'https://app.example.test', TURNSTILE_ENFORCE: 'false', EMAIL_PROVIDER: '', SMTP_HOST: '', SMTP_USER: '', SMTP_PASS: '', RESEND_API_KEY: '', ALLOW_DEV_EMAIL_CODE: 'true' },
+    env: { ...process.env, PASSWORD_RESET_HMAC_SECRET: secret, PORT: String(port), SMART_TIME_DB_PATH: dbPath, JWT_SECRET: secret, OWNER_EMAILS: ownerEmail, ALLOWED_ORIGINS: 'https://app.example.test', TURNSTILE_ENFORCE: 'false', EMAIL_PROVIDER: '', SMTP_HOST: '', SMTP_USER: '', SMTP_PASS: '', RESEND_API_KEY: '', ALLOW_DEV_EMAIL_CODE: 'true' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let serverOutput = '';
@@ -184,7 +184,7 @@ try {
   assert.equal(serverSource.includes('storedHash.length!==providedHash.length'), true, 'buffer lengths must be checked before timingSafeEqual');
   assert.match(serverSource, /timingSafeEqual\(providedHash,storedHash\)/, 'reset path uses constant-time comparison');
   assert.match(serverSource, /Number\(reset\.attempts\|\|0\)>=5/, 'reset path caps attempts');
-  assert.equal(serverSource.includes("crypto.createHmac('sha256',secret)"), true, 'OTP hashes must be keyed by OTP_HMAC_SECRET');
+  assert.equal(serverSource.includes("crypto.createHmac('sha256',secret)"), true, 'reset hashes must be keyed by PASSWORD_RESET_HMAC_SECRET');
   assert.equal((await post('/api/auth/forgot-password', { email: userEmail })).status, 200);
   assert.equal((await post('/api/auth/forgot-password', { email: userEmail })).status, 200);
   const oldCode = '246810';
