@@ -63,13 +63,18 @@ try {
 
   child = spawn(process.execPath, ['--import', 'tsx', 'server.ts'], {
     cwd: process.cwd(),
-    env: { ...process.env, PORT: String(port), SMART_TIME_DB_PATH: dbPath, JWT_SECRET: secret, OWNER_EMAILS: ownerEmail, TURNSTILE_ENFORCE: 'false', EMAIL_PROVIDER: '', SMTP_HOST: '', SMTP_USER: '', SMTP_PASS: '', RESEND_API_KEY: '', ALLOW_DEV_EMAIL_CODE: 'true' },
+    env: { ...process.env, PORT: String(port), SMART_TIME_DB_PATH: dbPath, JWT_SECRET: secret, OWNER_EMAILS: ownerEmail, ALLOWED_ORIGINS: 'https://app.example.test', TURNSTILE_ENFORCE: 'false', EMAIL_PROVIDER: '', SMTP_HOST: '', SMTP_USER: '', SMTP_PASS: '', RESEND_API_KEY: '', ALLOW_DEV_EMAIL_CODE: 'true' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let serverOutput = '';
   child.stdout?.on('data', chunk => { serverOutput = (serverOutput + String(chunk)).slice(-4000); });
   child.stderr?.on('data', chunk => { serverOutput = (serverOutput + String(chunk)).slice(-4000); });
   await waitForServer();
+
+  const allowedOrigin = await request('/api/health', { headers: { origin: 'https://app.example.test' } });
+  assert.equal(allowedOrigin.status, 200, 'exact configured frontend origin must pass CORS');
+  const untrustedOrigin = await request('/api/health', { headers: { origin: 'https://attacker.vercel.app' } });
+  assert.equal(untrustedOrigin.status, 403, 'unconfigured Vercel subdomains must be rejected');
 
   const userLogin = await post('/api/auth/login', { identifier: userEmail, password });
   assert.equal(userLogin.status, 200);
@@ -184,7 +189,13 @@ try {
   const sixthGuess = await post('/api/auth/reset-password', { email: userEmail, code: 'f'.repeat(64), newPassword: 'AnotherPassword!123' });
   assert.equal(sixthGuess.status, 429, 'the sixth reset-token guess must be rate limited');
 
-  console.log('AUTH_SECURITY_INTEGRATION_PASS: role escalation blocked; DB role authoritative; JWT session revocation; settings isolation; explicit unknown-email response; reset token one-use; request and guess limits.');
+  // Per-IP limiter should stop a burst even when requests use distinct email addresses.
+  for (let i = 0; i < 6; i++) {
+    const result = await post('/api/auth/forgot-password', { email: `unknown-ip-test-${i}@example.test` });
+    assert.equal(result.status, i < 5 ? 404 : 429, 'IP reset limit must apply independently of per-email limits');
+  }
+
+  console.log('AUTH_SECURITY_INTEGRATION_PASS: role escalation blocked; admin appointment/audit/revocation; exact-origin CORS; DB role authoritative; JWT session revocation; settings isolation; email/IP reset limits; reset token one-use.');
 } catch (error) {
   console.error('AUTH_SECURITY_INTEGRATION_FAIL', error);
   if (child) child.kill('SIGTERM');
