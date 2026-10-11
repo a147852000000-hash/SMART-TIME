@@ -84,8 +84,10 @@ git clone --single-branch --branch "$BRANCH" \
   https://github.com/a147852000000-hash/SMART-TIME.git "$STAGE"
 cd "$STAGE"
 
-# Reuse runtime configuration without copying or printing secrets.
-if [ -f "$LIVE/.env" ]; then ln -s "$LIVE/.env" .env; fi
+# Do NOT symlink or copy the live .env into staging; that would expose production credentials
+# to the staging checkout and could send real email or call production integrations.
+# Tests below use isolated test configuration. Configure a dedicated staging mail provider
+# separately only when ready to perform an actual inbox-delivery check.
 
 npm install --ignore-scripts --no-audit --no-fund
 npm run test:password-reset-email
@@ -103,8 +105,12 @@ test ! -e "$DB"
 node scripts/migrate-legacy-json-to-sqlite.cjs "${MIGRATE_ARGS[@]}" --apply --output "$DB"
 chmod 600 "$DB"
 
-# Run in the foreground, restricted to loopback. Leave the existing PM2 app and Caddy untouched.
-NODE_ENV=production HOST=127.0.0.1 PORT=3001 SMART_TIME_DB_PATH="$DB" node dist/server.cjs
+# Run in the foreground, restricted to loopback. Use a new staging-only JWT secret and
+# suppress outbound email by default; never load production credentials into this process.
+STAGING_JWT_SECRET="$(openssl rand -hex 48)"
+NODE_ENV=production HOST=127.0.0.1 PORT=3001 SMART_TIME_DB_PATH="$DB" \
+  JWT_SECRET="$STAGING_JWT_SECRET" TURNSTILE_ENFORCE=false \
+  EMAIL_PROVIDER= ALLOW_DEV_EMAIL_CODE=true node dist/server.cjs
 ```
 
 Keep this SSH terminal open. From a second SSH terminal, test only localhost:
