@@ -16,6 +16,15 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
 
+// This one-shot migration may create databases and SQLite sidecar files containing
+// password hashes and bearer session tokens. Keep newly created files private by default.
+process.umask(0o077);
+
+function pathEntryExists(target) {
+  try { fs.lstatSync(path.resolve(target)); return true; }
+  catch (error) { if (error && error.code === 'ENOENT') return false; throw error; }
+}
+
 function arg(name) {
   const i = process.argv.indexOf(name);
   return i >= 0 ? process.argv[i + 1] : undefined;
@@ -119,11 +128,16 @@ function main() {
   const usersByEmail = new Map(users.map(u => [u.email, u]));
   const rawSessions = readJson(sessionsFile, 'sessions.json');
   const sessions = rawSessions.map((row, index) => normalizeSession(row, index, usersByEmail)).filter(s => s && idSet.has(s.userId));
+  const sessionTokenSet = new Set();
+  for (const session of sessions) {
+    if (sessionTokenSet.has(session.id)) throw new Error('Duplicate session token detected; migration stopped.');
+    sessionTokenSet.add(session.id);
+  }
   const apply = has('--apply');
   const output = arg('--output');
   if (apply && !output) throw new Error('--apply requires --output with a NEW, isolated SQLite path.');
   if (!apply && output) throw new Error('--output is only accepted together with --apply.');
-  if (apply && fs.existsSync(path.resolve(output))) throw new Error('Output already exists; refusing to overwrite any database.');
+  if (apply && pathEntryExists(output)) throw new Error('Output already exists; refusing to overwrite any database.');
   const report = {
     mode: apply ? 'APPLY_TO_NEW_FILE' : 'DRY_RUN_READ_ONLY',
     inputUsers: rawUsers.length,
@@ -143,9 +157,11 @@ function main() {
     console.log('DRY RUN ONLY: no database or input file was written.');
     return;
   }
-  fs.mkdirSync(path.dirname(path.resolve(output)), { recursive: true });
-  const db = new DatabaseSync(path.resolve(output));
+  const outputPath = path.resolve(output);
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true, mode: 0o700 });
+  const db = new DatabaseSync(outputPath);
   try {
+    fs.chmodSync(outputPath, 0o600);
     db.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL;');
     db.exec(`
       CREATE TABLE users (
