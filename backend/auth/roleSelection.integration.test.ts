@@ -186,6 +186,14 @@ try {
   assert.match(serverSource, /Number\(reset\.attempts\|\|0\)>=5/, 'reset path caps attempts');
   assert.equal((await post('/api/auth/forgot-password', { email: userEmail })).status, 200);
   assert.equal((await post('/api/auth/forgot-password', { email: userEmail })).status, 200);
+  const oldCode = '246810';
+  db.prepare('INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at')
+    .run('other@example.test', crypto.createHmac('sha256', secret).update(oldCode).digest('hex'), new Date(Date.now() + 60 * 60_000).toISOString(), 0, new Date().toISOString());
+  assert.equal((await post('/api/auth/forgot-password', { email: 'other@example.test' })).status, 200);
+  assert.equal((await post('/api/auth/reset-password', { email: 'other@example.test', code: oldCode, newPassword: 'AnotherPassword!123' })).status, 400, 'a new reset request invalidates the previous code');
+  const mailSource = fs.readFileSync(path.join(process.cwd(), 'backend/auth/passwordResetEmail.ts'), 'utf8');
+  assert.doesNotMatch(mailSource, /console\\.error\\([^\\n]*error:\\s*message/, 'SMTP/provider error logs must not print raw provider error messages');
+  assert.match(serverSource, /PASSWORD_RESET_EMAIL_FAILED/, 'application mail-failure path logs a generic code only');
   const rateLimited = await post('/api/auth/forgot-password', { email: userEmail });
   assert.equal(rateLimited.status, 429, 'fourth reset request in the 15-minute window must be rate limited');
 
