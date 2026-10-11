@@ -35,7 +35,8 @@
     "test:groq-provider": "tsx backend/ai/providers/groqProvider.test.ts",
     "test:turnstile": "tsx backend/security/turnstile.test.ts",
     "verify:phase-a2-stt": "node scripts/verify-phase-a2-stt.mjs",
-    "test:password-reset-email": "tsx backend/auth/passwordResetEmail.test.ts"
+    "test:password-reset-email": "tsx backend/auth/passwordResetEmail.test.ts",
+    "test:auth-security": "tsx backend/auth/roleSelection.integration.test.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

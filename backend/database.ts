@@ -262,6 +262,7 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS phone_otps (phone TEXT PRIMARY KEY, co
 try { db.exec('ALTER TABLE phone_otps ADD COLUMN remote_provider TEXT'); } catch {}
 try { db.exec('ALTER TABLE phone_otps ADD COLUMN remote_verification_id TEXT'); } catch {}
 try { db.exec(`CREATE TABLE IF NOT EXISTS password_resets (email TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires_at TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)`); } catch {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS password_reset_requests (email TEXT PRIMARY KEY, window_started_at TEXT NOT NULL, request_count INTEGER NOT NULL DEFAULT 0)`); } catch {}
 try { db.exec('ALTER TABLE users ADD COLUMN trip_free_searches INTEGER NOT NULL DEFAULT 0'); } catch {}
 try { db.exec('ALTER TABLE users ADD COLUMN trip_gift_claimed_at TEXT'); } catch {}
 try { db.exec('ALTER TABLE trip_gift_claims ADD COLUMN phone_hash TEXT'); } catch {}

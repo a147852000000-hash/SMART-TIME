@@ -77,7 +77,7 @@ export async function loginWithIdentifier(identifier: string, password: string, 
 }
 
 
-export async function selectLoginRole(roleChoiceTicket: string, role: 'owner' | 'user'): Promise<AuthSession> {
+export async function selectLoginRole(roleChoiceTicket: string, role: 'owner' | 'admin' | 'user'): Promise<AuthSession> {
   const data = await request('/api/auth/select-role', { roleChoiceTicket, role });
   const session: AuthSession = { token: data.token, user: data.user };
   saveSession(session); applyUserToProfile(session.user); return session;
@@ -93,7 +93,7 @@ export async function loginWithPhone(phone: string, code: string, turnstileToken
 
 const API_BASE = 'https://smart-time-ai.duckdns.org';
 
-export async function forgotPassword(email: string) {
+export async function forgotPassword(email: string, turnstileToken?: string) {
   const normalizedEmail = email.trim();
   if (!normalizedEmail) throw new Error('أدخل بريدك الإلكتروني.');
 
@@ -104,7 +104,7 @@ export async function forgotPassword(email: string) {
     response = await fetch(apiUrl('/api/auth/forgot-password'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: normalizedEmail }),
+      body: JSON.stringify({ email: normalizedEmail, turnstileToken: turnstileToken || '' }),
       signal: controller.signal,
     });
   } catch {
@@ -139,6 +139,19 @@ export async function requestPasswordReset(email: string, _turnstileToken?: stri
 export async function resetPassword(email: string, code: string, newPassword: string, turnstileToken?: string) {
   return request('/api/auth/reset-password', { email, code, newPassword, turnstileToken: turnstileToken || '' });
 }
+
+export async function getUserSettings(): Promise<{ settings: Record<string, unknown>; updatedAt: string | null }> {
+  const response = await api('/api/user/settings', { method: 'GET' });
+  const data: any = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'تعذر تحميل إعدادات الحساب.');
+  return { settings: data.settings && typeof data.settings === 'object' ? data.settings : {}, updatedAt: data.updatedAt || null };
+}
+
+export async function saveUserSettings(settings: Record<string, unknown>): Promise<{ ok: true; updatedAt: string }> {
+  return request('/api/user/settings', { settings });
+}
+
+
 
 export async function registerWithEmail(name: string, username: string, email: string, password: string, turnstileToken?: string): Promise<any> {
   const data = await request('/api/auth/register', { name, username, email, password, deviceId: getDeviceId(), turnstileToken: turnstileToken || '' });

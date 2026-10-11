@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Eye, EyeOff, LockKeyhole, Mail, UserRound } from 'lucide-react';
 import { forgotPassword, loginWithIdentifier, registerWithEmail, resetPassword, selectLoginRole } from '../services/authService';
 import { apiUrl } from '../services/apiConfig';
+import { renderTurnstile, resetTurnstile } from '../services/turnstileService';
 
 interface Props {
   onAuthenticated: () => void;
@@ -24,8 +25,35 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
   const [error, setError] = useState('');
   const [resetSent, setResetSent] = useState(false);
   const [roleChoiceTicket, setRoleChoiceTicket] = useState('');
+  const [availableRoles, setAvailableRoles] = useState<string[]>([]);
   const [showRoleChoice, setShowRoleChoice] = useState(false);
   const [emailExistsInRailway, setEmailExistsInRailway] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const turnstileContainerRef = useRef<HTMLDivElement | null>(null);
+  const turnstileWidgetId = useRef<string | number | null>(null);
+  const turnstileEnabled = String(import.meta.env.VITE_TURNSTILE_ENABLED || '').trim().toLowerCase() === 'true';
+
+  useEffect(() => {
+    if (!turnstileEnabled || !turnstileContainerRef.current) return;
+    let cancelled = false;
+    void renderTurnstile(
+      turnstileContainerRef.current,
+      token => { if (!cancelled) setTurnstileToken(token); },
+      () => { if (!cancelled) setTurnstileToken(''); },
+    ).then(widgetId => {
+      if (cancelled) resetTurnstile(widgetId);
+      else turnstileWidgetId.current = widgetId;
+    }).catch(() => {
+      if (!cancelled) setError('تعذر تحميل خطوة التحقق الأمني. حدّث الصفحة وحاول مرة أخرى.');
+    });
+    return () => {
+      cancelled = true;
+      resetTurnstile(turnstileWidgetId.current);
+      turnstileWidgetId.current = null;
+      setTurnstileToken('');
+    };
+  }, [turnstileEnabled, mode, resetSent]);
+
 
   useEffect(() => {
     const normalizedEmail = email.trim().toLowerCase();
@@ -70,12 +98,13 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
   }, [email, mode]);
 
   const clearError = () => setError('');
-  const switchMode = (next: Mode) => { setMode(next); clearError(); setCode(''); setResetSent(false); };
+  const switchMode = (next: Mode) => { setMode(next); clearError(); setCode(''); setResetSent(false); setShowRoleChoice(false); setRoleChoiceTicket(''); setAvailableRoles([]); setTurnstileToken(''); if (turnstileWidgetId.current !== null) resetTurnstile(turnstileWidgetId.current); };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setError(''); setBusy(true);
     try {
-      const challenge = '';
+      const challenge = turnstileToken;
+      if (turnstileEnabled && !challenge) throw new Error('أكمل خطوة التحقق الأمني قبل المتابعة.');
       if (mode === 'register') {
         if (emailExistsInRailway) throw new Error('هذا البريد مسجل بالفعل، يرجى تسجيل الدخول');
         if (name.trim().length < 2) throw new Error('اكتب اسمًا صحيحًا.');
@@ -88,7 +117,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
       }
       if (mode === 'forgot') {
         if (!resetSent) {
-          const d:any = await forgotPassword(email.trim());
+          const d:any = await forgotPassword(email.trim(), challenge);
           if (!d.ok && !d.emailSent) {
             throw new Error(d.message || 'تعذر إرسال رمز الاستعادة حاليًا. حاول لاحقًا.');
           }
@@ -106,6 +135,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
       const result = await loginWithIdentifier(email.trim(), password, challenge);
       if ('requiresRoleChoice' in result && result.requiresRoleChoice) {
         setRoleChoiceTicket(result.roleChoiceTicket || '');
+        setAvailableRoles(Array.isArray(result.availableRoles) ? result.availableRoles.filter((role: string) => ['owner', 'admin', 'user'].includes(role)) : ['user']);
         setShowRoleChoice(true);
         setError('');
         return;
@@ -124,10 +154,14 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
         }
       }
     }
-    finally { setBusy(false); }
+    finally {
+      setBusy(false);
+      if (turnstileEnabled && turnstileWidgetId.current !== null) resetTurnstile(turnstileWidgetId.current);
+      setTurnstileToken('');
+    }
   };
 
-  const chooseRole = async (role: 'owner' | 'user') => {
+  const chooseRole = async (role: 'owner' | 'admin' | 'user') => {
     setError(''); setBusy(true);
     try {
       if (!roleChoiceTicket) throw new Error('انتهت صلاحية اختيار نوع الدخول. سجّل الدخول مرة أخرى.');
@@ -160,8 +194,9 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
               <div className="text-lg font-semibold text-black">Choose sign-in type</div>
               <p className="mt-1 text-sm text-gray-600">Choose how to enter for this session.</p>
             </div>
-            <button type="button" disabled={busy} onClick={() => chooseRole('owner')} className="w-full rounded-xl bg-black p-3.5 font-medium text-[#C5A059] transition hover:bg-gray-900 disabled:opacity-50">Continue as Owner</button>
-            <button type="button" disabled={busy} onClick={() => chooseRole('user')} className="w-full rounded-xl border border-gray-300 bg-white p-3.5 font-medium text-black transition hover:bg-gray-50 disabled:opacity-50">Continue as User</button>
+            {availableRoles.includes('owner') && <button type="button" disabled={busy} onClick={() => chooseRole('owner')} className="w-full rounded-xl bg-black p-3.5 font-medium text-[#C5A059] transition hover:bg-gray-900 disabled:opacity-50">Continue as Owner</button>}
+            {availableRoles.includes('admin') && <button type="button" disabled={busy} onClick={() => chooseRole('admin')} className="w-full rounded-xl bg-black p-3.5 font-medium text-[#C5A059] transition hover:bg-gray-900 disabled:opacity-50">Continue as Admin</button>}
+            {availableRoles.includes('user') && <button type="button" disabled={busy} onClick={() => chooseRole('user')} className="w-full rounded-xl border border-gray-300 bg-white p-3.5 font-medium text-black transition hover:bg-gray-50 disabled:opacity-50">Continue as User</button>}
             {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
           </div>
         ) : (
@@ -193,7 +228,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
             {mode === 'forgot' && resetSent && (
               <label className="block">
                 <span className="mb-2 block text-[15px] sm:text-[17px] font-medium text-gray-900">Reset code</span>
-                <input required dir="ltr" value={code} onChange={e=>setCode(e.target.value)} className="h-[60px] sm:h-[68px] w-full rounded-[14px] border border-[#D4AF37]/50 bg-white px-4 text-center tracking-[.3em] outline-none focus:border-[#C5A059] focus:ring-2 focus:ring-[#C5A059]/20" placeholder="Enter the code from your email" />
+                <input required dir="ltr" autoComplete="off" autoCapitalize="off" spellCheck={false} maxLength={64} value={code} onChange={e=>setCode(e.target.value.trim())} className="h-[60px] sm:h-[68px] w-full rounded-[14px] border border-[#D4AF37]/50 bg-white px-3 text-left font-mono text-xs tracking-normal outline-none focus:border-[#C5A059] focus:ring-2 focus:ring-[#C5A059]/20" placeholder="Paste the 64-character reset token from your email" />
               </label>
             )}
 
@@ -207,6 +242,8 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
                 </div>
               </label>
             ) : null}
+
+            {turnstileEnabled && <div className="flex justify-center py-2"><div ref={turnstileContainerRef} /></div>}
 
             {error && <div role="alert" className={`rounded-xl p-3 text-sm font-medium ${error.includes('تم ') ? 'border border-emerald-200 bg-emerald-50 text-emerald-700' : 'border border-red-200 bg-red-50 text-red-700'}`}>{error}</div>}
 

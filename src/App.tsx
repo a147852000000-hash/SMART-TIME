@@ -71,7 +71,7 @@ import SmartAIServicePage from '../app/services/smart-ai/page';
 import { AuthView } from './components/AuthView';
 import { CalendarView } from './components/CalendarView';
 import AdminCenter from './components/AdminCenter';
-import { getStoredSession, restoreSession, startTrialSession, logout as logoutAuth } from './services/authService';
+import { getStoredSession, restoreSession, startTrialSession, logout as logoutAuth, getUserSettings, saveUserSettings } from './services/authService';
 import { acknowledgeEventReminder, createCanonicalTask, deleteCanonicalTask, fetchPendingEventReminders, fetchSmartAiState, importCanonicalTasks, updateCanonicalTask } from './services/aiService';
 
 // Icons
@@ -94,6 +94,17 @@ export default function App() {
   const [theme, setTheme] = useState<ThemeMode>(() => UserRepository.getProfile().theme || 'light');
   const [colorTheme, setColorTheme] = useState<ColorTheme>('ocean');
   const [iconStyle, setIconStyle] = useState<IconStyle>(() => UserRepository.getProfile().iconStyle || 'classic');
+  const [cloudSettingsReady, setCloudSettingsReady] = useState(false);
+
+  const loadCloudSettings = useCallback(async () => {
+    const result = await getUserSettings();
+    const settings = result.settings || {};
+    setLanguage(settings.language === 'ar' || settings.language === 'en' || settings.language === 'fr' ? settings.language : 'ar');
+    setTheme(settings.theme === 'light' || settings.theme === 'dark' ? settings.theme : 'light');
+    setColorTheme(['ocean', 'facebook', 'whatsapp', 'telegram', 'instagram', 'youtube', 'gold'].includes(String(settings.colorTheme)) ? settings.colorTheme as ColorTheme : 'ocean');
+    setIconStyle(['classic', 'soft', 'bold', 'glow'].includes(String(settings.iconStyle)) ? settings.iconStyle as IconStyle : 'classic');
+    setCloudSettingsReady(true);
+  }, []);
 
   const handleNavigate = (nextView: AppView) => {
     if (nextView !== currentView) {
@@ -154,30 +165,51 @@ export default function App() {
   useEffect(() => {
     let active = true;
     restoreSession()
-      .then((session) => {
+      .then(async (session) => {
         if (!active) return;
         setAuthenticated(Boolean(session));
         if (session) setUserProfile(UserRepository.getProfile());
+        if (session && session.user.role !== 'guest' && session.user.id !== 'smart-time-trial-user') {
+          try { await loadCloudSettings(); } catch { if (active) setCloudSettingsReady(false); }
+        } else {
+          setCloudSettingsReady(false);
+        }
       })
       .catch(() => {
-        if (active) setAuthenticated(false);
+        if (active) { setAuthenticated(false); setCloudSettingsReady(false); }
       })
       .finally(() => {
         if (active) setAuthChecked(true);
       });
     return () => { active = false; };
-  }, []);
+  }, [loadCloudSettings]);
+
+  useEffect(() => {
+    const session = getStoredSession();
+    if (!authChecked || !authenticated || !cloudSettingsReady || !session?.token || session.user.role === 'guest' || session.user.id === 'smart-time-trial-user') return;
+    const timeout = window.setTimeout(() => {
+      void saveUserSettings({ language, theme, colorTheme, iconStyle }).catch((error) => {
+        console.error('Cloud settings save failed:', error);
+      });
+    }, 500);
+    return () => window.clearTimeout(timeout);
+  }, [authChecked, authenticated, cloudSettingsReady, language, theme, colorTheme, iconStyle]);
 
   const handleAuthenticated = useCallback(async () => {
+    setCloudSettingsReady(false);
     const session = await restoreSession();
     setAuthenticated(Boolean(session));
     if (session) setUserProfile(UserRepository.getProfile());
-  }, []);
+    if (session && session.user.role !== 'guest' && session.user.id !== 'smart-time-trial-user') {
+      try { await loadCloudSettings(); } catch { setCloudSettingsReady(false); }
+    }
+  }, [loadCloudSettings]);
 
   const handleGuest = useCallback(async () => {
     try {
       const session = await startTrialSession();
       setAuthenticated(Boolean(session));
+      setCloudSettingsReady(false);
       if (session) setUserProfile(UserRepository.getProfile());
     } catch (error) {
       console.error('Trial session error:', error);
@@ -188,6 +220,7 @@ export default function App() {
   const handleLogout = useCallback(async () => {
     await logoutAuth();
     setAuthenticated(false);
+    setCloudSettingsReady(false);
     setAuthChecked(true);
     setViewHistory([]);
     setCurrentView('dashboard');
