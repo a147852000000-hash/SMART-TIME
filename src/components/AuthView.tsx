@@ -230,7 +230,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
             {mode === 'forgot' && resetSent && (
               <label className="block">
                 <span className="mb-2 block text-[15px] sm:text-[17px] font-medium text-gray-900">Reset code</span>
-                <input required dir="ltr" autoComplete="off" autoCapitalize="off" spellCheck={false} maxLength={64} value={code} onChange={e=>setCode(e.target.value.trim())} className="h-[60px] sm:h-[68px] w-full rounded-[14px] border border-[#D4AF37]/50 bg-white px-3 text-left font-mono text-xs tracking-normal outline-none focus:border-[#C5A059] focus:ring-2 focus:ring-[#C5A059]/20" placeholder="Paste the 64-character reset token from your email" />
+                <input required dir="ltr" autoComplete="off" autoCapitalize="off" spellCheck={false} maxLength={6} inputMode="numeric" pattern="[0-9]{6}" value={code} onChange={e=>setCode(e.target.value.trim())} className="h-[60px] sm:h-[68px] w-full rounded-[14px] border border-[#D4AF37]/50 bg-white px-3 text-left font-mono text-xs tracking-normal outline-none focus:border-[#C5A059] focus:ring-2 focus:ring-[#C5A059]/20" placeholder="Enter the 6-digit reset code from your email" />
               </label>
             )}
 
