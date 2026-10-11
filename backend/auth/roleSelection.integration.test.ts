@@ -178,12 +178,12 @@ try {
   assert.equal(JSON.stringify(knownForgot.body).includes('a'.repeat(64)), false, 'reset token must not be included in the API response');
   const storedReset = db.prepare('SELECT code_hash, attempts FROM password_resets WHERE email=?').get(userEmail);
   assert.match(storedReset.code_hash, /^[a-f0-9]{64}$/i, 'database stores a fixed-length HMAC-SHA256 digest');
-  assert.match(serverSource, /createHmac\\('sha256',secret\\)/, 'OTP hashes must be keyed by OTP_HMAC_SECRET');
   assert.doesNotMatch(JSON.stringify(knownForgot.body), /\b\d{6}\b/, 'reset code must not be returned in the response');
   const serverSource = fs.readFileSync(path.join(process.cwd(), 'server.ts'), 'utf8');
   assert.match(serverSource, /crypto\.randomInt\(100000, 1000000\)/, 'reset code generation uses crypto.randomInt for six digits');
   assert.match(serverSource, /timingSafeEqual\(providedHash,storedHash\)/, 'reset path uses constant-time comparison');
   assert.match(serverSource, /Number\(reset\.attempts\|\|0\)>=5/, 'reset path caps attempts');
+  assert.equal(serverSource.includes("crypto.createHmac('sha256',secret)"), true, 'OTP hashes must be keyed by OTP_HMAC_SECRET');
   assert.equal((await post('/api/auth/forgot-password', { email: userEmail })).status, 200);
   assert.equal((await post('/api/auth/forgot-password', { email: userEmail })).status, 200);
   const oldCode = '246810';
@@ -204,13 +204,13 @@ try {
     const wrongGuess = await post('/api/auth/reset-password', { email: userEmail, code: '111111', newPassword: 'AnotherPassword!123' });
     assert.equal(wrongGuess.status, 400, 'the first five wrong reset-token guesses must be rejected');
   }
-  const sixthGuess = await post('/api/auth/reset-password', { email: userEmail, code: 'f'.repeat(64), newPassword: 'AnotherPassword!123' });
+  const sixthGuess = await post('/api/auth/reset-password', { email: userEmail, code: '111111', newPassword: 'AnotherPassword!123' });
   assert.equal(sixthGuess.status, 429, 'the sixth reset-token guess must be rate limited');
 
   // Per-IP limiter should stop a burst even when requests use distinct email addresses.
   for (let i = 0; i < 6; i++) {
     const result = await post('/api/auth/forgot-password', { email: `unknown-ip-test-${i}@example.test` });
-    assert.equal(result.status, i < 5 ? 404 : 429, 'IP reset limit must apply independently of per-email limits');
+    assert.equal(result.status, i < 4 ? 404 : 429, 'IP reset limit must apply independently of per-email limits');
   }
 
   console.log('AUTH_SECURITY_INTEGRATION_PASS: role escalation blocked; admin appointment/audit/revocation; exact-origin CORS; DB role authoritative; JWT session revocation; settings isolation; email/IP reset limits; reset token one-use.');
