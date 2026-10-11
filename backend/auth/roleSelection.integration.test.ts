@@ -95,6 +95,10 @@ try {
   assert.equal(ownerSession.body.user.role, 'owner');
   const me = await request('/api/auth/me', { headers: { authorization: `Bearer ${ownerSession.body.token}` } });
   assert.equal(me.status, 200);
+  db.prepare('UPDATE users SET email=? WHERE id=?').run('renamed-owner@example.test', 'test-owner');
+  const staleOwnerSession = await request('/api/auth/me', { headers: { authorization: `Bearer ${ownerSession.body.token}` } });
+  assert.equal(staleOwnerSession.status, 401, 'owner JWT must be rejected after the account email changes');
+  db.prepare('UPDATE users SET email=? WHERE id=?').run(ownerEmail, 'test-owner');
   await post('/api/auth/logout', {}, ownerSession.body.token);
   const revoked = await request('/api/auth/me', { headers: { authorization: `Bearer ${ownerSession.body.token}` } });
   assert.equal(revoked.status, 401, 'logout must revoke JWT-backed sessions');
@@ -119,6 +123,16 @@ try {
   assert.equal(oldPasswordLogin.status, 401);
   const newPasswordLogin = await post('/api/auth/login', { identifier: userEmail, password: 'UpdatedPassword!123' });
   assert.equal(newPasswordLogin.status, 200);
+
+  const concurrentToken = crypto.randomBytes(32).toString('hex');
+  db.prepare('INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at')
+    .run(userEmail, crypto.createHash('sha256').update(concurrentToken).digest('hex'), new Date(Date.now() + 60 * 60_000).toISOString(), 0, new Date().toISOString());
+  const concurrentResults = await Promise.all([
+    post('/api/auth/reset-password', { email: userEmail, code: concurrentToken, newPassword: 'ConcurrentPassword!123' }),
+    post('/api/auth/reset-password', { email: userEmail, code: concurrentToken, newPassword: 'AnotherConcurrentPassword!123' }),
+  ]);
+  assert.equal(concurrentResults.filter(result => result.status === 200).length, 1, 'a reset token must be consumed by exactly one concurrent request');
+  assert.equal(concurrentResults.filter(result => result.status === 400).length, 1, 'the competing reset request must be rejected');
 
   const unknownForgot = await post('/api/auth/forgot-password', { email: 'unknown@example.test' });
   assert.equal(unknownForgot.status, 404);
