@@ -18,7 +18,8 @@ import { verifyTurnstileToken } from "./backend/security/turnstile.js";
 dotenv.config();
 
 const app = express();
-app.set("trust proxy", 1);
+// Trust only the local reverse proxy (Caddy on Oracle); do not trust client-supplied X-Forwarded-For from the public network.
+app.set("trust proxy", "loopback");
 const PORT = Number(process.env.PORT || 3000);
 const SMART_VOICE_DNA_PROVIDER_URL = String(process.env.SMART_VOICE_DNA_PROVIDER_URL || "").trim();
 const SMART_VOICE_DNA_PROVIDER_TOKEN = String(process.env.SMART_VOICE_DNA_PROVIDER_TOKEN || "").trim();
@@ -109,6 +110,16 @@ const TRIAL_MODE = String(process.env.TRIAL_MODE || 'false').trim().toLowerCase(
 const TRIAL_USER_ID = 'smart-time-trial-user';
 const AUTH_SESSION_DAYS = 30;
 const PASSWORD_RESET_MINUTES = 60;
+function consumePasswordResetIpRequest(ip: string): boolean {
+  const now = new Date().toISOString();
+  const ipHash = crypto.createHash('sha256').update(String(process.env.RATE_LIMIT_HASH_SECRET || process.env.JWT_SECRET || 'smart-time-rate-limit-v1')).update(':').update(ip).digest('hex');
+  db.prepare(`INSERT INTO password_reset_ip_requests(ip_hash,window_started_at,request_count) VALUES(?,?,1)
+    ON CONFLICT(ip_hash) DO UPDATE SET
+      request_count=CASE WHEN (julianday(excluded.window_started_at)-julianday(password_reset_ip_requests.window_started_at))*1440 >= 15 THEN 1 ELSE password_reset_ip_requests.request_count+1 END,
+      window_started_at=CASE WHEN (julianday(excluded.window_started_at)-julianday(password_reset_ip_requests.window_started_at))*1440 >= 15 THEN excluded.window_started_at ELSE password_reset_ip_requests.window_started_at END`).run(ipHash, now);
+  const row = db.prepare('SELECT request_count FROM password_reset_ip_requests WHERE ip_hash=?').get(ipHash) as any;
+  return Number(row?.request_count || 0) <= 10;
+}
 function consumePasswordResetRequest(email: string): boolean {
   const now = new Date().toISOString();
   db.prepare(`INSERT INTO password_reset_requests(email,window_started_at,request_count) VALUES(?,?,1)
@@ -181,6 +192,11 @@ function verifyJwt(token: string): any | null {
 }
 const OWNER_EMAILS = new Set(String(process.env.OWNER_EMAILS || '').split(',').map(v => v.trim().toLowerCase()).filter(Boolean));
 const VALID_APP_ROLES = new Set(['owner', 'admin', 'user']);
+try { db.exec(`CREATE TABLE IF NOT EXISTS password_reset_ip_requests (
+  ip_hash TEXT PRIMARY KEY,
+  window_started_at TEXT NOT NULL,
+  request_count INTEGER NOT NULL DEFAULT 0
+)`); } catch {}
 try { db.exec(`CREATE TABLE IF NOT EXISTS role_audit_log (
   id TEXT PRIMARY KEY,
   actor_user_id TEXT NOT NULL,
@@ -508,6 +524,9 @@ app.post('/api/auth/forgot-password',async(req,res)=>{
     const email=String(req.body?.email||'').trim().toLowerCase();
     if(!email||email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({code:'INVALID_EMAIL',message:'البريد الإلكتروني غير صحيح'});
+    }
+    if(!consumePasswordResetIpRequest(clientIp(req))) {
+      return res.status(429).json({code:'RATE_LIMITED',message:'تم تجاوز عدد الطلبات من هذا الاتصال. حاول بعد 15 دقيقة.'});
     }
     if(!consumePasswordResetRequest(email)) {
       return res.status(429).json({code:'RATE_LIMITED',message:'تم تجاوز عدد طلبات الاستعادة. حاول بعد 15 دقيقة.'});
