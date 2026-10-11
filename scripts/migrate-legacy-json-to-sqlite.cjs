@@ -107,7 +107,7 @@ function main() {
   }
   const usersByEmail = new Map(users.map(u => [u.email, u]));
   const rawSessions = readJson(sessionsFile, 'sessions.json');
-  const sessions = rawSessions.map(normalizeSession).filter(s => s && idSet.has(s.userId));
+  const sessions = rawSessions.map((row, index) => normalizeSession(row, index, usersByEmail)).filter(s => s && idSet.has(s.userId));
   const apply = has('--apply');
   const output = arg('--output');
   if (apply && !output) throw new Error('--apply requires --output with a NEW, isolated SQLite path.');
