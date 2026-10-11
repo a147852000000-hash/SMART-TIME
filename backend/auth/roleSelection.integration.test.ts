@@ -108,9 +108,11 @@ try {
   assert.deepEqual(isolated.body.settings, {}, 'settings must be isolated by user id');
 
   const token = crypto.randomBytes(32).toString('hex');
+  db.prepare('INSERT INTO sessions(id,user_id,expires_at,created_at) VALUES(?,?,?,?)').run('pre-reset-session', 'test-user', new Date(Date.now() + 60 * 60_000).toISOString(), new Date().toISOString());
   db.prepare('INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?)').run(userEmail, crypto.createHash('sha256').update(token).digest('hex'), new Date(Date.now() + 60 * 60_000).toISOString(), 0, new Date().toISOString());
   const reset = await post('/api/auth/reset-password', { email: userEmail, code: token, newPassword: 'UpdatedPassword!123' });
   assert.equal(reset.status, 200);
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM sessions WHERE user_id=?').get('test-user').count, 0, 'password reset must revoke all existing sessions');
   const reuse = await post('/api/auth/reset-password', { email: userEmail, code: token, newPassword: 'AnotherPassword!123' });
   assert.equal(reuse.status, 400, 'reset token must be one-time');
   const oldPasswordLogin = await post('/api/auth/login', { identifier: userEmail, password });
