@@ -433,7 +433,7 @@ app.post('/api/auth/forgot-password',async(req,res)=>{
   try {
     if (!(await requireAuthTurnstile(req,res))) return;
     const email=String(req.body?.email||'').trim().toLowerCase();
-    if(!email||email.length>254||!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+    if(!email||email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({code:'INVALID_EMAIL',message:'البريد الإلكتروني غير صحيح'});
     }
     if(!consumePasswordResetRequest(email)) {
