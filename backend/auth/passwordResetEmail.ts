@@ -133,7 +133,7 @@ export async function sendPasswordResetEmail(email: string, code: string, ttlMin
       const message = typeof payload?.message === "string" ? payload.message : typeof payload?.error === "string" ? payload.error : "Resend API request failed";
       const error: any = new Error(message);
       error.code = typeof payload?.name === "string" ? payload.name : `HTTP_${response.status}`;
-      console.error("RESEND_FAILED", { status: response.status, error: message, code: error.code });
+      console.error("RESEND_FAILED", { status: response.status, code: error.code });
       throw error;
     }
 
@@ -150,7 +150,7 @@ export async function sendPasswordResetEmail(email: string, code: string, ttlMin
     if (!error?.code || error.code === "ECONNRESET" || error.code === "ENOTFOUND" || error.code === "EAI_AGAIN") {
       console.error("RESEND_FAILED", {
         status: undefined,
-        error: error instanceof Error ? error.message : "Unknown Resend transport error",
+        error: "Resend transport failure",
         code: typeof error?.code === "string" ? error.code : "RESEND_NETWORK_ERROR",
       });
     }
