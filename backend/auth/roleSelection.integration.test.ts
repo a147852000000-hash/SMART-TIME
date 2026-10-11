@@ -120,6 +120,17 @@ try {
   const newPasswordLogin = await post('/api/auth/login', { identifier: userEmail, password: 'UpdatedPassword!123' });
   assert.equal(newPasswordLogin.status, 200);
 
+  // Two concurrent submissions of the same token must not both succeed.
+  const concurrentToken = crypto.randomBytes(32).toString('hex');
+  db.prepare('INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?)')
+    .run(userEmail, crypto.createHash('sha256').update(concurrentToken).digest('hex'), new Date(Date.now() + 60 * 60_000).toISOString(), 0, new Date().toISOString());
+  const concurrentResults = await Promise.all([
+    post('/api/auth/reset-password', { email: userEmail, code: concurrentToken, newPassword: 'ConcurrentPassword!123' }),
+    post('/api/auth/reset-password', { email: userEmail, code: concurrentToken, newPassword: 'AnotherConcurrentPassword!123' }),
+  ]);
+  assert.equal(concurrentResults.filter(result => result.status === 200).length, 1, 'a reset token must be consumed by exactly one concurrent request');
+  assert.equal(concurrentResults.filter(result => result.status === 400).length, 1, 'the losing concurrent reset must be rejected as already consumed');
+
   const unknownForgot = await post('/api/auth/forgot-password', { email: 'unknown@example.test' });
   const knownForgot = await post('/api/auth/forgot-password', { email: userEmail });
   assert.deepEqual(unknownForgot.body, knownForgot.body, 'forgot-password must not reveal account existence');
