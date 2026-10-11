@@ -95,6 +95,25 @@ try {
   assert.equal(ownerSession.body.user.role, 'owner');
   const me = await request('/api/auth/me', { headers: { authorization: `Bearer ${ownerSession.body.token}` } });
   assert.equal(me.status, 200);
+
+  const deniedAdminAppointment = await post('/api/auth/owner/admin-role', { email: userEmail, action: 'appoint' }, adminSession.body.token);
+  assert.equal(deniedAdminAppointment.status, 403, 'admins cannot appoint admins');
+  const selfAppointment = await post('/api/auth/owner/admin-role', { email: ownerEmail, action: 'appoint' }, ownerSession.body.token);
+  assert.equal(selfAppointment.status, 400, 'owner cannot self-appoint');
+  const appointUser = await post('/api/auth/owner/admin-role', { email: userEmail, action: 'appoint' }, ownerSession.body.token);
+  assert.equal(appointUser.status, 200);
+  assert.equal(appointUser.body.role, 'admin');
+  assert.equal(db.prepare('SELECT role FROM users WHERE id=?').get('test-user').role, 'admin');
+  const revokeUser = await post('/api/auth/owner/admin-role', { email: userEmail, action: 'revoke' }, ownerSession.body.token);
+  assert.equal(revokeUser.status, 200);
+  assert.equal(revokeUser.body.sessionsRevoked, true);
+  assert.equal(db.prepare('SELECT role FROM users WHERE id=?').get('test-user').role, 'user');
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM sessions WHERE user_id=?').get('test-user').count, 0, 'revoking admin must immediately delete all target sessions');
+  const audit = await request('/api/auth/owner/admin-role/audit?limit=10', { headers: { authorization: `Bearer ${ownerSession.body.token}` } });
+  assert.equal(audit.status, 200);
+  assert.equal(audit.body.entries.filter((entry: any) => entry.target_email === userEmail).length, 2, 'appointment and revocation must be audited');
+  const ownerDemotion = await post('/api/auth/owner/admin-role', { email: ownerEmail, action: 'revoke' }, ownerSession.body.token);
+  assert.equal(ownerDemotion.status, 400, 'owner cannot change their own role');
   db.prepare('UPDATE users SET email=? WHERE id=?').run('renamed-owner@example.test', 'test-owner');
   const staleOwnerSession = await request('/api/auth/me', { headers: { authorization: `Bearer ${ownerSession.body.token}` } });
   assert.equal(staleOwnerSession.status, 401, 'owner JWT must be rejected after the account email changes');
