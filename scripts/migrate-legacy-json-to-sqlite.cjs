@@ -64,8 +64,9 @@ function normalizeUser(row, index) {
   // Empty/auto-created legacy accounts receive an unknown random password. They can
   // regain access only through the secured email reset flow; no plaintext is carried over.
   const passwordHash = isScryptHash(existingHash) ? existingHash : makePasswordHash(rawPassword || crypto.randomBytes(32).toString('hex'));
-  const rawRole = String(first(row, ['role', 'appRole'], 'user')).toLowerCase();
-  const role = ['owner', 'admin', 'user'].includes(rawRole) ? rawRole : 'user';
+  // Never carry owner/admin privileges across from a legacy JSON source automatically.
+  // All migrated accounts start as least-privilege user; owner/admin promotion is a separate reviewed DB operation.
+  const role = 'user';
   const createdAt = iso(first(row, ['created_at', 'createdAt', 'created', 'registeredAt']), new Date(0).toISOString());
   const phone = String(first(row, ['phone', 'mobile'], '')).trim() || null;
   const phoneVerified = ['true', '1', 'yes'].includes(String(first(row, ['phone_verified', 'phoneVerified'], 'false')).toLowerCase()) ? 1 : 0;
@@ -119,6 +120,7 @@ function main() {
     existingScryptHashesPreserved: rawUsers.filter(r => isScryptHash(first(r, ['password_hash', 'passwordHash'], ''))).length,
     legacyPasswordsHashed: rawUsers.filter(r => !isScryptHash(first(r, ['password_hash', 'passwordHash'], '')) && String(first(r, ['password', 'pass', 'plainPassword'], '')).length > 0).length,
     passwordlessLegacyAccountsGivenRandomUnknownPassword: rawUsers.filter(r => !isScryptHash(first(r, ['password_hash', 'passwordHash'], '')) && !String(first(r, ['password', 'pass', 'plainPassword'], '')).length).length,
+    legacyOwnerOrAdminRecordsRequiringManualReview: rawUsers.filter(r => ['owner','admin'].includes(String(first(r, ['role','appRole'],'user')).toLowerCase())).length,
     inputSessions: rawSessions.length,
     importableSessions: sessions.length,
     invalidOrOrphanSessionsSkipped: rawSessions.length - sessions.length,
