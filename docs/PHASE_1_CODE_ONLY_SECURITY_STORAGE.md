@@ -2,6 +2,10 @@
 
 Status: prepared in GitHub only. These files have not been executed on Oracle. No server, Caddy, PM2, Docker/LiveKit, network rule, secret, or production database was changed by these scripts/docs.
 
+## Runtime entrypoint boundary
+
+The Oracle Phase 0 inventory identifies the live PM2 entrypoint as `/home/ubuntu/smart-time-ai/index.cjs`. That file is not present at the same path in this GitHub branch (the branch contains `server.ts` and builds `dist/server.cjs`). Therefore the CORS and auth changes in `server.ts` do not change the currently running Oracle `index.cjs` by themselves. Do not copy, replace, or restart the live entrypoint during Phase 1. Before Phase 2, compare the live entrypoint with a reviewed build artifact and produce an explicit migration/rollback plan; the current server backup remains the only approved rollback point.
+
 ## Exact CORS allowlist
 
 `server.ts` now accepts exact origins from `ALLOWED_ORIGINS`, comma-separated. There is no default wildcard and no wildcard `*.vercel.app`. In production, an unset/empty allowlist permits requests with no Origin header (for non-browser/server-to-server clients) but rejects any supplied Origin. Before a frontend cutover, set the exact HTTPS frontend origin(s) yourself in the server environment. Do not include paths or trailing slashes. Keep credentials disabled unless a separate reviewed requirement exists.
