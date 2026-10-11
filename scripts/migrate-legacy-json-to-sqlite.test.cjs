@@ -174,3 +174,35 @@ test('a dangling symlink at the output path is treated as existing and is never 
     assert.equal(fs.existsSync(target), false);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+
+test('duplicate emails and user IDs stop before creating output', () => {
+  const cases = [
+    {
+      rows: [
+        { id: 'u1', email: 'same@example.com', password: 'secret1' },
+        { id: 'u2', email: 'SAME@example.com', password: 'secret2' },
+      ],
+      message: /Duplicate email detected/,
+    },
+    {
+      rows: [
+        { id: 'duplicate-id', email: 'one@example.com', password: 'secret1' },
+        { id: 'duplicate-id', email: 'two@example.com', password: 'secret2' },
+      ],
+      message: /Duplicate user id detected/,
+    },
+  ];
+  for (const item of cases) {
+    const dir = tempDir();
+    try {
+      const users = path.join(dir, 'users.json');
+      const output = path.join(dir, 'staging.db');
+      fs.writeFileSync(users, JSON.stringify(item.rows), { mode: 0o600 });
+      const result = run(['--users', users, '--apply', '--output', output]);
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, item.message);
+      assert.equal(fs.existsSync(output), false);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  }
+});
