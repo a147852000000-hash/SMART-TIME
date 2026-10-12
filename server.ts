@@ -513,10 +513,15 @@ app.post('/api/auth/owner/admin-role', (req,res) => {
     const safeMessage = String(err?.message || 'Unknown error')
       .replace(/(password|secret|token|authorization)\s*[:=]\s*\S+/gi, '$1=[REDACTED]')
       .slice(0, 300);
+    const safeStack = String(err?.stack || '')
+      .split('\\n')
+      .slice(0, 8)
+      .map((line: string) => line.replace(/(password|secret|token|authorization)\\s*[:=]\\s*\\S+/gi, '$1=[REDACTED]').slice(0, 300))
+      .join('\\n');
     console.error('OWNER_ADMIN_ROLE_CHANGE_FAILED', {
-      actorId: String(actor.id),
       code: String(err?.code || 'UNKNOWN'),
       message: safeMessage,
+      stack: safeStack,
     });
     return res.status(500).json({ code: 'ROLE_CHANGE_FAILED', message: 'تعذر تحديث الصلاحيات.' });
   }
