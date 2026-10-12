@@ -182,15 +182,19 @@ try {
   const serverSource = fs.readFileSync(path.join(process.cwd(), 'server.ts'), 'utf8');
   assert.match(serverSource, /crypto\.randomInt\(100000, 1000000\)/, 'reset code generation uses crypto.randomInt for six digits');
   assert.equal(serverSource.includes('storedHash.length!==providedHash.length'), true, 'buffer lengths must be checked before timingSafeEqual');
+  assert.equal(serverSource.includes('storedHash.length!==providedHash.length'), true, 'buffer lengths must be checked before timingSafeEqual');
   assert.match(serverSource, /timingSafeEqual\(providedHash,storedHash\)/, 'reset path uses constant-time comparison');
   assert.match(serverSource, /Number\(reset\.attempts\|\|0\)>=5/, 'reset path caps attempts');
-  assert.equal(serverSource.includes("crypto.createHmac('sha256',secret)"), true, 'reset hashes must be keyed by PASSWORD_RESET_HMAC_SECRET');
-  assert.equal((await post('/api/auth/forgot-password', { email: userEmail })).status, 200);
+  assert.equal(serverSource.includes("function passwordResetHash(code:string){const secret=String(process.env.PASSWORD_RESET_HMAC_SECRET||'')"), true, 'reset hashes must be keyed by PASSWORD_RESET_HMAC_SECRET');
+  assert.equal(serverSource.includes("return crypto.createHmac('sha256',secret).update(code).digest('hex')"), true, 'reset hash must use HMAC-SHA256');
   assert.equal((await post('/api/auth/forgot-password', { email: userEmail })).status, 200);
   const oldCode = '246810';
+  const oldHash = crypto.createHmac('sha256', secret).update(oldCode).digest('hex');
   db.prepare('INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at')
-    .run('other@example.test', crypto.createHmac('sha256', secret).update(oldCode).digest('hex'), new Date(Date.now() + 60 * 60_000).toISOString(), 0, new Date().toISOString());
+    .run('other@example.test', oldHash, new Date(Date.now() + 60 * 60_000).toISOString(), 0, new Date().toISOString());
   assert.equal((await post('/api/auth/forgot-password', { email: 'other@example.test' })).status, 200);
+  const replacementHash = db.prepare('SELECT code_hash FROM password_resets WHERE email=?').get('other@example.test').code_hash;
+  assert.notEqual(replacementHash, oldHash, 'a new reset request replaces the previous stored HMAC');
   assert.equal((await post('/api/auth/reset-password', { email: 'other@example.test', code: oldCode, newPassword: 'AnotherPassword!123' })).status, 400, 'a new reset request invalidates the previous code');
   const mailSource = fs.readFileSync(path.join(process.cwd(), 'backend/auth/passwordResetEmail.ts'), 'utf8');
   assert.equal(mailSource.includes('error: message'), false, 'SMTP/provider error logs must not print raw provider error messages');
