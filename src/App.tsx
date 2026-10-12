@@ -56,6 +56,9 @@ import AdminWalletPanel from './components/AdminWalletPanel';
 import { VehiclesView } from './components/VehiclesView';
 import { EducationView } from './components/EducationView';
 import { ReligiousView } from './components/ReligiousView';
+import ReligiousChoice from './components/religious/ReligiousChoice';
+import MuslimDashboard from './components/religious/MuslimDashboard';
+import ChristianDashboard from './components/religious/ChristianDashboard';
 import { SecureVaultView } from './components/SecureVaultView';
 import { AiCenterView } from './components/AiCenterView';
 import { HotChatView } from './components/HotChatView';
@@ -397,6 +400,9 @@ export default function App() {
 
   if (servicePath === '/services/smart-ai') return <SmartAIServicePage />;
   if (servicePath === '/services') return <ServicesPage />;
+  if (servicePath === '/religious') return <ReligiousChoice />;
+  if (servicePath === '/religious/muslim') return <MuslimDashboard />;
+  if (servicePath === '/religious/christian') return <ChristianDashboard />;
   if (!authChecked) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white font-bold">جارٍ التحقق من جلسة الحساب…</div>;
   if (!authenticated) {
     return (
