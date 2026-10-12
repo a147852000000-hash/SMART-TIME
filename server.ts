@@ -511,7 +511,7 @@ app.post('/api/auth/owner/admin-role', (req,res) => {
   } catch (err:any) {
     // Log a bounded, redacted diagnostic for CI/server operators; never log request bodies or credentials.
     const safeMessage = String(err?.message || 'Unknown error')
-      .replace(/(password|secret|token|authorization)\\s*[:=]\\s*\\S+/gi, '$1=[REDACTED]')
+      .replace(/(password|secret|token|authorization)\s*[:=]\s*\S+/gi, '$1=[REDACTED]')
       .slice(0, 300);
     console.error('OWNER_ADMIN_ROLE_CHANGE_FAILED', {
       actorId: String(actor.id),
