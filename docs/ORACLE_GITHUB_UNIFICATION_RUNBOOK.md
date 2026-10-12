@@ -52,6 +52,16 @@ If there is no `sessions.json`, omit the `--sessions` argument. Dry-run mode rea
 
 The importer hashes plaintext passwords using the same `salt:hash` scrypt format as `server.ts`. Accounts with no legacy password receive an unknown random password and must use email reset. Legacy owner/admin labels are **not** promoted automatically; review them separately to prevent privilege escalation.
 
+### Approved owner promotion (separate, manual approval)
+
+Run the read-only preview first:
+
+```bash
+sqlite3 -readonly /path/to/review-copy.db < scripts/sql/preview-approved-owners.sql
+```
+
+Review that exactly the two approved accounts exist. For an apply attempt, open the intended reviewed database interactively with `sqlite3`, enable `.bail on`, and run `.read scripts/sql/promote-approved-owners.sql`. The apply script requires exactly two matching accounts and exactly two changed rows; otherwise a SQLite trigger rolls the transaction back and the CLI stops. It intentionally leaves a successful transaction uncommitted. Review the displayed rows and enter `COMMIT;` manually only after approval, or enter `ROLLBACK;`. Running the apply script non-interactively will not commit changes. Never use the live production database before the separate production approval gate.
+
 ## 4. Build a separate staging database, never overwrite an existing file
 
 Choose a brand-new staging path and confirm it does not exist:
@@ -84,12 +94,10 @@ git clone --single-branch --branch "$BRANCH" \
   https://github.com/a147852000000-hash/SMART-TIME.git "$STAGE"
 cd "$STAGE"
 
-# Do NOT symlink or copy the live .env into staging; that would expose production credentials
-# to the staging checkout and could send real email or call production integrations.
-# Tests below use isolated test configuration. Configure a dedicated staging mail provider
-# separately only when ready to perform an actual inbox-delivery check. With outbound mail
-# suppressed, password-reset requests are not proof of delivery and a human cannot complete
-# the passwordless-account recovery test; perform that gate only after staging SMTP is configured.
+# Do NOT symlink or copy the live .env into staging; that would expose production credentials.
+# Generate unique staging-only signing and rate-limit secrets. Do not put secrets in source control.
+# Password reset uses direct SMTP only. Blank SMTP values suppress delivery; registered-account
+# recovery must be tested separately after a staging SMTP account is configured.
 
 npm install --ignore-scripts --no-audit --no-fund
 npm run test:password-reset-email
@@ -107,12 +115,15 @@ test ! -e "$DB"
 node scripts/migrate-legacy-json-to-sqlite.cjs "${MIGRATE_ARGS[@]}" --apply --output "$DB"
 chmod 600 "$DB"
 
-# Run in the foreground, restricted to loopback. Use a new staging-only JWT secret and
-# suppress outbound email by default; never load production credentials into this process.
+# Run in the foreground, restricted to loopback. Use separate staging-only secrets.
+# Direct SMTP credentials are intentionally blank until a staging mailbox is approved.
 STAGING_JWT_SECRET="$(openssl rand -hex 48)"
+STAGING_RATE_LIMIT_HASH_SECRET="$(openssl rand -hex 32)"
+STAGING_PASSWORD_RESET_HMAC_SECRET="$(openssl rand -hex 32)"
 NODE_ENV=production HOST=127.0.0.1 PORT=3001 SMART_TIME_DB_PATH="$DB" \
-  JWT_SECRET="$STAGING_JWT_SECRET" TURNSTILE_ENFORCE=false \
-  EMAIL_PROVIDER= ALLOW_DEV_EMAIL_CODE=true node dist/server.cjs
+  JWT_SECRET="$STAGING_JWT_SECRET" RATE_LIMIT_HASH_SECRET="$STAGING_RATE_LIMIT_HASH_SECRET" \
+  PASSWORD_RESET_HMAC_SECRET="$STAGING_PASSWORD_RESET_HMAC_SECRET" TURNSTILE_ENFORCE=false \
+  SMTP_HOST= SMTP_PORT= SMTP_USER= SMTP_PASS= node dist/server.cjs
 ```
 
 Keep this SSH terminal open. From a second SSH terminal, test only localhost:
@@ -127,7 +138,7 @@ cat /tmp/smart-time-reset-check.json
 rm -f /tmp/smart-time-reset-check.json
 ```
 
-The expected unknown-email response is HTTP 404 with `EMAIL_NOT_REGISTERED`. Do not test a real email until the staging mail provider is confirmed. Do not open port 3001 in Oracle security rules. Stop the staging process with Ctrl+C in its first terminal. The production service remains unchanged.
+The expected unknown-email response is HTTP 404 with `ACCOUNT_NOT_FOUND`, message `هذا البريد غير مسجل، أنشئ حساباً`, and `registerUrl: "/register"`. Do not test a real registered email until direct staging SMTP is configured. For Gmail SMTP use environment variables `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_SECURE=true`, `SMTP_USER`, `SMTP_PASS` (a Gmail App Password), and optionally `EMAIL_FROM`; do not commit these values or paste credentials into logs/chat. Do not open port 3001 in Oracle security rules. Stop the staging process with Ctrl+C in its first terminal. The production service remains unchanged.
 
 The staging database contains only the migrated authentication users/sessions initially; the GitHub server initializes the rest of its application schema when it starts. This does **not** migrate unrelated application data stored outside those JSON files. Do not switch Caddy/PM2 until all required data stores have been inventoried and migrated.
 
@@ -136,7 +147,7 @@ The staging database contains only the migrated authentication users/sessions in
 - `npm ci`, `npm run lint`, `npm run build`, and repository CI all pass.
 - Staging DB user count equals the source JSON record count; duplicate or invalid emails stop migration.
 - Test login for a known migrated account and password; verify a passwordless legacy account can recover via email.
-- Test unknown email response: HTTP 404 and `EMAIL_NOT_REGISTERED` with `البريد غير مسجل، يجب التسجيل أولاً`.
+- Test unknown email response: HTTP 404 and `ACCOUNT_NOT_FOUND` with `هذا البريد غير مسجل، أنشئ حساباً` and `registerUrl: "/register"`.
 - Test registered email reset delivery to a real inbox; ensure token never appears in API response or logs.
 - Test invalid token, expired token, sixth guess, and fourth request within 15 minutes.
 - Test a normal user attempting owner/admin selection returns 403.
