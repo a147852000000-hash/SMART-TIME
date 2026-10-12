@@ -198,8 +198,10 @@ try {
   assert.equal((await post('/api/auth/reset-password', { email: 'other@example.test', code: oldCode, newPassword: 'AnotherPassword!123' })).status, 400, 'a new reset request invalidates the previous code');
   const mailSource = fs.readFileSync(path.join(process.cwd(), 'backend/auth/passwordResetEmail.ts'), 'utf8');
   assert.equal(mailSource.includes('error: message'), false, 'SMTP/provider error logs must not print raw provider error messages');
-  assert.doesNotMatch(serverOutput, /\\b\\d{6}\\b/, 'application logs must not contain six-digit reset codes');
+  assert.doesNotMatch(serverOutput, /\b\d{6}\b/, 'application logs must not contain six-digit reset codes');
   assert.match(serverSource, /PASSWORD_RESET_EMAIL_FAILED/, 'application mail-failure path logs a generic code only');
+  // The earlier known-account requests are #1 and #2; make request #3 explicitly before asserting #4 is limited.
+  assert.equal((await post('/api/auth/forgot-password', { email: userEmail })).status, 200);
   const rateLimited = await post('/api/auth/forgot-password', { email: userEmail });
   assert.equal(rateLimited.status, 429, 'fourth reset request in the 15-minute window must be rate limited');
 
