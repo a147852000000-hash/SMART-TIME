@@ -9,7 +9,10 @@ const configuredDbPath = process.env.SMART_TIME_DB_PATH?.trim();
 const dataDir = railwayVolumePath ? path.resolve(railwayVolumePath) : defaultDataDir;
 const dbPath = configuredDbPath ? path.resolve(configuredDbPath) : path.join(dataDir, 'smart-time.db');
 
-fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+const databaseDir = path.dirname(dbPath);
+fs.mkdirSync(databaseDir, { recursive: true, mode: 0o700 });
+// SQLite contains authentication and application data; enforce private directory permissions on every startup.
+fs.chmodSync(databaseDir, 0o700);
 
 // When Railway first attaches a persistent volume, preserve the legacy SQLite
 // database if it is still visible and the persistent target has not been created.
@@ -26,6 +29,8 @@ if ((railwayVolumePath || configuredDbPath) && !fs.existsSync(dbPath)) {
 }
 
 export const db = new DatabaseSync(dbPath);
+fs.chmodSync(dbPath, 0o600);
+// The 700 directory permission also protects SQLite WAL/SHM sidecars created beside the database.
 db.exec(`
 PRAGMA journal_mode = WAL;
 CREATE TABLE IF NOT EXISTS service_status (
