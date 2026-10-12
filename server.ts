@@ -197,15 +197,21 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS password_reset_ip_requests (
   window_started_at TEXT NOT NULL,
   request_count INTEGER NOT NULL DEFAULT 0
 )`); } catch {}
-try { db.exec(`CREATE TABLE IF NOT EXISTS role_audit_log (
-  id TEXT PRIMARY KEY,
-  actor_user_id TEXT NOT NULL,
-  actor_email TEXT NOT NULL,
-  target_user_id TEXT NOT NULL,
-  target_email TEXT NOT NULL,
-  action TEXT NOT NULL CHECK(action IN ('admin_appointed','admin_revoked')),
-  created_at TEXT NOT NULL
-)`); } catch {}
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS role_audit_log (
+    id TEXT PRIMARY KEY,
+    actor_user_id TEXT NOT NULL,
+    actor_email TEXT NOT NULL,
+    target_user_id TEXT NOT NULL,
+    target_email TEXT NOT NULL,
+    action TEXT NOT NULL CHECK(action IN ('admin_appointed','admin_revoked')),
+    created_at TEXT NOT NULL
+  )`);
+} catch (error) {
+  const message = error instanceof Error ? error.message : 'Unknown database error';
+  console.error('[STARTUP] Failed to create role_audit_log table:', message);
+  throw new Error('Startup aborted: role_audit_log table is required for admin-role auditing.');
+}
 
 function rolesForDbRole(role: string): string[] { if (role === 'owner') return ['owner', 'admin', 'user']; if (role === 'admin') return ['admin', 'user']; return ['user']; }
 function issueRoleSelectionTicket(row: any): string {
