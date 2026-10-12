@@ -1,5 +1,6 @@
 # Religious audio assets
 
-This folder is reserved for audio assets used by the religious section.
+- `adhan.mp3` is a short silent placeholder, not a real adhan recording.
+- `error.mp3` is a brief tone placeholder for later correction feedback.
 
-No valid `adhan.mp3` or `error.mp3` binary is included yet. Do not create fake MP3 files by placing text in files with an `.mp3` extension. Add properly licensed, real audio files before wiring playback controls.
+Replace these placeholders with properly licensed, real audio before treating them as production religious audio. The UI must not imply that a real adhan recording is included.
