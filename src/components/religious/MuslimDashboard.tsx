@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import PrayerTimes from './components/PrayerTimes';
 import SearchAyah from './components/SearchAyah';
 import TasmieGhaibi from './components/TasmieGhaibi';
+import TasmieBattle from './components/TasmieBattle';
 import Tasbeeh from './components/Tasbeeh';
 import KhatmaTracker from './components/KhatmaTracker';
 import TafsirPanel from './components/TafsirPanel';
@@ -13,6 +14,7 @@ const tools = [
   { title: 'مواقيت الصلاة', description: 'واجهة مبدئية — تُفعّل في Phase 2', icon: '◷', Component: PrayerTimes },
   { title: 'البحث في الآيات', description: 'واجهة مبدئية — يُفعّل البحث في Phase 2', icon: '⌕', Component: SearchAyah },
   { title: 'التسميع الغيبي', description: 'واجهة التسميع تُستكمل في Phase 3', icon: '♫', Component: TasmieGhaibi },
+  { title: 'تحدي التسميع', description: 'واجهة التحدي تُستكمل في Phase 4', icon: '⚔', Component: TasmieBattle },
   { title: 'السبحة', description: 'عداد تسبيح محلي', icon: '◎', Component: Tasbeeh },
   { title: 'متابعة الختمة', description: 'حفظ التقدم على جهازك', icon: '▦', Component: KhatmaTracker },
   { title: 'التفسير', description: 'واجهة مبدئية — تُستكمل في Phase 4', icon: '☰', Component: TafsirPanel },
