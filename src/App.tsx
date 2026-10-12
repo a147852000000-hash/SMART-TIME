@@ -71,6 +71,7 @@ import SmartAIServicePage from '../app/services/smart-ai/page';
 import { AuthView } from './components/AuthView';
 import { CalendarView } from './components/CalendarView';
 import AdminCenter from './components/AdminCenter';
+import OwnerAdminPanel from './components/OwnerAdminPanel';
 import { getStoredSession, restoreSession, startTrialSession, logout as logoutAuth, getUserSettings, saveUserSettings } from './services/authService';
 import { acknowledgeEventReminder, createCanonicalTask, deleteCanonicalTask, fetchPendingEventReminders, fetchSmartAiState, importCanonicalTasks, updateCanonicalTask } from './services/aiService';
 
@@ -441,6 +442,9 @@ export default function App() {
   }
 
   const sessionRole = getStoredSession()?.user.role;
+  if (authenticated && sessionRole === 'owner') {
+    return <OwnerAdminPanel onLogout={() => { setAuthenticated(false); setAuthChecked(true); }} />;
+  }
   if (authenticated && sessionRole === 'admin') {
     return <AdminCenter onLogout={() => { setAuthenticated(false); setAuthChecked(true); }} />;
   }
