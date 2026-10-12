@@ -3,13 +3,29 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import net from 'node:net';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { startSmtpTestServer } from './smtpTestServer.js';
 import type { SmtpTestServer } from './smtpTestServer.js';
 
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'smart-time-auth-security-'));
 const dbPath = path.join(tempDir, 'auth-test.sqlite');
-const port = 43179 + Math.floor(Math.random() * 1000);
+let port = 0;
+async function getAvailablePort(): Promise<number> {
+  const probe = net.createServer();
+  await new Promise<void>((resolve, reject) => {
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => resolve());
+  });
+  const address = probe.address();
+  if (!address || typeof address === 'string') {
+    await new Promise<void>(resolve => probe.close(() => resolve()));
+    throw new Error('Could not allocate a local test port.');
+  }
+  const selectedPort = address.port;
+  await new Promise<void>((resolve, reject) => probe.close(error => error ? reject(error) : resolve()));
+  return selectedPort;
+}
 const secret = crypto.randomBytes(48).toString('hex');
 const ownerEmail = 'owner@example.test';
 const adminEmail = 'admin@example.test';
@@ -59,6 +75,8 @@ const waitForServer = async () => {
 
 try {
   smtpServer = await startSmtpTestServer();
+  // Ask the OS for a free port after the SMTP sink is listening, preventing port collisions.
+  port = await getAvailablePort();
   const database = await import('../database.js');
   db = database.db;
   const insertUser = db.prepare('INSERT INTO users (id,email,username,password_hash,display_name,created_at,role,activation_status) VALUES (?,?,?,?,?,?,?,?)');
