@@ -107,6 +107,9 @@ try {
   const selfAppointment = await post('/api/auth/owner/admin-role', { email: ownerEmail, action: 'appoint' }, ownerSession.body.token);
   assert.equal(selfAppointment.status, 400, 'owner cannot self-appoint');
   const appointUser = await post('/api/auth/owner/admin-role', { email: userEmail, action: 'appoint' }, ownerSession.body.token);
+  if (appointUser.status !== 200) {
+    console.error('appointUser unexpected response', { status: appointUser.status, body: appointUser.body });
+  }
   assert.equal(appointUser.status, 200);
   assert.equal(appointUser.body.role, 'admin');
   assert.equal(db.prepare('SELECT role FROM users WHERE id=?').get('test-user').role, 'admin');
