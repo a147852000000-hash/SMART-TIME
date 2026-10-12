@@ -136,7 +136,6 @@ function consumePasswordResetRequest(email: string): boolean {
   const row = db.prepare('SELECT request_count FROM password_reset_requests WHERE email=?').get(email) as any;
   return Number(row?.request_count || 0) <= 3;
 }
-const PROGRAM_OWNER_EMAIL = String(process.env.PROGRAM_OWNER_EMAIL || '').trim().toLowerCase();
 const PROGRAM_OWNER_USER_ID = String(process.env.PROGRAM_OWNER_USER_ID || '').trim();
 const PROGRAM_OWNER_ACTIVATION_KEY = String(process.env.PROGRAM_OWNER_ACTIVATION_KEY || '');
 // تكلفة كل بحث/مقارنة رحلة بالجنيه المصري (يمكن تعديلها بمتغير بيئة TRIP_SEARCH_COST_EGP)
@@ -274,6 +273,17 @@ ensureRequiredTableSchema('role_audit_log', `CREATE TABLE IF NOT EXISTS role_aud
   { name: 'created_at', type: 'TEXT', notNull: 1, primaryKey: 0 },
 ]);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_deletion_audit (
+    id TEXT PRIMARY KEY,
+    actor_user_id TEXT NOT NULL,
+    actor_email TEXT NOT NULL,
+    deleted_user_id_hash TEXT NOT NULL,
+    deleted_email_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  )
+`);
+
 function rolesForDbRole(role: string): string[] { if (role === 'owner') return ['owner', 'admin', 'user']; if (role === 'admin') return ['admin', 'user']; return ['user']; }
 function issueRoleSelectionTicket(row: any): string {
   const now = Math.floor(Date.now() / 1000);
@@ -303,6 +313,29 @@ function authUser(req: express.Request) {
   if (selectedRole === 'admin' && !['admin', 'owner'].includes(String(legacy.role || 'user'))) return null;
   return { ...legacy, selectedRole, role: selectedRole, actualRoleInDB: String(legacy.role || 'user') };
 }
+function requireApprovedOwner(req: express.Request, res: express.Response): any | null {
+  const actor = authUser(req);
+  if (!actor || String(actor.role || '').toLowerCase() !== 'owner'
+      || String(actor.selectedRole || '').toLowerCase() !== 'owner') {
+    res.status(403).json({ code: 'OWNER_REQUIRED', message: 'هذا الإجراء مخصص للمالك المعتمد فقط.' });
+    return null;
+  }
+
+  try {
+    // Re-read the current database role/email so stale or legacy session fields cannot grant Owner.
+    const current = db.prepare('SELECT id,email,role FROM users WHERE id=?').get(String(actor.id)) as any;
+    const currentEmail = String(current?.email || '').trim().toLowerCase();
+    if (!current || String(current.role || '').toLowerCase() !== 'owner' || !OWNER_EMAILS.has(currentEmail)) {
+      res.status(403).json({ code: 'OWNER_REQUIRED', message: 'هذا الإجراء مخصص للمالك المعتمد فقط.' });
+      return null;
+    }
+    return { ...actor, id: String(current.id), email: currentEmail, role: 'owner', selectedRole: 'owner', actualRoleInDB: 'owner' };
+  } catch {
+    res.status(500).json({ code: 'OWNER_CHECK_FAILED', message: 'تعذر التحقق من صلاحيات المالك.' });
+    return null;
+  }
+}
+
 function publicUser(row:any){const selectedRole=row.selectedRole||'user';return {id:row.id,email:row.email,username:row.username||undefined,name:row.name||row.display_name||'',phone:row.phone||undefined,phoneVerified:!!row.phoneVerified,role:selectedRole,selectedRole,activationStatus:row.activation_status||row.activationStatus||'pending'};}
 function normalizePhone(phone:string){return String(phone||'').replace(/[\s()-]/g,'');}
 function normalizeUsername(username:string){return String(username||'').trim().toLowerCase();}
@@ -531,11 +564,163 @@ app.post('/api/auth/trips/verify-phone',async(req,res)=>{
 app.post('/api/auth/login',async(req,res)=>{try{if(!(await requireAuthTurnstile(req,res)))return;const identifier=String(req.body.identifier||req.body.email||'').trim(),normalizedEmail=identifier.toLowerCase(),normalizedUsername=normalizeUsername(identifier),password=String(req.body.password||'');let row:any=null;if(identifier.includes('@')) row=db.prepare('SELECT * FROM users WHERE email=?').get(normalizedEmail) as any;else row=db.prepare('SELECT * FROM users WHERE username=?').get(normalizedUsername) as any;if(!row||!verifyPassword(password,row.password_hash))return res.status(401).json({error:'بيانات الدخول غير صحيحة. تأكد من البريد أو اسم المستخدم وكلمة المرور.'});const dbRole=String(row.role||'user').toLowerCase();if(!VALID_APP_ROLES.has(dbRole))return res.status(403).json({error:'دور الحساب غير صالح.'});if(dbRole==='admin'||(dbRole==='owner'&&OWNER_EMAILS.has(String(row.email).toLowerCase()))){const roleChoiceTicket=issueRoleSelectionTicket({...row,role:dbRole});const claims=verifyJwt(roleChoiceTicket);return res.json({requiresRoleChoice:true,roleChoiceTicket,actualRoleInDB:dbRole,availableRoles:claims?.availableRoles||['user']});}const user={...row,name:row.display_name,phoneVerified:row.phone_verified,selectedRole:'user'};res.json({token:createSession(row.id),user:publicUser(user)});}catch(e:any){res.status(500).json({error:'تعذر تسجيل الدخول'});}});
 app.post('/api/auth/select-role',(req,res)=>{try{const claims=verifyJwt(String(req.body.roleChoiceTicket||'')),requestedRole=String(req.body.role||'').trim().toLowerCase();if(!claims||claims.purpose!=='role_selection'||!claims.sub)return res.status(401).json({error:'انتهت صلاحية اختيار نوع الدخول. سجّل الدخول مرة أخرى.'});if(!VALID_APP_ROLES.has(requestedRole))return res.status(400).json({error:'نوع الدخول غير صالح.'});const row=db.prepare('SELECT * FROM users WHERE id=?').get(String(claims.sub)) as any;if(!row)return res.status(401).json({error:'الحساب غير موجود.'});const dbRole=String(row.role||'user').toLowerCase();if(dbRole!==String(claims.actualRoleInDB)||String(row.email).toLowerCase()!==String(claims.email).toLowerCase())return res.status(403).json({error:'تم تغيير صلاحيات الحساب. سجّل الدخول مرة أخرى.'});if(requestedRole==='owner'&&(dbRole!=='owner'||!OWNER_EMAILS.has(String(row.email).toLowerCase())))return res.status(403).json({error:'لا تملك صلاحية الدخول كمالك.'});if(requestedRole==='admin'&&dbRole!=='admin'&&dbRole!=='owner')return res.status(403).json({error:'لا تملك صلاحية الدخول كمسؤول.'});if(!rolesForDbRole(dbRole).includes(requestedRole))return res.status(403).json({error:'نوع الدخول غير مسموح لهذا الحساب.'});const now=Math.floor(Date.now()/1000),sid=createSession(row.id),token=signJwt({purpose:'app_session',sub:row.id,sid,email:row.email,role:dbRole,selectedRole:requestedRole,iat:now,exp:now+AUTH_SESSION_DAYS*86400});db.prepare('UPDATE sessions SET session_role=? WHERE id=?').run(requestedRole,sid);res.json({token,user:publicUser({...row,name:row.display_name,phoneVerified:row.phone_verified,selectedRole:requestedRole})});}catch(e:any){res.status(500).json({error:'تعذر اختيار نوع الدخول.'});}});
 app.get('/api/auth/me',(req,res)=>{const user=authUser(req);if(!user)return res.status(401).json({error:'جلسة الدخول منتهية'});res.json({user:publicUser(user)});});
-app.post('/api/auth/owner/admin-role', (req,res) => {
-  const actor = authUser(req);
-  if (!actor || actor.role !== 'owner' || String(actor.actualRoleInDB) !== 'owner' || !OWNER_EMAILS.has(String(actor.email || '').toLowerCase())) {
-    return res.status(403).json({ code: 'OWNER_REQUIRED', message: 'هذا الإجراء مخصص للمالك فقط.' });
+app.get('/api/auth/owner/accounts', (req,res) => {
+  const actor = requireApprovedOwner(req, res);
+  if (!actor) return;
+
+  const parsedLimit = Number.parseInt(String(req.query.limit ?? '50'), 10);
+  const limit = Number.isFinite(parsedLimit) ? Math.max(1, Math.min(100, parsedLimit)) : 50;
+  const parsedOffset = Number.parseInt(String(req.query.offset ?? '0'), 10);
+  const offset = Number.isFinite(parsedOffset) ? Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, parsedOffset)) : 0;
+  const search = String(req.query.search ?? req.query.q ?? '').trim().slice(0, 200);
+  const where = search ? " WHERE lower(email) LIKE lower(?) OR lower(COALESCE(display_name, '')) LIKE lower(?)" : '';
+  const parameters = search ? [`%${search}%`, `%${search}%`] : [];
+
+  try {
+    const totalRow = db.prepare(`SELECT COUNT(*) AS total FROM users${where}`).get(...parameters) as any;
+    const users = db.prepare(`
+      SELECT id, display_name AS displayName, email, role
+      FROM users${where}
+      ORDER BY created_at ASC, id ASC
+      LIMIT ? OFFSET ?
+    `).all(...parameters, limit, offset);
+    const total = Number(totalRow?.total || 0);
+    return res.json({ ok: true, users, limit, offset, total, hasMore: offset + users.length < total });
+  } catch {
+    return res.status(500).json({ code: 'OWNER_ACCOUNT_LIST_FAILED', message: 'تعذر تحميل الحسابات.' });
   }
+});
+
+app.delete('/api/auth/owner/accounts/:id', (req,res) => {
+  const actor = requireApprovedOwner(req, res);
+  if (!actor) return;
+
+  const targetId = String(req.params.id || '').trim();
+  if (!targetId || targetId.length > 200) {
+    return res.status(400).json({ code: 'INVALID_ACCOUNT_ID', message: 'معرّف الحساب غير صحيح.' });
+  }
+
+  try {
+    const target = db.prepare('SELECT id,email,role,phone FROM users WHERE id=?').get(targetId) as any;
+    if (!target) return res.status(404).json({ code: 'ACCOUNT_NOT_FOUND', message: 'الحساب غير موجود.' });
+    if (String(target.id) === String(actor.id)) {
+      return res.status(400).json({ code: 'SELF_DELETE_FORBIDDEN', message: 'لا يمكن للمالك حذف حسابه من شاشة إدارة المستخدمين.' });
+    }
+    if (String(target.role || '').toLowerCase() === 'owner') {
+      return res.status(409).json({ code: 'OWNER_ROLE_PROTECTED', message: 'لا يمكن حذف حساب مالك.' });
+    }
+
+    const now = new Date().toISOString();
+    const deletedIdHash = crypto.createHmac('sha256', RATE_LIMIT_HASH_SECRET).update(`deleted-user-id:${String(target.id)}`).digest('hex');
+    const deletedEmailHash = crypto.createHmac('sha256', RATE_LIMIT_HASH_SECRET).update(`deleted-user-email:${String(target.email).trim().toLowerCase()}`).digest('hex');
+    const tombstoneUserId = `deleted:${deletedIdHash}`;
+    const tombstoneEmail = `deleted+${deletedEmailHash}@invalid`;
+
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      // Remove authentication and one-time verification state.
+      db.prepare('DELETE FROM sessions WHERE user_id=?').run(String(target.id));
+      db.prepare('DELETE FROM password_resets WHERE lower(email)=lower(?)').run(String(target.email));
+      db.prepare('DELETE FROM password_reset_requests WHERE lower(email)=lower(?)').run(String(target.email));
+      if (target.phone) db.prepare('DELETE FROM phone_otps WHERE phone=?').run(String(target.phone));
+
+      // User-owned app, AI, calendar, and finance records.
+      for (const table of [
+        'user_app_data', 'ai_transactions', 'ai_budgets', 'ai_tasks', 'ai_events', 'ai_event_reminders',
+        'finance_expenses', 'finance_monthly_income', 'finance_bank_certificates',
+        'finance_fuel_records', 'finance_maintenance_records', 'finance_education_expenses',
+      ]) {
+        db.prepare(`DELETE FROM ${table} WHERE user_id=?`).run(String(target.id));
+      }
+
+      // Remove this user's saved/read state and messages; clean all references to deleted messages.
+      db.prepare('DELETE FROM saved_messages WHERE user_id=?').run(String(target.id));
+      db.prepare('DELETE FROM message_reads WHERE user_id=?').run(String(target.id));
+      db.prepare('DELETE FROM saved_messages WHERE message_id IN (SELECT id FROM messages WHERE sender_id=?)').run(String(target.id));
+      db.prepare('DELETE FROM message_reads WHERE message_id IN (SELECT id FROM messages WHERE sender_id=?)').run(String(target.id));
+      db.prepare('DELETE FROM messages WHERE sender_id=?').run(String(target.id));
+      db.prepare('UPDATE messages SET pinned_by=NULL WHERE pinned_by=?').run(String(target.id));
+      db.prepare('DELETE FROM conversation_members WHERE user_id=?').run(String(target.id));
+      db.prepare('UPDATE conversations SET creator_id=NULL WHERE creator_id=?').run(String(target.id));
+
+      // Remove all Voice DNA sharing/recovery material connected to the account or its owned profiles.
+      db.prepare(`DELETE FROM voice_dna_sync_packages
+        WHERE owner_user_id=? OR recipient_user_id=?
+          OR profile_id IN (SELECT id FROM voice_dna_profiles WHERE owner_user_id=?)`)
+        .run(String(target.id), String(target.id), String(target.id));
+      db.prepare(`DELETE FROM voice_dna_shares
+        WHERE owner_user_id=? OR recipient_user_id=?
+          OR profile_id IN (SELECT id FROM voice_dna_profiles WHERE owner_user_id=?)`)
+        .run(String(target.id), String(target.id), String(target.id));
+      db.prepare(`DELETE FROM voice_dna_recovery_samples
+        WHERE user_id=? OR profile_id IN (SELECT id FROM voice_dna_profiles WHERE owner_user_id=?)`)
+        .run(String(target.id), String(target.id));
+      db.prepare('DELETE FROM voice_dna_public_keys WHERE user_id=?').run(String(target.id));
+      db.prepare('DELETE FROM voice_dna_recovery_envelopes WHERE user_id=?').run(String(target.id));
+      db.prepare('DELETE FROM voice_dna_profiles WHERE owner_user_id=?').run(String(target.id));
+
+      // Retain abuse-prevention signals and accounting/audit history without direct account identifiers.
+      db.prepare('UPDATE trip_gift_claims SET user_id=? WHERE user_id=?').run(tombstoneUserId, String(target.id));
+      db.prepare('UPDATE wallet_transactions SET user_id=? WHERE user_id=?').run(tombstoneUserId, String(target.id));
+      db.prepare(`UPDATE wallet_topups
+        SET user_id=?,
+            reviewed_by=CASE WHEN reviewed_by=? OR lower(COALESCE(reviewed_by,''))=lower(?) THEN ? ELSE reviewed_by END,
+            status=CASE WHEN lower(status)='pending' THEN 'cancelled' ELSE status END,
+            note=NULL, review_note=NULL
+        WHERE user_id=?`)
+        .run(tombstoneUserId, String(target.id), String(target.email), tombstoneUserId, String(target.id));
+      db.prepare(`UPDATE wallet_topups SET reviewed_by=?, review_note=NULL
+        WHERE reviewed_by=? OR lower(COALESCE(reviewed_by,''))=lower(?)`)
+        .run(tombstoneUserId, String(target.id), String(target.email));
+      db.prepare(`UPDATE wallet_admin_actions
+        SET user_id=CASE WHEN user_id=? THEN ? ELSE user_id END,
+            actor_id=CASE WHEN actor_id=? OR lower(COALESCE(actor_email,''))=lower(?) THEN ? ELSE actor_id END,
+            actor_email=CASE WHEN lower(COALESCE(actor_email,''))=lower(?) THEN ? ELSE actor_email END,
+            note=CASE WHEN user_id=? OR actor_id=? OR lower(COALESCE(actor_email,''))=lower(?) THEN NULL ELSE note END
+        WHERE user_id=? OR actor_id=? OR lower(COALESCE(actor_email,''))=lower(?)`)
+        .run(String(target.id), tombstoneUserId, String(target.id), String(target.email), tombstoneUserId,
+          String(target.email), tombstoneEmail, String(target.id), String(target.id), String(target.email),
+          String(target.id), String(target.id), String(target.email));
+
+      // Keep SMTP delivery history but anonymize any rows addressed to this email.
+      db.prepare('UPDATE email_logs SET recipient=? WHERE lower(recipient)=lower(?)').run(tombstoneEmail, String(target.email));
+      db.prepare('UPDATE users SET activated_by=NULL WHERE lower(COALESCE(activated_by,\'\'))=lower(?)').run(String(target.email));
+
+      // Retain role-change history while pseudonymizing references to the removed account.
+      db.prepare(`UPDATE role_audit_log SET target_user_id=?, target_email=?
+        WHERE target_user_id=? OR lower(target_email)=lower(?)`)
+        .run(tombstoneUserId, tombstoneEmail, String(target.id), String(target.email));
+      db.prepare(`UPDATE role_audit_log SET actor_user_id=?, actor_email=?
+        WHERE actor_user_id=? OR lower(actor_email)=lower(?)`)
+        .run(tombstoneUserId, tombstoneEmail, String(target.id), String(target.email));
+
+      const deletionAudit = db.prepare(`INSERT INTO user_deletion_audit
+        (id,actor_user_id,actor_email,deleted_user_id_hash,deleted_email_hash,created_at)
+        VALUES (?,?,?,?,?,?)`).run(crypto.randomUUID(), String(actor.id), String(actor.email).toLowerCase(), deletedIdHash, deletedEmailHash, now);
+      if (Number(deletionAudit.changes) !== 1) throw new Error('Deletion audit insert did not affect exactly one row.');
+
+      const deleted = db.prepare("DELETE FROM users WHERE id=? AND lower(role)<>'owner'").run(String(target.id));
+      if (Number(deleted.changes) !== 1) throw new Error('Account deletion did not affect exactly one non-owner row.');
+
+      db.exec('COMMIT');
+    } catch (transactionError) {
+      try { db.exec('ROLLBACK'); } catch {}
+      throw transactionError;
+    }
+
+    return res.json({ ok: true, deleted: true });
+  } catch (err:any) {
+    const safeMessage = String(err?.message || 'Unknown error')
+      .replace(/(password|secret|token|authorization)\s*[:=]\s*\S+/gi, '$1=[REDACTED]')
+      .slice(0, 300);
+    console.error('OWNER_ACCOUNT_DELETE_FAILED', { code: String(err?.code || 'UNKNOWN'), message: safeMessage });
+    return res.status(500).json({ code: 'OWNER_ACCOUNT_DELETE_FAILED', message: 'تعذر حذف الحساب؛ لم يتم اعتماد التغييرات.' });
+  }
+});
+
+app.post('/api/auth/owner/admin-role', (req,res) => {
+  const actor = requireApprovedOwner(req, res);
+  if (!actor) return;
   const targetEmail = String(req.body?.email || '').trim().toLowerCase();
   const action = String(req.body?.action || '').trim().toLowerCase();
   if (!targetEmail || targetEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail) || !['appoint','revoke'].includes(action)) {
@@ -561,9 +746,11 @@ app.post('/api/auth/owner/admin-role', (req,res) => {
     db.exec('BEGIN IMMEDIATE');
     try {
       if (action === 'appoint') {
-        db.prepare("UPDATE users SET role='admin' WHERE id=? AND role='user'").run(String(target.id));
+        const changed = db.prepare("UPDATE users SET role='admin' WHERE id=? AND role='user'").run(String(target.id));
+        if (Number(changed.changes) !== 1) throw new Error('Admin appointment did not affect exactly one user row.');
       } else {
-        db.prepare("UPDATE users SET role='user' WHERE id=? AND role='admin'").run(String(target.id));
+        const changed = db.prepare("UPDATE users SET role='user' WHERE id=? AND role='admin'").run(String(target.id));
+        if (Number(changed.changes) !== 1) throw new Error('Admin revocation did not affect exactly one user row.');
         // Revoke all target sessions immediately; role changes must not wait for JWT expiry.
         db.prepare('DELETE FROM sessions WHERE user_id=?').run(String(target.id));
       }
@@ -594,15 +781,38 @@ app.post('/api/auth/owner/admin-role', (req,res) => {
   }
 });
 app.get('/api/auth/owner/admin-role/audit', (req,res) => {
-  const actor = authUser(req);
-  if (!actor || actor.role !== 'owner' || String(actor.actualRoleInDB) !== 'owner' || !OWNER_EMAILS.has(String(actor.email || '').toLowerCase())) {
-    return res.status(403).json({ code: 'OWNER_REQUIRED', message: 'هذا الإجراء مخصص للمالك فقط.' });
-  }
+  const actor = requireApprovedOwner(req, res);
+  if (!actor) return;
   const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 50));
   const rows = db.prepare('SELECT id,actor_user_id,actor_email,target_user_id,target_email,action,created_at FROM role_audit_log ORDER BY created_at DESC LIMIT ?').all(limit);
   return res.json({ ok: true, entries: rows });
 });
-app.post('/api/auth/owner/activate',(req,res)=>{try{const ownerEmail=String(req.body.ownerEmail||'').trim().toLowerCase(),key=String(req.body.activationKey||'').trim(),userEmail=String(req.body.userEmail||'').trim().toLowerCase();if(ownerEmail!==PROGRAM_OWNER_EMAIL)return res.status(403).json({error:'هذا الإجراء مخصص لصاحب البرنامج.'});if(!PROGRAM_OWNER_ACTIVATION_KEY||key!==PROGRAM_OWNER_ACTIVATION_KEY)return res.status(403).json({error:'مفتاح تفعيل المالك غير صحيح أو غير مُكوّن.'});const user=db.prepare('SELECT id FROM users WHERE email=?').get(userEmail) as any;if(!user)return res.status(404).json({error:'الحساب غير موجود.'});db.prepare("UPDATE users SET activation_status='active',activated_by=?,activated_at=? WHERE id=?").run(ownerEmail,new Date().toISOString(),user.id);res.json({ok:true,message:'تم اعتماد الحساب بنجاح.'});}catch(e:any){res.status(500).json({error:e.message||'تعذر اعتماد الحساب'});}});
+app.post('/api/auth/owner/activate',(req,res)=>{
+  const actor = requireApprovedOwner(req, res);
+  if (!actor) return;
+  try {
+    const ownerEmail = String(req.body?.ownerEmail || '').trim().toLowerCase();
+    const activationKey = String(req.body?.activationKey || '');
+    const userEmail = String(req.body?.userEmail || '').trim().toLowerCase();
+    if (!ownerEmail || ownerEmail !== String(actor.email).toLowerCase()) {
+      return res.status(403).json({ error: 'هوية المالك غير مطابقة للجلسة الحالية.' });
+    }
+    const expectedKey = Buffer.from(PROGRAM_OWNER_ACTIVATION_KEY, 'utf8');
+    const providedKey = Buffer.from(activationKey, 'utf8');
+    if (!PROGRAM_OWNER_ACTIVATION_KEY || expectedKey.length !== providedKey.length
+        || !crypto.timingSafeEqual(expectedKey, providedKey)) {
+      return res.status(403).json({ error: 'مفتاح تفعيل المالك غير صحيح أو غير مُكوّن.' });
+    }
+    const user = db.prepare('SELECT id FROM users WHERE lower(email)=lower(?)').get(userEmail) as any;
+    if (!user) return res.status(404).json({ error: 'الحساب غير موجود.' });
+    const updated = db.prepare("UPDATE users SET activation_status='active',activated_by=?,activated_at=? WHERE id=?")
+      .run(String(actor.email).toLowerCase(), new Date().toISOString(), String(user.id));
+    if (Number(updated.changes) !== 1) return res.status(500).json({ error: 'تعذر اعتماد الحساب.' });
+    return res.json({ ok: true, message: 'تم اعتماد الحساب بنجاح.' });
+  } catch {
+    return res.status(500).json({ error: 'تعذر اعتماد الحساب.' });
+  }
+});
 app.post('/api/auth/phone-login/request-otp',async(req,res)=>{try{const phone=normalizePhone(req.body.phone);if(phone.length<8)return res.status(400).json({error:'رقم الهاتف غير صحيح'});const row=db.prepare('SELECT id FROM users WHERE phone=? AND phone_verified=1').get(phone) as any;if(!row)return res.status(404).json({error:'هذا الرقم غير مرتبط بحساب موثق.'});try{const otpResult=await requestPhoneOtp(phone);res.json({ok:true,expiresAt:otpResult.expires,devCode:otpResult.devCode,smsProvider:otpResult.provider});}catch(err:any){return res.status(503).json({error:err.message||'تعذر إرسال SMS'});}}catch(e:any){res.status(500).json({error:e.message||'تعذر إرسال رمز SMS'});}});
 app.post('/api/auth/phone-login',async(req,res)=>{try{const phone=normalizePhone(req.body.phone),code=String(req.body.code||'').trim();const check=await checkPhoneOtp(phone,code);if(!check.ok)return res.status(check.status).json({error:check.error});const row=db.prepare('SELECT * FROM users WHERE phone=? AND phone_verified=1').get(phone) as any;if(!row)return res.status(404).json({error:'هذا الرقم غير مرتبط بحساب موثق.'});db.prepare('DELETE FROM phone_otps WHERE phone=?').run(phone);res.json({token:createSession(row.id),user:publicUser({...row,name:row.display_name,phoneVerified:row.phone_verified})});}catch(e:any){res.status(500).json({error:e.message||'تعذر تسجيل الدخول بالهاتف'});}});
 app.post('/api/auth/forgot-password',async(req,res)=>{
