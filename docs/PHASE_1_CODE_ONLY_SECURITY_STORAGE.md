@@ -33,7 +33,7 @@ The server database module honors `SMART_TIME_DB_PATH`; the intended Oracle path
 
 ## Owner promotion SQL
 
-`scripts/sql/promote-approved-owners.sql` targets only the two explicitly approved owner emails. It does not create missing users or demote other users. Before execution, verify both accounts exist and inspect the transaction's affected rows. If either account is missing or unexpected rows would change, rollback and stop.
+`scripts/sql/preview-approved-owners.sql` is a read-only report for the two approved owner accounts. `scripts/sql/promote-approved-owners.sql` fails closed unless exactly two approved accounts exist and exactly two rows change; a failed guard executes SQLite `RAISE(ROLLBACK)`. A successful execution deliberately leaves the transaction open with no automatic `COMMIT`: inspect the rows, then commit manually only after approval, or rollback. Keep owner promotion separate from normal deployment and rollback procedures.
 
 ## Daily backup and restore verification
 
