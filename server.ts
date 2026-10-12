@@ -514,10 +514,10 @@ app.post('/api/auth/owner/admin-role', (req,res) => {
       .replace(/(password|secret|token|authorization)\s*[:=]\s*\S+/gi, '$1=[REDACTED]')
       .slice(0, 300);
     const safeStack = String(err?.stack || '')
-      .split('\\n')
+      .split('\n')
       .slice(0, 8)
-      .map((line: string) => line.replace(/(password|secret|token|authorization)\\s*[:=]\\s*\\S+/gi, '$1=[REDACTED]').slice(0, 300))
-      .join('\\n');
+      .map((line: string) => line.replace(/(password|secret|token|authorization)\s*[:=]\s*\S+/gi, '$1=[REDACTED]').slice(0, 300))
+      .join('\n');
     console.error('OWNER_ADMIN_ROLE_CHANGE_FAILED', {
       code: String(err?.code || 'UNKNOWN'),
       message: safeMessage,
