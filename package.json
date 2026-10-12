@@ -37,6 +37,7 @@
     "verify:phase-a2-stt": "node scripts/verify-phase-a2-stt.mjs",
     "test:password-reset-email": "tsx backend/auth/passwordResetEmail.test.ts",
     "test:auth-security": "tsx backend/auth/roleSelection.integration.test.ts",
+    "test:startup-storage": "tsx backend/security/startupStorage.test.ts",
     "test:legacy-json-migration": "node --test scripts/migrate-legacy-json-to-sqlite.test.cjs"
   },
   "dependencies": {
