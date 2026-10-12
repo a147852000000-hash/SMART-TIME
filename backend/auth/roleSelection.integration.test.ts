@@ -239,7 +239,6 @@ try {
   if (serverOutput) console.error('AUTH_SECURITY_SERVER_OUTPUT', serverOutput);
   if (child) child.kill('SIGTERM');
   if (db) { try { db.close(); } catch {} }
-  if (smtpServer) await smtpServer.close();
   fs.rmSync(tempDir, { recursive: true, force: true });
   process.exitCode = 1;
 } finally {
