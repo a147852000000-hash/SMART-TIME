@@ -25,7 +25,7 @@ The final production frontend origin has not yet been confirmed. Configure it in
 
 ## Persistent SQLite path
 
-The server database module honors `SMART_TIME_DB_PATH`; the intended Oracle path is `/home/ubuntu/smart-time-data/smart-time.db`. The directory must be owned by the runtime account and mode 700; the database and backup files should be mode 600. Do not set this path or migrate production data until a full-schema review confirms the running application is compatible with the selected database.
+The server database module honors `SMART_TIME_DB_PATH`; the intended Oracle path is `/home/ubuntu/smart-time-data/smart-time.db`. On startup, the code enforces mode 700 on the database directory and mode 600 on the database file; the directory also protects SQLite WAL/SHM sidecars. The directory must be owned by the runtime account. The server now requires `RATE_LIMIT_HASH_SECRET` with at least 32 characters and fails startup when it is missing; set it through the runtime environment, never in source control. Password reset uses direct SMTP only: `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` (Gmail App Password when using Gmail), and optionally `EMAIL_FROM`. No SMTP credentials belong in the repository. Do not set this path or migrate production data until a full-schema review confirms the running application is compatible with the selected database.
 
 ## Legacy JSON migration
 
@@ -37,7 +37,7 @@ The server database module honors `SMART_TIME_DB_PATH`; the intended Oracle path
 
 ## Daily backup and restore verification
 
-- `scripts/oracle-sqlite-backup.sh` creates a SQLite-consistent backup using the sqlite3 `.backup` command, verifies integrity and foreign keys, and writes SHA-256 metadata.
+- `scripts/oracle-sqlite-backup.sh` creates a SQLite-consistent backup using the sqlite3 `.backup` command, verifies integrity and foreign keys, and writes portable SHA-256 metadata using relative filenames. Backup creation never automatically deletes older backups; retention cleanup is a separate approved operation and must never include the explicitly approved rollback points.
 - `scripts/oracle-sqlite-restore-test.sh` checks the checksum and restores a copy to a fresh temporary directory, then verifies integrity, application tables, and foreign keys. It does not touch the live database.
 - A daily cron entry is only a proposal until an operator installs it during the approved deployment phase. Example after confirming paths and running a manual backup + restore test:
   `17 2 * * * SMART_TIME_DB_PATH=/home/ubuntu/smart-time-data/smart-time.db SMART_TIME_BACKUP_DIR=/home/ubuntu/smart-time-backups /home/ubuntu/smart-time-ai/scripts/oracle-sqlite-backup.sh >> /home/ubuntu/smart-time-backups/backup.log 2>&1`
@@ -50,4 +50,6 @@ The server database module honors `SMART_TIME_DB_PATH`; the intended Oracle path
 3. Test CORS for exact allowed origin, unknown origin, wildcard Vercel subdomain, absent Origin, and OPTIONS.
 4. Verify frontend LiveKit URL and document whether it uses `ws://` or `wss://`; do not change LiveKit/network in Phase 1.
 5. Review `trust proxy` and rate limiting against spoofed `X-Forwarded-For` through the actual reverse proxy.
-6. Do not declare production ready based on code presence alone.
+6. Verify startup rejects an incompatible `role_audit_log` or `password_reset_ip_requests` schema, and confirms the database directory/file modes are 700/600.
+7. Do not declare production ready based on code presence alone.
+
