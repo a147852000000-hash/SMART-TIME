@@ -37,7 +37,8 @@ The server database module honors `SMART_TIME_DB_PATH`; the intended Oracle path
 
 ## Daily backup and restore verification
 
-- `scripts/oracle-sqlite-backup.sh` creates a SQLite-consistent backup using the sqlite3 `.backup` command, verifies integrity and foreign keys, and writes portable SHA-256 metadata using relative filenames. Backup creation never automatically deletes older backups; retention cleanup is a separate approved operation and must never include the explicitly approved rollback points.
+- `scripts/oracle-sqlite-backup.sh` creates a SQLite-consistent backup using the sqlite3 `.backup` command, verifies integrity and foreign keys, and writes portable SHA-256 metadata using relative filenames. Backup creation never automatically deletes older backups.
+- `scripts/oracle-sqlite-backup-retention.sh` is separate, dry-run by default, and only targets top-level `smart-time-*.db` artifacts inside the dedicated backup directory. Review its output before passing `--apply`; never point it at the home directory, live checkout, or an approved rollback location.
 - `scripts/oracle-sqlite-restore-test.sh` checks the checksum and restores a copy to a fresh temporary directory, then verifies integrity, application tables, and foreign keys. It does not touch the live database.
 - A daily cron entry is only a proposal until an operator installs it during the approved deployment phase. Example after confirming paths and running a manual backup + restore test:
   `17 2 * * * SMART_TIME_DB_PATH=/home/ubuntu/smart-time-data/smart-time.db SMART_TIME_BACKUP_DIR=/home/ubuntu/smart-time-backups /home/ubuntu/smart-time-ai/scripts/oracle-sqlite-backup.sh >> /home/ubuntu/smart-time-backups/backup.log 2>&1`
