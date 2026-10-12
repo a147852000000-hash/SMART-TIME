@@ -102,6 +102,8 @@ cd "$STAGE"
 npm install --ignore-scripts --no-audit --no-fund
 npm run test:password-reset-email
 npm run test:auth-security
+npm run test:startup-storage
+npm run test:owner-promotion-sql
 npm run test:turnstile
 npm run test:legacy-json-migration
 npm run lint
