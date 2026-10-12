@@ -234,7 +234,7 @@ function ensureRequiredTableSchema(
 
     if (tableName === 'role_audit_log') {
       const schema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?").get(tableName) as any;
-      const normalizedSql = String(schema?.sql || '').replace(/\\s+/g, ' ').toLowerCase();
+      const normalizedSql = String(schema?.sql || '').replace(/\s+/g, ' ').toLowerCase();
       if (!normalizedSql.includes("check(action in ('admin_appointed','admin_revoked'))")) {
         throw new Error('role_audit_log action CHECK constraint is missing or incompatible.');
       }
