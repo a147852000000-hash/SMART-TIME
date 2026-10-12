@@ -489,7 +489,10 @@ app.post('/api/auth/owner/admin-role', (req,res) => {
     }
     const now = new Date().toISOString();
     const auditId = crypto.randomUUID();
-    const tx = db.transaction(() => {
+    // node:sqlite DatabaseSync does not expose better-sqlite3's db.transaction() helper.
+    // Use an explicit SQLite transaction so role update, session revocation, and audit are atomic.
+    db.exec('BEGIN IMMEDIATE');
+    try {
       if (action === 'appoint') {
         db.prepare("UPDATE users SET role='admin' WHERE id=? AND role='user'").run(String(target.id));
       } else {
@@ -499,11 +502,22 @@ app.post('/api/auth/owner/admin-role', (req,res) => {
       }
       db.prepare('INSERT INTO role_audit_log(id,actor_user_id,actor_email,target_user_id,target_email,action,created_at) VALUES(?,?,?,?,?,?,?)')
         .run(auditId, String(actor.id), String(actor.email).toLowerCase(), String(target.id), targetEmail, action === 'appoint' ? 'admin_appointed' : 'admin_revoked', now);
-    });
-    tx();
+      db.exec('COMMIT');
+    } catch (transactionError) {
+      try { db.exec('ROLLBACK'); } catch {}
+      throw transactionError;
+    }
     return res.json({ ok: true, email: targetEmail, role: action === 'appoint' ? 'admin' : 'user', sessionsRevoked: action === 'revoke' });
   } catch (err:any) {
-    console.error('OWNER_ADMIN_ROLE_CHANGE_FAILED', { actorId: String(actor.id), code: String(err?.code || 'UNKNOWN') });
+    // Log a bounded, redacted diagnostic for CI/server operators; never log request bodies or credentials.
+    const safeMessage = String(err?.message || 'Unknown error')
+      .replace(/(password|secret|token|authorization)\\s*[:=]\\s*\\S+/gi, '$1=[REDACTED]')
+      .slice(0, 300);
+    console.error('OWNER_ADMIN_ROLE_CHANGE_FAILED', {
+      actorId: String(actor.id),
+      code: String(err?.code || 'UNKNOWN'),
+      message: safeMessage,
+    });
     return res.status(500).json({ code: 'ROLE_CHANGE_FAILED', message: 'تعذر تحديث الصلاحيات.' });
   }
 });
