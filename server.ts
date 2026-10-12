@@ -17,6 +17,13 @@ import { verifyTurnstileToken } from "./backend/security/turnstile.js";
 
 dotenv.config();
 
+const RATE_LIMIT_HASH_SECRET = String(process.env.RATE_LIMIT_HASH_SECRET || '').trim();
+if (RATE_LIMIT_HASH_SECRET.length < 32) {
+  const message = 'RATE_LIMIT_HASH_SECRET is required and must contain at least 32 characters.';
+  console.error('[STARTUP] ' + message);
+  throw new Error(message);
+}
+
 const app = express();
 // Trust only the local reverse proxy (Caddy on Oracle); do not trust client-supplied X-Forwarded-For from the public network.
 app.set("trust proxy", "loopback");
@@ -112,7 +119,7 @@ const AUTH_SESSION_DAYS = 30;
 const PASSWORD_RESET_MINUTES = 60;
 function consumePasswordResetIpRequest(ip: string): boolean {
   const now = new Date().toISOString();
-  const ipHash = crypto.createHash('sha256').update(String(process.env.RATE_LIMIT_HASH_SECRET || process.env.JWT_SECRET || 'smart-time-rate-limit-v1')).update(':').update(ip).digest('hex');
+  const ipHash = crypto.createHmac('sha256', RATE_LIMIT_HASH_SECRET).update(ip).digest('hex');
   db.prepare(`INSERT INTO password_reset_ip_requests(ip_hash,window_started_at,request_count) VALUES(?,?,1)
     ON CONFLICT(ip_hash) DO UPDATE SET
       request_count=CASE WHEN (julianday(excluded.window_started_at)-julianday(password_reset_ip_requests.window_started_at))*1440 >= 15 THEN 1 ELSE password_reset_ip_requests.request_count+1 END,
@@ -192,26 +199,80 @@ function verifyJwt(token: string): any | null {
 }
 const OWNER_EMAILS = new Set(String(process.env.OWNER_EMAILS || '').split(',').map(v => v.trim().toLowerCase()).filter(Boolean));
 const VALID_APP_ROLES = new Set(['owner', 'admin', 'user']);
-try { db.exec(`CREATE TABLE IF NOT EXISTS password_reset_ip_requests (
+type RequiredSqliteColumn = {
+  name: string;
+  type: string;
+  notNull: number;
+  primaryKey: number;
+  defaultValue?: string | null;
+};
+
+function ensureRequiredTableSchema(
+  tableName: 'password_reset_ip_requests' | 'role_audit_log',
+  createSql: string,
+  expectedColumns: RequiredSqliteColumn[],
+): void {
+  try {
+    db.exec(createSql);
+    const actualColumns = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{
+      name: string; type: string; notnull: number; pk: number; dflt_value: unknown;
+    }>;
+    const mismatch = actualColumns.length !== expectedColumns.length || expectedColumns.some(expected => {
+      const actual = actualColumns.find(column => column.name === expected.name);
+      return !actual
+        || String(actual.type || '').toUpperCase() !== expected.type
+        || Number(actual.notnull) !== expected.notNull
+        || Number(actual.pk) !== expected.primaryKey
+        || String(actual.dflt_value ?? '') !== String(expected.defaultValue ?? '');
+    });
+    if (mismatch) {
+      const found = actualColumns.map(column =>
+        `${column.name}:${String(column.type || '').toUpperCase()}:notNull=${column.notnull}:pk=${column.pk}:default=${String(column.dflt_value ?? 'NULL')}`
+      ).join(', ');
+      throw new Error(`Expected columns do not match PRAGMA table_info; found [${found || 'none'}].`);
+    }
+
+    if (tableName === 'role_audit_log') {
+      const schema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?").get(tableName) as any;
+      const normalizedSql = String(schema?.sql || '').replace(/\\s+/g, ' ').toLowerCase();
+      if (!normalizedSql.includes("check(action in ('admin_appointed','admin_revoked'))")) {
+        throw new Error('role_audit_log action CHECK constraint is missing or incompatible.');
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown database error';
+    console.error(`[STARTUP] Failed to create or validate ${tableName} schema: ${message}`);
+    throw new Error(`Startup aborted: ${tableName} does not have the required schema.`);
+  }
+}
+
+ensureRequiredTableSchema('password_reset_ip_requests', `CREATE TABLE IF NOT EXISTS password_reset_ip_requests (
   ip_hash TEXT PRIMARY KEY,
   window_started_at TEXT NOT NULL,
   request_count INTEGER NOT NULL DEFAULT 0
-)`); } catch {}
-try {
-  db.exec(`CREATE TABLE IF NOT EXISTS role_audit_log (
-    id TEXT PRIMARY KEY,
-    actor_user_id TEXT NOT NULL,
-    actor_email TEXT NOT NULL,
-    target_user_id TEXT NOT NULL,
-    target_email TEXT NOT NULL,
-    action TEXT NOT NULL CHECK(action IN ('admin_appointed','admin_revoked')),
-    created_at TEXT NOT NULL
-  )`);
-} catch (error) {
-  const message = error instanceof Error ? error.message : 'Unknown database error';
-  console.error('[STARTUP] Failed to create role_audit_log table:', message);
-  throw new Error('Startup aborted: role_audit_log table is required for admin-role auditing.');
-}
+)`, [
+  { name: 'ip_hash', type: 'TEXT', notNull: 0, primaryKey: 1 },
+  { name: 'window_started_at', type: 'TEXT', notNull: 1, primaryKey: 0 },
+  { name: 'request_count', type: 'INTEGER', notNull: 1, primaryKey: 0, defaultValue: '0' },
+]);
+
+ensureRequiredTableSchema('role_audit_log', `CREATE TABLE IF NOT EXISTS role_audit_log (
+  id TEXT PRIMARY KEY,
+  actor_user_id TEXT NOT NULL,
+  actor_email TEXT NOT NULL,
+  target_user_id TEXT NOT NULL,
+  target_email TEXT NOT NULL,
+  action TEXT NOT NULL CHECK(action IN ('admin_appointed','admin_revoked')),
+  created_at TEXT NOT NULL
+)`, [
+  { name: 'id', type: 'TEXT', notNull: 0, primaryKey: 1 },
+  { name: 'actor_user_id', type: 'TEXT', notNull: 1, primaryKey: 0 },
+  { name: 'actor_email', type: 'TEXT', notNull: 1, primaryKey: 0 },
+  { name: 'target_user_id', type: 'TEXT', notNull: 1, primaryKey: 0 },
+  { name: 'target_email', type: 'TEXT', notNull: 1, primaryKey: 0 },
+  { name: 'action', type: 'TEXT', notNull: 1, primaryKey: 0 },
+  { name: 'created_at', type: 'TEXT', notNull: 1, primaryKey: 0 },
+]);
 
 function rolesForDbRole(role: string): string[] { if (role === 'owner') return ['owner', 'admin', 'user']; if (role === 'admin') return ['admin', 'user']; return ['user']; }
 function issueRoleSelectionTicket(row: any): string {
