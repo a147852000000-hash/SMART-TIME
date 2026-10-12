@@ -471,7 +471,7 @@ app.post('/api/auth/owner/admin-role', (req,res) => {
   }
   const targetEmail = String(req.body?.email || '').trim().toLowerCase();
   const action = String(req.body?.action || '').trim().toLowerCase();
-  if (!targetEmail || targetEmail.length > 254 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(targetEmail) || !['appoint','revoke'].includes(action)) {
+  if (!targetEmail || targetEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail) || !['appoint','revoke'].includes(action)) {
     return res.status(400).json({ code: 'INVALID_REQUEST', message: 'البيانات غير صحيحة.' });
   }
   if (targetEmail === String(actor.email).toLowerCase()) {
