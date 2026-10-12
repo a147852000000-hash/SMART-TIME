@@ -69,7 +69,7 @@ try {
 
   child = spawn(process.execPath, ['--import', 'tsx', 'server.ts'], {
     cwd: process.cwd(),
-    env: { ...process.env, PASSWORD_RESET_HMAC_SECRET: secret, RATE_LIMIT_HASH_SECRET: secret, PORT: String(port), SMART_TIME_DB_PATH: dbPath, JWT_SECRET: secret, OWNER_EMAILS: ownerEmail, ALLOWED_ORIGINS: 'https://app.example.test', TURNSTILE_ENFORCE: 'false', EMAIL_PROVIDER: 'smtp', SMTP_HOST: '127.0.0.1', SMTP_PORT: String(smtpServer.port), SMTP_SECURE: 'false', SMTP_USER: 'sender@example.test', SMTP_PASS: 'test-only-app-password', EMAIL_FROM: 'SMART-TIME Test <sender@example.test>', RESEND_API_KEY: '', ALLOW_DEV_EMAIL_CODE: 'false' },
+    env: { ...process.env, PASSWORD_RESET_HMAC_SECRET: secret, RATE_LIMIT_HASH_SECRET: secret, PORT: String(port), SMART_TIME_DB_PATH: dbPath, JWT_SECRET: secret, OWNER_EMAILS: ownerEmail, ALLOWED_ORIGINS: 'https://app.example.test', TURNSTILE_ENFORCE: 'false', SMTP_HOST: '127.0.0.1', SMTP_PORT: String(smtpServer.port), SMTP_SECURE: 'false', SMTP_USER: 'sender@example.test', SMTP_PASS: 'test-only-app-password', EMAIL_FROM: 'SMART-TIME Test <sender@example.test>' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout?.on('data', chunk => { serverOutput = (serverOutput + String(chunk)).slice(-4000); });
