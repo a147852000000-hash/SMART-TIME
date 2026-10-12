@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { startSmtpTestServer } from './smtpTestServer.js';
+import type { SmtpTestServer } from './smtpTestServer.js';
 
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'smart-time-auth-security-'));
 const dbPath = path.join(tempDir, 'auth-test.sqlite');
@@ -20,6 +22,8 @@ process.env.TURNSTILE_ENFORCE = 'false';
 
 let child: ChildProcess | undefined;
 let db: any;
+let serverOutput = '';
+let smtpServer: SmtpTestServer | undefined;
 const password = 'TestPassword!123';
 const passwordHash = (value: string) => {
   const salt = crypto.randomBytes(16).toString('hex');
@@ -54,6 +58,7 @@ const waitForServer = async () => {
 };
 
 try {
+  smtpServer = await startSmtpTestServer();
   const database = await import('../database.js');
   db = database.db;
   const insertUser = db.prepare('INSERT INTO users (id,email,username,password_hash,display_name,created_at,role,activation_status) VALUES (?,?,?,?,?,?,?,?)');
@@ -64,10 +69,9 @@ try {
 
   child = spawn(process.execPath, ['--import', 'tsx', 'server.ts'], {
     cwd: process.cwd(),
-    env: { ...process.env, PASSWORD_RESET_HMAC_SECRET: secret, PORT: String(port), SMART_TIME_DB_PATH: dbPath, JWT_SECRET: secret, OWNER_EMAILS: ownerEmail, ALLOWED_ORIGINS: 'https://app.example.test', TURNSTILE_ENFORCE: 'false', EMAIL_PROVIDER: '', SMTP_HOST: '', SMTP_USER: '', SMTP_PASS: '', RESEND_API_KEY: '', ALLOW_DEV_EMAIL_CODE: 'true' },
+    env: { ...process.env, PASSWORD_RESET_HMAC_SECRET: secret, RATE_LIMIT_HASH_SECRET: secret, PORT: String(port), SMART_TIME_DB_PATH: dbPath, JWT_SECRET: secret, OWNER_EMAILS: ownerEmail, ALLOWED_ORIGINS: 'https://app.example.test', TURNSTILE_ENFORCE: 'false', EMAIL_PROVIDER: 'smtp', SMTP_HOST: '127.0.0.1', SMTP_PORT: String(smtpServer.port), SMTP_SECURE: 'false', SMTP_USER: 'sender@example.test', SMTP_PASS: 'test-only-app-password', EMAIL_FROM: 'SMART-TIME Test <sender@example.test>', RESEND_API_KEY: '', ALLOW_DEV_EMAIL_CODE: 'false' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  let serverOutput = '';
   child.stdout?.on('data', chunk => { serverOutput = (serverOutput + String(chunk)).slice(-4000); });
   child.stderr?.on('data', chunk => { serverOutput = (serverOutput + String(chunk)).slice(-4000); });
   await waitForServer();
@@ -138,9 +142,13 @@ try {
   const revoked = await request('/api/auth/me', { headers: { authorization: `Bearer ${ownerSession.body.token}` } });
   assert.equal(revoked.status, 401, 'logout must revoke JWT-backed sessions');
 
-  const saved = await post('/api/user/settings', { settings: { theme: 'dark', locale: 'ar-EG' } }, userLogin.body.token);
+  // Revoking admin correctly deleted the prior sessions; establish a fresh user session for settings tests.
+  const settingsLogin = await post('/api/auth/login', { identifier: userEmail, password });
+  assert.equal(settingsLogin.status, 200);
+  assert.equal(settingsLogin.body.user.role, 'user');
+  const saved = await post('/api/user/settings', { settings: { theme: 'dark', locale: 'ar-EG' } }, settingsLogin.body.token);
   assert.equal(saved.status, 200);
-  const loaded = await request('/api/user/settings', { headers: { authorization: `Bearer ${userLogin.body.token}` } });
+  const loaded = await request('/api/user/settings', { headers: { authorization: `Bearer ${settingsLogin.body.token}` } });
   assert.deepEqual(loaded.body.settings, { theme: 'dark', locale: 'ar-EG' });
   const otherLogin = await post('/api/auth/login', { identifier: 'other@example.test', password });
   const isolated = await request('/api/user/settings', { headers: { authorization: `Bearer ${otherLogin.body.token}` } });
@@ -231,10 +239,12 @@ try {
   if (serverOutput) console.error('AUTH_SECURITY_SERVER_OUTPUT', serverOutput);
   if (child) child.kill('SIGTERM');
   if (db) { try { db.close(); } catch {} }
+  if (smtpServer) await smtpServer.close();
   fs.rmSync(tempDir, { recursive: true, force: true });
   process.exitCode = 1;
 } finally {
   if (child && child.exitCode === null) child.kill('SIGTERM');
   if (db) { try { db.close(); } catch {} }
+  if (smtpServer) await smtpServer.close();
   fs.rmSync(tempDir, { recursive: true, force: true });
 }
