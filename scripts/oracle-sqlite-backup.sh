@@ -4,8 +4,6 @@ umask 077
 
 DB_PATH="${SMART_TIME_DB_PATH:-/home/ubuntu/smart-time-data/smart-time.db}"
 BACKUP_DIR="${SMART_TIME_BACKUP_DIR:-/home/ubuntu/smart-time-backups}"
-RETENTION_DAYS="${SMART_TIME_BACKUP_RETENTION_DAYS:-14}"
-
 [[ -f "$DB_PATH" ]] || { echo "ERROR: configured SQLite database does not exist" >&2; exit 2; }
 command -v sqlite3 >/dev/null || { echo "ERROR: sqlite3 CLI is required; install it during an approved server phase" >&2; exit 2; }
 command -v sha256sum >/dev/null
@@ -25,9 +23,10 @@ sqlite3 "$tmp" 'PRAGMA foreign_key_check;' > "$tmp.foreign-key-check"
 [[ ! -s "$tmp.foreign-key-check" ]] || { echo "ERROR: backup has foreign-key violations" >&2; exit 4; }
 rm -f "$tmp.foreign-key-check"
 mv "$tmp" "$final"
-sha256sum "$final" > "$final.sha256"
+# Write a relative filename so the checksum remains valid if the backup + sidecar are copied together.
+(cd "$BACKUP_DIR" && sha256sum "$(basename "$final")" > "$(basename "$final").sha256")
 chmod 600 "$final" "$final.sha256"
-find "$BACKUP_DIR" -maxdepth 1 -type f -name 'smart-time-*.db' -mtime +"$RETENTION_DAYS" -print -delete
-find "$BACKUP_DIR" -maxdepth 1 -type f -name 'smart-time-*.db.sha256' -mtime +"$RETENTION_DAYS" -print -delete
+# Backup creation never prunes old backups or approved rollback points. Retention is a separate,
+# explicitly reviewed operation limited to this backup directory.
 echo "BACKUP_OK path=$final integrity=ok sha256_file=$final.sha256"
 echo "NOTE: configure an independently secured off-server copy before treating this as disaster recovery."
