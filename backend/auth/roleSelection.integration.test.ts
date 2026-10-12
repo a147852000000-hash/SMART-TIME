@@ -227,6 +227,8 @@ try {
   console.log('AUTH_SECURITY_INTEGRATION_PASS: role escalation blocked; admin appointment/audit/revocation; exact-origin CORS; DB role authoritative; JWT session revocation; settings isolation; email/IP reset limits; reset token one-use.');
 } catch (error) {
   console.error('AUTH_SECURITY_INTEGRATION_FAIL', error);
+  // The child server's stdout/stderr are piped, so surface its sanitized diagnostics on failure.
+  if (serverOutput) console.error('AUTH_SECURITY_SERVER_OUTPUT', serverOutput);
   if (child) child.kill('SIGTERM');
   if (db) { try { db.close(); } catch {} }
   fs.rmSync(tempDir, { recursive: true, force: true });
