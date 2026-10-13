@@ -14,17 +14,22 @@ const tools = [
   { title: 'مواقيت الصلاة', description: 'مواقيت محلية مع عدّ تنازلي وتنبيهات', icon: '◷', Component: PrayerTimes },
   { title: 'البحث في الآيات', description: 'بحث مباشر في نص القرآن', icon: '⌕', Component: SearchAyah },
   { title: 'التسميع الغيبي', description: 'تسميع من الحفظ مع مقارنة الكلمات وتصحيح الأخطاء', icon: '♫', Component: TasmieGhaibi },
-  { title: 'تحدي التسميع', description: 'واجهة التحدي تُستكمل في Phase 4', icon: '⚔', Component: TasmieBattle },
+  { title: 'تحدي التسميع', description: 'إنشاء رابط تحدٍ ومشاركته لتوحيد نطاق الآيات', icon: '⚔', Component: TasmieBattle },
   { title: 'السبحة', description: 'عداد تسبيح محلي', icon: '◎', Component: Tasbeeh },
-  { title: 'متابعة الختمة', description: 'حفظ التقدم على جهازك', icon: '▦', Component: KhatmaTracker },
-  { title: 'التفسير', description: 'واجهة مبدئية — تُستكمل في Phase 4', icon: '☰', Component: TafsirPanel },
-  { title: 'تسجيل الأذان', description: 'يتطلب إذن الميكروفون', icon: '◉', Component: MyAdhanRecorder },
+  { title: 'متابعة الختمة', description: 'شبكة 114 سورة ونسبة الإنجاز وسلسلة القراءة', icon: '▦', Component: KhatmaTracker },
+  { title: 'التفسير', description: 'جلب تفسير الآية المختارة من Quran.com', icon: '☰', Component: TafsirPanel },
+  { title: 'تسجيل الأذان', description: 'تسجيل بصوتك مع معاينة وتنزيل محلي', icon: '◉', Component: MyAdhanRecorder },
   { title: 'إدارة التنزيلات', description: 'إدارة الموارد المحلية', icon: '↓', Component: DownloadManager },
 ];
 
 export default function MuslimDashboard() {
   const [offlineStatus, setOfflineStatus] = useState('جارٍ تجهيز عينة المصحف المحلية…');
   const [activeTool, setActiveTool] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tool') === 'tasmi-battle') setActiveTool('تحدي التسميع');
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,7 +65,7 @@ export default function MuslimDashboard() {
         </section>
         <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {tools.map((tool) => (
-            <button key={tool.title} onClick={() => setActiveTool(activeTool === tool.title ? null : tool.title)} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-right hover:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-amber-300">
+            <button key={tool.title} onClick={() => setActiveTool(activeTool === tool.title ? null : tool.title)} aria-expanded={activeTool === tool.title} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-right hover:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-amber-300">
               <span className="text-2xl text-amber-300" aria-hidden="true">{tool.icon}</span>
               <h2 className="mt-3 font-semibold">{tool.title}</h2>
               <p className="mt-1 text-sm leading-6 text-slate-400">{tool.description}</p>
@@ -71,7 +76,7 @@ export default function MuslimDashboard() {
           <section key={title} className="mt-5 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="font-semibold">{title}</h2>
-              <button onClick={() => setActiveTool(null)} className="rounded-lg px-3 py-1 text-sm text-slate-300 hover:bg-white/10">إغلاق</button>
+              <button type="button" onClick={() => setActiveTool(null)} className="rounded-lg px-3 py-1 text-sm text-slate-300 hover:bg-white/10">إغلاق</button>
             </div>
             <Component />
           </section>
