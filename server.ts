@@ -161,8 +161,6 @@ async function requireAuthTurnstile(req: express.Request, res: express.Response)
   return true;
 }
 function giftSignalHash(value:string): string { return crypto.createHash('sha256').update(`${TRIP_GIFT_HASH_SALT}:${value}`).digest('hex'); }
-const OWNER_WALLET_NUMBER = String(process.env.OWNER_WALLET_NUMBER || '01126621962').trim();
-const OWNER_INSTAPAY_ADDRESS = String(process.env.OWNER_INSTAPAY_ADDRESS || '01126621962').trim();
 const parsedTopupMin = Number(process.env.WALLET_TOPUP_MIN_EGP || 5);
 const parsedTopupMax = Number(process.env.WALLET_TOPUP_MAX_EGP || 10000);
 const WALLET_TOPUP_MIN_EGP = Number.isFinite(parsedTopupMin) && parsedTopupMin > 0 ? parsedTopupMin : 5;
