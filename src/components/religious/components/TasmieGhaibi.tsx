@@ -299,7 +299,7 @@ export default function TasmieGhaibi() {
 
       {notice && <p role="status" className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm leading-6 text-slate-300">{notice}</p>}
 
-      {correction && <CorrectionPanel expected={correction.expected} heard={correction.heard} onDismiss={() => setCorrection(null)} />}
+      {correction && <CorrectionPanel expected={correction.expected} heard={correction.heard} chapterId={Number(surahId)} ayahNumber={Number(fromAyah)} onDismiss={() => setCorrection(null)} />}
 
       {score && <div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] p-4" aria-live="polite">
         <h4 className="font-semibold text-amber-200">نتيجة التسميع</h4>
