@@ -97,15 +97,15 @@ export default function WalletView({ onOpenAdmin }: { onOpenAdmin?: () => void }
           </div>
         ) : (
           <div className="rounded-xl bg-amber-50 border border-amber-200 text-amber-800 p-3 mb-3 text-xs">
-            رقم التحويل لم يتم ضبطه بعد من إعدادات السيرفر. اضبط OWNER_WALLET_NUMBER أو OWNER_INSTAPAY_ADDRESS في Railway.
+            الشحن غير متاح حاليًا لعدم تفعيل وسيلة دفع معتمدة. لا تحوّل أي مبلغ حتى يظهر رقم تحويل موثوق.
           </div>
         )}
 
-        <input type="number" min={wallet?.topupMin ?? 5} max={wallet?.topupMax ?? 10000} step="1"
+        <input type="number" disabled={!paymentTarget || loading} min={wallet?.topupMin ?? 5} max={wallet?.topupMax ?? 10000} step="1"
           placeholder="المبلغ المحوّل (ج.م)" value={amount} onChange={(e) => setAmount(e.target.value)}
           className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent mb-2 text-right" />
 
-        <select value={method} onChange={(e) => setMethod(e.target.value)}
+        <select disabled={!paymentTarget || loading} value={method} onChange={(e) => setMethod(e.target.value)}
           className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent mb-2 text-right">
           <option value="vodafone_cash">فودافون كاش</option>
           <option value="instapay">إنستاباي</option>
@@ -113,7 +113,7 @@ export default function WalletView({ onOpenAdmin }: { onOpenAdmin?: () => void }
           <option value="other">وسيلة أخرى</option>
         </select>
 
-        <input type="text" maxLength={120} placeholder="رقم العملية أو آخر 4 أرقام من رقم التحويل (مستحسن)"
+        <input type="text" disabled={!paymentTarget || loading} maxLength={120 placeholder="رقم العملية أو آخر 4 أرقام من رقم التحويل (مستحسن)"
           value={note} onChange={(e) => setNote(e.target.value)}
           className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent mb-3 text-right" />
 
