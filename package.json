@@ -36,7 +36,7 @@
     "test:turnstile": "tsx backend/security/turnstile.test.ts",
     "verify:phase-a2-stt": "node scripts/verify-phase-a2-stt.mjs",
     "test:password-reset-email": "tsx backend/auth/passwordResetEmail.test.ts",
-    "test:auth-security": "tsx backend/auth/roleSelection.integration.test.ts",
+    "test:auth-security": "tsx backend/auth/roleSelection.integration.test.ts && node --test backend/wallet/topupFailClosed.test.cjs",
     "test:startup-storage": "tsx backend/security/startupStorage.test.ts",
     "test:owner-promotion-sql": "node --test scripts/sql/promote-approved-owners.test.cjs",
     "test:legacy-json-migration": "node --test scripts/migrate-legacy-json-to-sqlite.test.cjs"
