@@ -61,7 +61,8 @@ async function sendPasswordResetEmailWithProvider(email: string, code: string, t
     const host = required("SMTP_HOST");
     const user = required("SMTP_USER");
     const pass = required("SMTP_PASS");
-    const from = required("EMAIL_FROM");
+    const from = String(process.env.SMTP_FROM || process.env.EMAIL_FROM || "").trim();
+    if (!from) throw new Error("SMTP_FROM أو EMAIL_FROM مطلوب.");
     const port = Number(String(process.env.SMTP_PORT || "587").trim());
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("SMTP_PORT must be a valid TCP port.");
     const secure = String(process.env.SMTP_SECURE || (port === 465 ? "true" : "false")).trim().toLowerCase() === "true";
