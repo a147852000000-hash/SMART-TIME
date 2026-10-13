@@ -76,6 +76,7 @@ export async function sendPasswordResetEmail(email: string, code: string, ttlMin
       host,
       port,
       secure,
+      requireTLS: !secure,
       auth: { user, pass },
       connectionTimeout: 10_000,
       greetingTimeout: 10_000,
