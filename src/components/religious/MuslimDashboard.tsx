@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import ReligiousPwaSetup from './ReligiousPwaSetup';
 import PrayerTimes from './components/PrayerTimes';
 import SearchAyah from './components/SearchAyah';
 import TasmieGhaibi from './components/TasmieGhaibi';
@@ -49,7 +50,9 @@ export default function MuslimDashboard() {
   }, []);
 
   return (
-    <main dir="rtl" className="min-h-screen bg-slate-950 px-4 py-6 text-slate-100 sm:px-6">
+    <>
+      <ReligiousPwaSetup />
+    <main dir="rtl" className="religious-shell min-h-screen bg-slate-950 px-4 py-6 text-slate-100 sm:px-6">
       <div className="mx-auto max-w-5xl">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -83,5 +86,6 @@ export default function MuslimDashboard() {
         ) : null)}
       </div>
     </main>
+    </>
   );
 }
