@@ -1,0 +1,23 @@
+{
+  "id": "/religious",
+  "name": "SMART-TIME | القسم الديني",
+  "short_name": "SMART-TIME ديني",
+  "description": "مساحتك الروحانية للقرآن والعبادات ومتابعة الختمة",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/religious",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#020617",
+  "theme_color": "#0f172a",
+  "categories": ["lifestyle", "education"],
+  "icons": [
+    {
+      "src": "/quran/religious-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
