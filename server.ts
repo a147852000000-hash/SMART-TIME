@@ -278,11 +278,13 @@ db.exec(`
     id TEXT PRIMARY KEY,
     actor_user_id TEXT NOT NULL,
     actor_email TEXT NOT NULL,
+    action TEXT NOT NULL DEFAULT 'user_deleted',
     deleted_user_id_hash TEXT NOT NULL,
     deleted_email_hash TEXT NOT NULL,
     created_at TEXT NOT NULL
   )
 `);
+try { db.exec("ALTER TABLE user_deletion_audit ADD COLUMN action TEXT NOT NULL DEFAULT 'user_deleted'"); } catch {}
 
 function rolesForDbRole(role: string): string[] { if (role === 'owner') return ['owner', 'admin', 'user']; if (role === 'admin') return ['admin', 'user']; return ['user']; }
 function issueRoleSelectionTicket(row: any): string {
@@ -564,15 +566,60 @@ app.post('/api/auth/trips/verify-phone',async(req,res)=>{
 app.post('/api/auth/login',async(req,res)=>{try{if(!(await requireAuthTurnstile(req,res)))return;const identifier=String(req.body.identifier||req.body.email||'').trim(),normalizedEmail=identifier.toLowerCase(),normalizedUsername=normalizeUsername(identifier),password=String(req.body.password||'');let row:any=null;if(identifier.includes('@')) row=db.prepare('SELECT * FROM users WHERE email=?').get(normalizedEmail) as any;else row=db.prepare('SELECT * FROM users WHERE username=?').get(normalizedUsername) as any;if(!row||!verifyPassword(password,row.password_hash))return res.status(401).json({error:'بيانات الدخول غير صحيحة. تأكد من البريد أو اسم المستخدم وكلمة المرور.'});const dbRole=String(row.role||'user').toLowerCase();if(!VALID_APP_ROLES.has(dbRole))return res.status(403).json({error:'دور الحساب غير صالح.'});if(dbRole==='admin'||(dbRole==='owner'&&OWNER_EMAILS.has(String(row.email).toLowerCase()))){const roleChoiceTicket=issueRoleSelectionTicket({...row,role:dbRole});const claims=verifyJwt(roleChoiceTicket);return res.json({requiresRoleChoice:true,roleChoiceTicket,actualRoleInDB:dbRole,availableRoles:claims?.availableRoles||['user']});}const user={...row,name:row.display_name,phoneVerified:row.phone_verified,selectedRole:'user'};res.json({token:createSession(row.id),user:publicUser(user)});}catch(e:any){res.status(500).json({error:'تعذر تسجيل الدخول'});}});
 app.post('/api/auth/select-role',(req,res)=>{try{const claims=verifyJwt(String(req.body.roleChoiceTicket||'')),requestedRole=String(req.body.role||'').trim().toLowerCase();if(!claims||claims.purpose!=='role_selection'||!claims.sub)return res.status(401).json({error:'انتهت صلاحية اختيار نوع الدخول. سجّل الدخول مرة أخرى.'});if(!VALID_APP_ROLES.has(requestedRole))return res.status(400).json({error:'نوع الدخول غير صالح.'});const row=db.prepare('SELECT * FROM users WHERE id=?').get(String(claims.sub)) as any;if(!row)return res.status(401).json({error:'الحساب غير موجود.'});const dbRole=String(row.role||'user').toLowerCase();if(dbRole!==String(claims.actualRoleInDB)||String(row.email).toLowerCase()!==String(claims.email).toLowerCase())return res.status(403).json({error:'تم تغيير صلاحيات الحساب. سجّل الدخول مرة أخرى.'});if(requestedRole==='owner'&&(dbRole!=='owner'||!OWNER_EMAILS.has(String(row.email).toLowerCase())))return res.status(403).json({error:'لا تملك صلاحية الدخول كمالك.'});if(requestedRole==='admin'&&dbRole!=='admin'&&dbRole!=='owner')return res.status(403).json({error:'لا تملك صلاحية الدخول كمسؤول.'});if(!rolesForDbRole(dbRole).includes(requestedRole))return res.status(403).json({error:'نوع الدخول غير مسموح لهذا الحساب.'});const now=Math.floor(Date.now()/1000),sid=createSession(row.id),token=signJwt({purpose:'app_session',sub:row.id,sid,email:row.email,role:dbRole,selectedRole:requestedRole,iat:now,exp:now+AUTH_SESSION_DAYS*86400});db.prepare('UPDATE sessions SET session_role=? WHERE id=?').run(requestedRole,sid);res.json({token,user:publicUser({...row,name:row.display_name,phoneVerified:row.phone_verified,selectedRole:requestedRole})});}catch(e:any){res.status(500).json({error:'تعذر اختيار نوع الدخول.'});}});
 app.get('/api/auth/me',(req,res)=>{const user=authUser(req);if(!user)return res.status(401).json({error:'جلسة الدخول منتهية'});res.json({user:publicUser(user)});});
+const ownerRouteWindows = new Map<string, { startedAt: number; count: number }>();
+function consumeOwnerRouteQuota(req: express.Request): boolean {
+  const ipHash = crypto.createHmac('sha256', RATE_LIMIT_HASH_SECRET).update(clientIp(req)).digest('hex');
+  const now = Date.now();
+  if (ownerRouteWindows.size > 5000) {
+    for (const [key, value] of ownerRouteWindows) {
+      if (now - value.startedAt >= 60_000) ownerRouteWindows.delete(key);
+    }
+  }
+  const current = ownerRouteWindows.get(ipHash);
+  if (!current || now - current.startedAt >= 60_000) {
+    ownerRouteWindows.set(ipHash, { startedAt: now, count: 1 });
+    return true;
+  }
+  if (current.count >= 30) return false;
+  current.count += 1;
+  return true;
+}
+function ownerRouteRateLimited(req: express.Request, res: express.Response): boolean {
+  if (consumeOwnerRouteQuota(req)) return false;
+  res.status(429).json({ code: 'RATE_LIMITED', message: 'تم تجاوز عدد الطلبات. حاول بعد دقيقة.' });
+  return true;
+}
+function sqliteTableExists(tableName: string): boolean {
+  return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(tableName));
+}
+function runIfTableExists(tableName: string, sql: string, ...params: unknown[]): any | null {
+  if (!sqliteTableExists(tableName)) return null;
+  return db.prepare(sql).run(...params);
+}
+
 app.get('/api/auth/owner/accounts', (req,res) => {
   const actor = requireApprovedOwner(req, res);
   if (!actor) return;
+  if (ownerRouteRateLimited(req, res)) return;
 
-  const parsedLimit = Number.parseInt(String(req.query.limit ?? '50'), 10);
-  const limit = Number.isFinite(parsedLimit) ? Math.max(1, Math.min(100, parsedLimit)) : 50;
-  const parsedOffset = Number.parseInt(String(req.query.offset ?? '0'), 10);
-  const offset = Number.isFinite(parsedOffset) ? Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, parsedOffset)) : 0;
-  const search = String(req.query.search ?? req.query.q ?? '').trim().slice(0, 200);
+  const integerParam = (value: unknown, fallback: number, min: number, max: number): number | null => {
+    if (value === undefined) return fallback;
+    const raw = String(value);
+    if (!/^(0|[1-9][0-9]*)$/.test(raw)) return null;
+    const parsed = Number(raw);
+    if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) return null;
+    return parsed;
+  };
+  const limit = integerParam(req.query.limit, 50, 1, 100);
+  const offset = integerParam(req.query.offset, 0, 0, Number.MAX_SAFE_INTEGER);
+  const rawSearch = req.query.search ?? req.query.q ?? '';
+  if (Array.isArray(rawSearch) || typeof rawSearch !== 'string' || rawSearch.length > 200) {
+    return res.status(400).json({ code: 'INVALID_SEARCH', message: 'نص البحث غير صحيح أو أطول من المسموح.' });
+  }
+  if (limit === null || offset === null) {
+    return res.status(400).json({ code: 'INVALID_PAGINATION', message: 'قيم limit وoffset يجب أن تكون أعدادًا صحيحة ضمن الحدود المسموحة.' });
+  }
+  const search = rawSearch.trim();
   const where = search ? " WHERE lower(email) LIKE lower(?) OR lower(COALESCE(display_name, '')) LIKE lower(?)" : '';
   const parameters = search ? [`%${search}%`, `%${search}%`] : [];
 
@@ -594,9 +641,10 @@ app.get('/api/auth/owner/accounts', (req,res) => {
 app.delete('/api/auth/owner/accounts/:id', (req,res) => {
   const actor = requireApprovedOwner(req, res);
   if (!actor) return;
+  if (ownerRouteRateLimited(req, res)) return;
 
   const targetId = String(req.params.id || '').trim();
-  if (!targetId || targetId.length > 200) {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/.test(targetId)) {
     return res.status(400).json({ code: 'INVALID_ACCOUNT_ID', message: 'معرّف الحساب غير صحيح.' });
   }
 
@@ -618,89 +666,87 @@ app.delete('/api/auth/owner/accounts/:id', (req,res) => {
 
     db.exec('BEGIN IMMEDIATE');
     try {
-      // Remove authentication and one-time verification state.
-      db.prepare('DELETE FROM sessions WHERE user_id=?').run(String(target.id));
-      db.prepare('DELETE FROM password_resets WHERE lower(email)=lower(?)').run(String(target.email));
-      db.prepare('DELETE FROM password_reset_requests WHERE lower(email)=lower(?)').run(String(target.email));
-      if (target.phone) db.prepare('DELETE FROM phone_otps WHERE phone=?').run(String(target.phone));
+      // Every DML statement is guarded by sqlite_master so optional/missing tables do not abort deletion.
+      runIfTableExists('sessions', 'DELETE FROM sessions WHERE user_id=?', String(target.id));
+      runIfTableExists('password_resets', 'DELETE FROM password_resets WHERE lower(email)=lower(?)', String(target.email));
+      runIfTableExists('password_reset_requests', 'DELETE FROM password_reset_requests WHERE lower(email)=lower(?)', String(target.email));
+      if (target.phone) runIfTableExists('phone_otps', 'DELETE FROM phone_otps WHERE phone=?', String(target.phone));
 
-      // User-owned app, AI, calendar, and finance records.
       for (const table of [
         'user_app_data', 'ai_transactions', 'ai_budgets', 'ai_tasks', 'ai_events', 'ai_event_reminders',
         'finance_expenses', 'finance_monthly_income', 'finance_bank_certificates',
         'finance_fuel_records', 'finance_maintenance_records', 'finance_education_expenses',
       ]) {
-        db.prepare(`DELETE FROM ${table} WHERE user_id=?`).run(String(target.id));
+        runIfTableExists(table, `DELETE FROM ${table} WHERE user_id=?`, String(target.id));
       }
 
-      // Remove this user's saved/read state and messages; clean all references to deleted messages.
-      db.prepare('DELETE FROM saved_messages WHERE user_id=?').run(String(target.id));
-      db.prepare('DELETE FROM message_reads WHERE user_id=?').run(String(target.id));
-      db.prepare('DELETE FROM saved_messages WHERE message_id IN (SELECT id FROM messages WHERE sender_id=?)').run(String(target.id));
-      db.prepare('DELETE FROM message_reads WHERE message_id IN (SELECT id FROM messages WHERE sender_id=?)').run(String(target.id));
-      db.prepare('DELETE FROM messages WHERE sender_id=?').run(String(target.id));
-      db.prepare('UPDATE messages SET pinned_by=NULL WHERE pinned_by=?').run(String(target.id));
-      db.prepare('DELETE FROM conversation_members WHERE user_id=?').run(String(target.id));
-      db.prepare('UPDATE conversations SET creator_id=NULL WHERE creator_id=?').run(String(target.id));
+      runIfTableExists('saved_messages', 'DELETE FROM saved_messages WHERE user_id=?', String(target.id));
+      runIfTableExists('message_reads', 'DELETE FROM message_reads WHERE user_id=?', String(target.id));
+      if (sqliteTableExists('messages')) {
+        runIfTableExists('saved_messages', 'DELETE FROM saved_messages WHERE message_id IN (SELECT id FROM messages WHERE sender_id=?)', String(target.id));
+        runIfTableExists('message_reads', 'DELETE FROM message_reads WHERE message_id IN (SELECT id FROM messages WHERE sender_id=?)', String(target.id));
+        // Preserve shared-room conversation history using the existing soft-delete mechanism.
+        db.prepare("UPDATE messages SET is_deleted=1, body='تم حذف هذه الرسالة', sender_id=?, sender_name=NULL, sender_avatar=NULL, media_url=NULL, pinned_by=NULL, pinned_at=NULL, is_pinned=0, updated_at=? WHERE sender_id=?").run(tombstoneUserId, now, String(target.id));
+      }
+      runIfTableExists('conversation_members', 'DELETE FROM conversation_members WHERE user_id=?', String(target.id));
+      runIfTableExists('conversations', 'UPDATE conversations SET creator_id=NULL WHERE creator_id=?', String(target.id));
 
-      // Remove all Voice DNA sharing/recovery material connected to the account or its owned profiles.
-      db.prepare(`DELETE FROM voice_dna_sync_packages
-        WHERE owner_user_id=? OR recipient_user_id=?
-          OR profile_id IN (SELECT id FROM voice_dna_profiles WHERE owner_user_id=?)`)
-        .run(String(target.id), String(target.id), String(target.id));
-      db.prepare(`DELETE FROM voice_dna_shares
-        WHERE owner_user_id=? OR recipient_user_id=?
-          OR profile_id IN (SELECT id FROM voice_dna_profiles WHERE owner_user_id=?)`)
-        .run(String(target.id), String(target.id), String(target.id));
-      db.prepare(`DELETE FROM voice_dna_recovery_samples
-        WHERE user_id=? OR profile_id IN (SELECT id FROM voice_dna_profiles WHERE owner_user_id=?)`)
-        .run(String(target.id), String(target.id));
-      db.prepare('DELETE FROM voice_dna_public_keys WHERE user_id=?').run(String(target.id));
-      db.prepare('DELETE FROM voice_dna_recovery_envelopes WHERE user_id=?').run(String(target.id));
-      db.prepare('DELETE FROM voice_dna_profiles WHERE owner_user_id=?').run(String(target.id));
+      if (sqliteTableExists('voice_dna_profiles')) {
+        runIfTableExists('voice_dna_sync_packages',
+          'DELETE FROM voice_dna_sync_packages WHERE owner_user_id=? OR recipient_user_id=? OR profile_id IN (SELECT id FROM voice_dna_profiles WHERE owner_user_id=?)',
+          String(target.id), String(target.id), String(target.id));
+        runIfTableExists('voice_dna_shares',
+          'DELETE FROM voice_dna_shares WHERE owner_user_id=? OR recipient_user_id=? OR profile_id IN (SELECT id FROM voice_dna_profiles WHERE owner_user_id=?)',
+          String(target.id), String(target.id), String(target.id));
+        runIfTableExists('voice_dna_recovery_samples',
+          'DELETE FROM voice_dna_recovery_samples WHERE user_id=? OR profile_id IN (SELECT id FROM voice_dna_profiles WHERE owner_user_id=?)',
+          String(target.id), String(target.id));
+      } else {
+        runIfTableExists('voice_dna_sync_packages', 'DELETE FROM voice_dna_sync_packages WHERE owner_user_id=? OR recipient_user_id=?', String(target.id), String(target.id));
+        runIfTableExists('voice_dna_shares', 'DELETE FROM voice_dna_shares WHERE owner_user_id=? OR recipient_user_id=?', String(target.id), String(target.id));
+        runIfTableExists('voice_dna_recovery_samples', 'DELETE FROM voice_dna_recovery_samples WHERE user_id=?', String(target.id));
+      }
+      runIfTableExists('voice_dna_public_keys', 'DELETE FROM voice_dna_public_keys WHERE user_id=?', String(target.id));
+      runIfTableExists('voice_dna_recovery_envelopes', 'DELETE FROM voice_dna_recovery_envelopes WHERE user_id=?', String(target.id));
+      runIfTableExists('voice_dna_profiles', 'DELETE FROM voice_dna_profiles WHERE owner_user_id=?', String(target.id));
 
-      // Retain abuse-prevention signals and accounting/audit history without direct account identifiers.
-      db.prepare('UPDATE trip_gift_claims SET user_id=? WHERE user_id=?').run(tombstoneUserId, String(target.id));
-      db.prepare('UPDATE wallet_transactions SET user_id=? WHERE user_id=?').run(tombstoneUserId, String(target.id));
-      db.prepare(`UPDATE wallet_topups
-        SET user_id=?,
-            reviewed_by=CASE WHEN reviewed_by=? OR lower(COALESCE(reviewed_by,''))=lower(?) THEN ? ELSE reviewed_by END,
-            status=CASE WHEN lower(status)='pending' THEN 'cancelled' ELSE status END,
+      runIfTableExists('trip_gift_claims', 'UPDATE trip_gift_claims SET user_id=? WHERE user_id=?', tombstoneUserId, String(target.id));
+      runIfTableExists('wallet_transactions', 'UPDATE wallet_transactions SET user_id=? WHERE user_id=?', tombstoneUserId, String(target.id));
+      runIfTableExists('wallet_topups', `UPDATE wallet_topups
+        SET user_id=?, status=CASE WHEN lower(status)='pending' THEN 'cancelled' ELSE status END,
             note=NULL, review_note=NULL
-        WHERE user_id=?`)
-        .run(tombstoneUserId, String(target.id), String(target.email), tombstoneUserId, String(target.id));
-      db.prepare(`UPDATE wallet_topups SET reviewed_by=?, review_note=NULL
-        WHERE reviewed_by=? OR lower(COALESCE(reviewed_by,''))=lower(?)`)
-        .run(tombstoneUserId, String(target.id), String(target.email));
-      db.prepare(`UPDATE wallet_admin_actions
+        WHERE user_id=?`, tombstoneUserId, String(target.id));
+      runIfTableExists('wallet_topups', `UPDATE wallet_topups SET reviewed_by=?, review_note=NULL
+        WHERE reviewed_by=? OR lower(COALESCE(reviewed_by,''))=lower(?)`,
+        tombstoneUserId, String(target.id), String(target.email));
+      runIfTableExists('wallet_admin_actions', `UPDATE wallet_admin_actions
         SET user_id=CASE WHEN user_id=? THEN ? ELSE user_id END,
             actor_id=CASE WHEN actor_id=? OR lower(COALESCE(actor_email,''))=lower(?) THEN ? ELSE actor_id END,
             actor_email=CASE WHEN lower(COALESCE(actor_email,''))=lower(?) THEN ? ELSE actor_email END,
             note=CASE WHEN user_id=? OR actor_id=? OR lower(COALESCE(actor_email,''))=lower(?) THEN NULL ELSE note END
-        WHERE user_id=? OR actor_id=? OR lower(COALESCE(actor_email,''))=lower(?)`)
-        .run(String(target.id), tombstoneUserId, String(target.id), String(target.email), tombstoneUserId,
-          String(target.email), tombstoneEmail, String(target.id), String(target.id), String(target.email),
-          String(target.id), String(target.id), String(target.email));
+        WHERE user_id=? OR actor_id=? OR lower(COALESCE(actor_email,''))=lower(?)`,
+        String(target.id), tombstoneUserId, String(target.id), String(target.email), tombstoneUserId,
+        String(target.email), tombstoneEmail, String(target.id), String(target.id), String(target.email),
+        String(target.id), String(target.id), String(target.email));
 
-      // Keep SMTP delivery history but anonymize any rows addressed to this email.
-      db.prepare('UPDATE email_logs SET recipient=? WHERE lower(recipient)=lower(?)').run(tombstoneEmail, String(target.email));
-      db.prepare('UPDATE users SET activated_by=NULL WHERE lower(COALESCE(activated_by,\'\'))=lower(?)').run(String(target.email));
+      runIfTableExists('email_logs', 'UPDATE email_logs SET recipient=? WHERE lower(recipient)=lower(?)', tombstoneEmail, String(target.email));
+      runIfTableExists('users', "UPDATE users SET activated_by=NULL WHERE lower(COALESCE(activated_by,''))=lower(?)", String(target.email));
 
-      // Retain role-change history while pseudonymizing references to the removed account.
-      db.prepare(`UPDATE role_audit_log SET target_user_id=?, target_email=?
-        WHERE target_user_id=? OR lower(target_email)=lower(?)`)
-        .run(tombstoneUserId, tombstoneEmail, String(target.id), String(target.email));
-      db.prepare(`UPDATE role_audit_log SET actor_user_id=?, actor_email=?
-        WHERE actor_user_id=? OR lower(actor_email)=lower(?)`)
-        .run(tombstoneUserId, tombstoneEmail, String(target.id), String(target.email));
+      runIfTableExists('role_audit_log', `UPDATE role_audit_log SET target_user_id=?, target_email=?
+        WHERE target_user_id=? OR lower(target_email)=lower(?)`,
+        tombstoneUserId, tombstoneEmail, String(target.id), String(target.email));
+      runIfTableExists('role_audit_log', `UPDATE role_audit_log SET actor_user_id=?, actor_email=?
+        WHERE actor_user_id=? OR lower(actor_email)=lower(?)`,
+        tombstoneUserId, tombstoneEmail, String(target.id), String(target.email));
 
-      const deletionAudit = db.prepare(`INSERT INTO user_deletion_audit
-        (id,actor_user_id,actor_email,deleted_user_id_hash,deleted_email_hash,created_at)
-        VALUES (?,?,?,?,?,?)`).run(crypto.randomUUID(), String(actor.id), String(actor.email).toLowerCase(), deletedIdHash, deletedEmailHash, now);
-      if (Number(deletionAudit.changes) !== 1) throw new Error('Deletion audit insert did not affect exactly one row.');
+      const audit = runIfTableExists('user_deletion_audit', `INSERT INTO user_deletion_audit
+        (id,actor_user_id,actor_email,action,deleted_user_id_hash,deleted_email_hash,created_at)
+        VALUES (?,?,?,?,?,?,?)`, crypto.randomUUID(), String(actor.id), String(actor.email).toLowerCase(),
+        'user_deleted', deletedIdHash, deletedEmailHash, now);
+      if (!audit || Number(audit.changes) !== 1) throw new Error('Deletion audit table missing or insert did not affect exactly one row.');
 
-      const deleted = db.prepare("DELETE FROM users WHERE id=? AND lower(role)<>'owner'").run(String(target.id));
-      if (Number(deleted.changes) !== 1) throw new Error('Account deletion did not affect exactly one non-owner row.');
+      const deleted = runIfTableExists('users', "DELETE FROM users WHERE id=? AND lower(role)<>'owner'", String(target.id));
+      if (!deleted || Number(deleted.changes) !== 1) throw new Error('Account deletion did not affect exactly one non-owner row.');
 
       db.exec('COMMIT');
     } catch (transactionError) {
@@ -754,8 +800,9 @@ app.post('/api/auth/owner/admin-role', (req,res) => {
         // Revoke all target sessions immediately; role changes must not wait for JWT expiry.
         db.prepare('DELETE FROM sessions WHERE user_id=?').run(String(target.id));
       }
-      db.prepare('INSERT INTO role_audit_log(id,actor_user_id,actor_email,target_user_id,target_email,action,created_at) VALUES(?,?,?,?,?,?,?)')
+      const auditResult = db.prepare('INSERT INTO role_audit_log(id,actor_user_id,actor_email,target_user_id,target_email,action,created_at) VALUES(?,?,?,?,?,?,?)')
         .run(auditId, String(actor.id), String(actor.email).toLowerCase(), String(target.id), targetEmail, action === 'appoint' ? 'admin_appointed' : 'admin_revoked', now);
+      if (Number(auditResult.changes) !== 1) throw new Error('Role audit insert did not affect exactly one row.');
       db.exec('COMMIT');
     } catch (transactionError) {
       try { db.exec('ROLLBACK'); } catch {}
