@@ -74,6 +74,26 @@ try {
   await assert.rejects(() => sendPasswordResetEmail("recipient@example.test", "789012", 15), /SMTP_PORT must be a valid TCP port/);
   process.env.SMTP_PORT = "587";
 
+  // Primary Oracle relay failure must fall through to the configured SMTP backup.
+  process.env.EMAIL_PROVIDER = "oracle-relay";
+  process.env.EMAIL_FALLBACK_PROVIDERS = "smtp,resend";
+  process.env.ORACLE_EMAIL_RELAY_URL = "https://oracle.example.test/api/internal/send-reset";
+  process.env.ORACLE_EMAIL_RELAY_SECRET = "unit-test-secret";
+  process.env.SMTP_HOST = "smtp.example.test";
+  process.env.SMTP_PORT = "587";
+  process.env.SMTP_SECURE = "false";
+  process.env.SMTP_USER = "mailer@example.test";
+  process.env.SMTP_PASS = "unit";
+  process.env.EMAIL_FROM = "Smart Time <mailer@example.test>";
+  globalThis.fetch = (async () => new Response(JSON.stringify({ ok: false }), { status: 503 })) as any;
+  (nodemailer as any).createTransport = () => ({
+    sendMail: async () => ({ messageId: "smtp-fallback-1" }),
+    close: () => {},
+  });
+  const fallbackResult = await sendPasswordResetEmail("recipient@example.test", "456789", 15);
+  assert.equal(fallbackResult.provider, "smtp");
+  assert.equal(fallbackResult.messageId, "smtp-fallback-1");
+
   console.log("password reset email provider tests: PASS");
 } finally {
   process.env = originalEnv;
