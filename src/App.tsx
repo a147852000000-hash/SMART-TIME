@@ -398,6 +398,7 @@ export default function App() {
     { view: 'notes' as AppView, label: language === 'ar' ? 'الملاحظات' : 'Notes', icon: FileText },
   ];
 
+  if (servicePath === '/') return <ReligiousChoice />;
   if (servicePath === '/services/smart-ai') return <SmartAIServicePage />;
   if (servicePath === '/services') return <ServicesPage />;
   if (servicePath === '/religious') return <ReligiousChoice />;
