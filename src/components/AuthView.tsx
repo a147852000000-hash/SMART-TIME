@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Eye, EyeOff, LockKeyhole, Mail, UserRound } from 'lucide-react';
 import { forgotPassword, loginWithIdentifier, registerWithEmail, resetPassword, selectLoginRole } from '../services/authService';
-import { apiUrl } from '../services/apiConfig';
 
 interface Props {
   onAuthenticated: () => void;
@@ -25,49 +24,6 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
   const [resetSent, setResetSent] = useState(false);
   const [roleChoiceTicket, setRoleChoiceTicket] = useState('');
   const [showRoleChoice, setShowRoleChoice] = useState(false);
-  const [emailExistsInRailway, setEmailExistsInRailway] = useState(false);
-
-  useEffect(() => {
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-      setEmailExistsInRailway(false);
-      if (mode === 'register') setError('');
-      return;
-    }
-    if (mode !== 'register') {
-      setError('');
-      return;
-    }
-    let cancelled = false;
-    const timer = window.setTimeout(async () => {
-      try {
-        await fetch('https://smart-time-ai.duckdns.org/check-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: normalizedEmail }),
-        }).catch(() => null);
-        const response = await fetch(apiUrl('/api/auth/check'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: normalizedEmail }),
-        });
-        const data = await response.json().catch(() => ({}));
-        if (cancelled) return;
-        const exists = response.ok && data.accountExists === true;
-        setEmailExistsInRailway(exists);
-        setError(exists ? 'هذا البريد مسجل بالفعل، يرجى تسجيل الدخول' : '');
-      } catch {
-        if (!cancelled) {
-          setEmailExistsInRailway(false);
-          setError('');
-        }
-      }
-    }, 350);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [email, mode]);
 
   const clearError = () => setError('');
   const switchMode = (next: Mode) => { setMode(next); clearError(); setCode(''); setResetSent(false); };
@@ -77,7 +33,6 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
     try {
       const challenge = '';
       if (mode === 'register') {
-        if (emailExistsInRailway) throw new Error('هذا البريد مسجل بالفعل، يرجى تسجيل الدخول');
         if (name.trim().length < 2) throw new Error('اكتب اسمًا صحيحًا.');
         if (!username.trim()) throw new Error('اسم المستخدم مطلوب.');
         const registration = await registerWithEmail(name.trim(), username.trim(), email.trim().toLowerCase(), password, challenge);
@@ -117,7 +72,6 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
         setError('لو البريد الإلكتروني مرتبط بحساب، هيوصلك كود استعادة كلمة المرور.');
       } else {
         if (mode === 'register' && /مسجل بالفعل|already exists/i.test(message)) {
-          setEmailExistsInRailway(true);
           setError('هذا البريد مسجل بالفعل، يرجى تسجيل الدخول');
         } else {
           setError(message);
@@ -210,7 +164,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
 
             {error && <div role="alert" className={`rounded-xl p-3 text-sm font-medium ${error.includes('تم ') ? 'border border-emerald-200 bg-emerald-50 text-emerald-700' : 'border border-red-200 bg-red-50 text-red-700'}`}>{error}</div>}
 
-            <button disabled={busy || (mode === 'register' && emailExistsInRailway)} className="flex h-10 sm:h-[72px] w-full items-center justify-center rounded-full bg-[#090909] px-4 font-semibold text-[14px] sm:text-[24px] text-[#D6AD52] shadow-[0_8px_20px_rgba(0,0,0,0.08)] transition hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C5A059] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+            <button disabled={busy} className="flex h-10 sm:h-[72px] w-full items-center justify-center rounded-full bg-[#090909] px-4 font-semibold text-[14px] sm:text-[24px] text-[#D6AD52] shadow-[0_8px_20px_rgba(0,0,0,0.08)] transition hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C5A059] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
               {busy?'Please wait…':mode==='register'?'Create account':mode==='forgot'?(resetSent?'Reset password':'Send reset code'):'Sign In'}
             </button>
 
