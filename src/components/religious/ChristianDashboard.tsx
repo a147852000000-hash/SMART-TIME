@@ -1,8 +1,11 @@
 import React from 'react';
+import ReligiousPwaSetup from './ReligiousPwaSetup';
 
 export default function ChristianDashboard() {
   return (
-    <main dir="rtl" className="min-h-screen bg-slate-950 px-5 py-10 text-slate-100">
+    <>
+      <ReligiousPwaSetup />
+    <main dir="rtl" className="religious-shell min-h-screen bg-slate-950 px-5 py-10 text-slate-100">
       <section className="mx-auto max-w-3xl">
         <a href="/religious" className="text-sm text-amber-300 hover:underline">← اختيار القسم</a>
         <h1 className="mt-4 text-3xl font-bold">القسم المسيحي</h1>
@@ -13,5 +16,6 @@ export default function ChristianDashboard() {
         </div>
       </section>
     </main>
+    </>
   );
 }
