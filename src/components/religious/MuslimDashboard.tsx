@@ -11,8 +11,8 @@ import DownloadManager from './components/DownloadManager';
 import { saveOfflineAsset } from './offlineStore';
 
 const tools = [
-  { title: 'مواقيت الصلاة', description: 'واجهة مبدئية — تُفعّل في Phase 2', icon: '◷', Component: PrayerTimes },
-  { title: 'البحث في الآيات', description: 'واجهة مبدئية — يُفعّل البحث في Phase 2', icon: '⌕', Component: SearchAyah },
+  { title: 'مواقيت الصلاة', description: 'مواقيت محلية مع عدّ تنازلي وتنبيهات', icon: '◷', Component: PrayerTimes },
+  { title: 'البحث في الآيات', description: 'بحث مباشر في نص القرآن', icon: '⌕', Component: SearchAyah },
   { title: 'التسميع الغيبي', description: 'واجهة التسميع تُستكمل في Phase 3', icon: '♫', Component: TasmieGhaibi },
   { title: 'تحدي التسميع', description: 'واجهة التحدي تُستكمل في Phase 4', icon: '⚔', Component: TasmieBattle },
   { title: 'السبحة', description: 'عداد تسبيح محلي', icon: '◎', Component: Tasbeeh },
