@@ -1,4 +1,5 @@
 import React from 'react';
+import ReligiousPwaSetup from './ReligiousPwaSetup';
 
 type Props = { onNavigate?: (path: string) => void };
 
@@ -15,7 +16,9 @@ export default function ReligiousChoice({ onNavigate }: Props) {
   };
 
   return (
-    <main dir="rtl" className="min-h-screen bg-slate-950 text-slate-100 px-5 py-12">
+    <>
+      <ReligiousPwaSetup />
+    <main dir="rtl" className="religious-shell min-h-screen bg-slate-950 text-slate-100 px-5 py-12">
       <section className="mx-auto max-w-3xl">
         <p className="text-sm tracking-wide text-amber-300">SMART-TIME · RELIGIOUS</p>
         <h1 className="mt-3 text-3xl font-bold md:text-4xl">مساحتك الروحانية</h1>
@@ -32,5 +35,6 @@ export default function ReligiousChoice({ onNavigate }: Props) {
         </div>
       </section>
     </main>
+    </>
   );
 }
