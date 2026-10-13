@@ -33,6 +33,7 @@ const adminEmail = 'admin@example.test';
 const userEmail = 'user@example.test';
 const deleteEmail = 'delete-me@example.test';
 const activationEmail = 'activate-me@example.test';
+const failedDeleteEmail = 'failed-delete@example.test';
 process.env.SMART_TIME_DB_PATH = dbPath;
 process.env.JWT_SECRET = secret;
 process.env.PASSWORD_RESET_HMAC_SECRET = secret;
@@ -99,6 +100,7 @@ try {
   insertUser.run('test-user-2', 'other@example.test', 'otheruser', reusableTestHash, 'Other User', createdAt(), 'user', 'active');
   insertUser.run('test-delete-user', deleteEmail, 'deleteuser', reusableTestHash, 'Delete Test User', createdAt(), 'user', 'active');
   insertUser.run('test-activation-user', activationEmail, 'activateuser', reusableTestHash, 'Activation Test User', createdAt(), 'user', 'pending');
+  insertUser.run('test-failed-delete-user', failedDeleteEmail, 'faileddeleteuser', reusableTestHash, 'Failed Delete User', createdAt(), 'user', 'active');
   db.prepare("UPDATE users SET phone=? WHERE id='test-delete-user'").run('+201000000000');
   for (let i = 0; i < 105; i++) {
     const suffix = String(i).padStart(3, '0');
@@ -177,10 +179,15 @@ try {
   assert.equal(new Set([...firstPage.body.users, ...secondPage.body.users].map((account: any) => account.id)).size, 6, 'adjacent pages must not repeat accounts');
   const expectedFirstSix = (db.prepare('SELECT id FROM users ORDER BY created_at ASC, id ASC LIMIT 6').all() as any[]).map(row => row.id);
   assert.deepEqual([...firstPage.body.users, ...secondPage.body.users].map((account: any) => account.id), expectedFirstSix, 'paging must use stable created_at/id ordering');
-  const maxPage = await request('/api/auth/owner/accounts?limit=500&offset=0', { headers: ownerHeaders });
+  const maxPage = await request('/api/auth/owner/accounts?limit=100&offset=0', { headers: ownerHeaders });
   assert.equal(maxPage.status, 200);
-  assert.equal(maxPage.body.limit, 100, 'owner account list must cap page size at 100');
+  assert.equal(maxPage.body.limit, 100, 'owner account list must allow the maximum page size of 100');
   assert.equal(maxPage.body.users.length, 100);
+  assert.equal((await request('/api/auth/owner/accounts?limit=101', { headers: ownerHeaders })).status, 400, 'owner account list rejects limit above 100');
+  assert.equal((await request('/api/auth/owner/accounts?limit=1.5', { headers: ownerHeaders })).status, 400, 'owner account list rejects fractional limit');
+  assert.equal((await request('/api/auth/owner/accounts?offset=-1', { headers: ownerHeaders })).status, 400, 'owner account list rejects negative offset');
+  assert.equal((await request('/api/auth/owner/accounts?offset=1e2', { headers: ownerHeaders })).status, 400, 'owner account list rejects non-integer syntax');
+  assert.equal((await request('/api/auth/owner/accounts?search=' + 'x'.repeat(201), { headers: ownerHeaders })).status, 400, 'owner account list rejects search longer than 200 characters');
   const emailSearch = await request('/api/auth/owner/accounts?search=other%40example.test', { headers: ownerHeaders });
   assert.equal(emailSearch.status, 200);
   assert.deepEqual(emailSearch.body.users.map((account: any) => account.id), ['test-user-2'], 'owner list search must match email');
@@ -202,13 +209,19 @@ try {
     assert.equal((await post('/api/auth/owner/activate', { ownerEmail, activationKey: secret, userEmail: activationEmail }, denied.token)).status, 403, `${denied.label} cannot activate accounts by spoofing owner fields`);
   }
 
+  assert.equal((await request('/api/auth/owner/accounts/no-such-account', { method: 'DELETE', headers: ownerHeaders })).status, 404, 'deleting a nonexistent id returns 404');
+  assert.equal((await request('/api/auth/owner/accounts/bad@id', { method: 'DELETE', headers: ownerHeaders })).status, 400, 'deletion rejects invalid account id format');
   const selfDelete = await request('/api/auth/owner/accounts/test-owner', { method: 'DELETE', headers: ownerHeaders });
   assert.equal(selfDelete.status, 400, 'Owner cannot delete their own account');
   const protectedOwnerDelete = await request('/api/auth/owner/accounts/test-owner-2', { method: 'DELETE', headers: ownerHeaders });
   assert.equal(protectedOwnerDelete.status, 409, 'Owner cannot delete another Owner account');
 
+  const noSessionActivation = await post('/api/auth/owner/activate', { ownerEmail, activationKey: secret, userEmail: activationEmail });
+  assert.equal(noSessionActivation.status, 403, 'activation without a session is forbidden');
   const wrongActivationKey = await post('/api/auth/owner/activate', { ownerEmail, activationKey: 'wrong-key', userEmail: activationEmail }, ownerSession.body.token);
-  assert.equal(wrongActivationKey.status, 403, 'activation key remains required as a second factor');
+  assert.equal(wrongActivationKey.status, 403, 'approved Owner session without the correct key cannot activate');
+  const missingActivationKey = await post('/api/auth/owner/activate', { ownerEmail, userEmail: activationEmail }, ownerSession.body.token);
+  assert.equal(missingActivationKey.status, 403, 'approved Owner session without a key cannot activate');
   db.prepare("UPDATE users SET activation_status='pending' WHERE id='test-activation-user'").run();
   const approvedActivation = await post('/api/auth/owner/activate', { ownerEmail, activationKey: secret, userEmail: activationEmail }, ownerSession.body.token);
   assert.equal(approvedActivation.status, 200, 'approved Owner with the key can activate an account');
@@ -358,6 +371,8 @@ try {
 
   db.prepare('INSERT INTO user_app_data(user_id,data_key,payload_json,updated_at) VALUES(?,?,?,?)')
     .run('test-delete-user', 'test-setting', '{"private":true}', now);
+  db.prepare('INSERT INTO user_app_data(user_id,data_key,payload_json,updated_at) VALUES(?,?,?,?)')
+    .run('test-failed-delete-user', 'rollback-setting', '{"mustRollback":true}', now);
   db.prepare('INSERT INTO ai_transactions(id,user_id,title,amount,category,date,created_at) VALUES(?,?,?,?,?,?,?)')
     .run('delete-ai-transaction', 'test-delete-user', 'test expense', 3, 'test', now, now);
   db.prepare('INSERT INTO trip_gift_claims(id,user_id,ip_hash,created_at) VALUES(?,?,?,?)')
@@ -389,13 +404,31 @@ try {
   db.prepare('INSERT INTO role_audit_log(id,actor_user_id,actor_email,target_user_id,target_email,action,created_at) VALUES(?,?,?,?,?,?,?)')
     .run('delete-test-role-audit', 'test-owner', ownerEmail, 'test-delete-user', deleteEmail, 'admin_appointed', now);
 
+  // Simulate canonical-schema tables absent in this database build; they must be skipped safely.
+  for (const table of ['finance_expenses', 'finance_monthly_income', 'finance_bank_certificates', 'finance_fuel_records', 'finance_maintenance_records', 'finance_education_expenses']) {
+    db.exec('DROP TABLE IF EXISTS ' + table);
+  }
+  const failureAuditBefore = Number(db.prepare('SELECT COUNT(*) AS count FROM user_deletion_audit').get().count);
+  db.exec("CREATE TRIGGER fail_test_account_delete BEFORE DELETE ON users WHEN OLD.id='test-failed-delete-user' BEGIN SELECT RAISE(ABORT, 'injected deletion failure'); END");
+  const failedDeleteResponse = await request('/api/auth/owner/accounts/test-failed-delete-user', { method: 'DELETE', headers: deletionOwnerHeaders });
+  assert.equal(failedDeleteResponse.status, 500, 'injected failure returns a JSON server error');
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM users WHERE id=?').get('test-failed-delete-user').count, 1, 'injected failure must roll back the user delete');
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM user_app_data WHERE user_id=?').get('test-failed-delete-user').count, 1, 'injected failure must roll back earlier data cleanup');
+  assert.equal(Number(db.prepare('SELECT COUNT(*) AS count FROM user_deletion_audit').get().count), failureAuditBefore, 'injected failure must roll back the audit insert');
+  db.exec('DROP TRIGGER fail_test_account_delete');
+
   const deleteResponse = await request('/api/auth/owner/accounts/test-delete-user', { method: 'DELETE', headers: deletionOwnerHeaders });
   assert.equal(deleteResponse.status, 200, 'approved Owner can delete a non-owner account');
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM users WHERE id=?').get('test-delete-user').count, 0, 'deleted user row must be removed');
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM sessions WHERE user_id=?').get('test-delete-user').count, 0);
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM user_app_data WHERE user_id=?').get('test-delete-user').count, 0);
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM ai_transactions WHERE user_id=?').get('test-delete-user').count, 0);
-  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM messages WHERE sender_id=?').get('test-delete-user').count, 0);
+  const deletedMessage = db.prepare('SELECT is_deleted,sender_name,sender_avatar,media_url FROM messages WHERE id=?').get('delete-test-message') as any;
+  assert.equal(deletedMessage.is_deleted, 1, 'shared-room message must be soft-deleted, not physically removed');
+  assert.equal(db.prepare('SELECT sender_id FROM messages WHERE id=?').get('delete-test-message').sender_id, 'deleted:' + crypto.createHmac('sha256', secret).update('deleted-user-id:test-delete-user').digest('hex'), 'soft-deleted message must not retain the deleted account id');
+  assert.equal(deletedMessage.sender_name, null, 'deleted sender display name must be cleared');
+  assert.equal(deletedMessage.sender_avatar, null, 'deleted sender avatar must be cleared');
+  assert.equal(deletedMessage.media_url, null, 'deleted sender media must be cleared');
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM saved_messages WHERE message_id=?').get('delete-test-message').count, 0);
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM message_reads WHERE message_id=?').get('delete-test-message').count, 0);
   assert.equal(db.prepare('SELECT creator_id FROM conversations WHERE id=?').get('delete-test-room').creator_id, null, 'shared room must not retain the deleted creator id');
@@ -416,6 +449,10 @@ try {
   const deletionAudit = db.prepare('SELECT deleted_user_id_hash,deleted_email_hash FROM user_deletion_audit').get();
   assert.equal(deletionAudit.deleted_user_id_hash, crypto.createHmac('sha256', secret).update('deleted-user-id:test-delete-user').digest('hex'));
   assert.equal(deletionAudit.deleted_email_hash, crypto.createHmac('sha256', secret).update('deleted-user-email:' + deleteEmail).digest('hex'));
+  assert.equal(db.prepare('SELECT action FROM user_deletion_audit').get().action, 'user_deleted', 'deletion audit records its action');
+  assert.equal(db.prepare('SELECT actor_user_id FROM user_deletion_audit').get().actor_user_id, 'test-owner', 'deletion audit records the actor id');
+  assert.equal(db.prepare('SELECT actor_email FROM user_deletion_audit').get().actor_email, ownerEmail, 'deletion audit records the actor email');
+  assert.equal(db.prepare('SELECT deleted_email_hash FROM user_deletion_audit').get().deleted_email_hash.includes(deleteEmail), false, 'audit must not store the deleted email in plain text');
 
   // Reset only the IP counter after confirming the test and child server share this SQLite file.
   // Distinct addresses isolate this test from the per-email limiter and make it order-independent.
