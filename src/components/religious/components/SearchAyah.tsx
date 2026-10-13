@@ -76,7 +76,7 @@ export default function SearchAyah() {
         {results.map((result, index) => {
           const key = result.verse_key ?? `result-${index}`;
           const surah = result.surah?.name ?? result.surah?.name_simple ?? (result.verse_key ? `سورة ${result.verse_key.split(':')[0]}` : 'نتيجة البحث');
-          const verse = result.verse_number ?? Number(result.verse_key?.split(':')[1]) || 0;
+          const verse = result.verse_number ?? (Number(result.verse_key?.split(':')[1]) || 0);
           return <article key={key} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
             <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="font-semibold text-amber-200">{surah}</h4><span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-xs text-slate-300">الآية {verse || '—'}</span></div>
             <p className="mt-3 text-lg leading-9 text-slate-100">{textOf(result) || 'النص غير متاح في استجابة الخدمة.'}</p>
