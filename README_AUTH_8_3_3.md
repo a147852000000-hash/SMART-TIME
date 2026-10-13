@@ -2,7 +2,7 @@
 
 - Account registration creates a `pending` account.
 - Login is blocked until the program owner approves the account.
-- Program owner identity defaults to `eng.mamdouh2009@gmail.com` and can be overridden by `PROGRAM_OWNER_EMAIL`.
+- Program owner identity is configured only through the server-side `OWNER_EMAILS` allowlist; never place personal email addresses in this document.
 - Owner activation requires a server-only `PROGRAM_OWNER_ACTIVATION_KEY`.
 - Chat phone verification is separate and uses SMS OTP.
 - SMS adapters: `twilio`, `webhook`, or `messagecentral` (Message Central / VerifyNow —
