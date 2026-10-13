@@ -52,10 +52,11 @@ export default function TasmieGhaibi() {
   const [elapsed, setElapsed] = useState(0);
   const [heardWords, setHeardWords] = useState<string[]>([]);
   const [notice, setNotice] = useState('');
-  const [correction, setCorrection] = useState<{ expected: string; heard: string } | null>(null);
+  const [correction, setCorrection] = useState<{ expected: string; heard: string; ayahNumber: number } | null>(null);
   const [score, setScore] = useState<{ correct: number; total: number; percent: number } | null>(null);
   const [supported, setSupported] = useState(true);
   const expectedWordsRef = useRef<string[]>([]);
+  const expectedAyahNumbersRef = useRef<number[]>([]);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const mismatchHandledRef = useRef(false);
@@ -148,10 +149,15 @@ export default function TasmieGhaibi() {
     }
 
     const selected = verses.filter((verse) => verse.number >= first && verse.number <= last).sort((a, b) => a.number - b.number);
-    const hiddenText = selected.map((verse) => verse.text).filter(Boolean).join(' ');
-    const words = toWords(hiddenText);
+    const words: string[] = [];
+    const ayahNumbers: number[] = [];
+    selected.forEach((verse) => {
+      const verseWords = toWords(verse.text);
+      words.push(...verseWords);
+      ayahNumbers.push(...verseWords.map(() => verse.number));
+    });
     if (!words.length) throw new Error('النص غير متاح للنطاق المحدد.');
-    return words;
+    return { words, ayahNumbers };
   }, []);
 
   const startRecitation = async () => {
@@ -181,7 +187,9 @@ export default function TasmieGhaibi() {
     setStarting(true);
     try {
       // يُحفظ النص المتوقع في ref فقط؛ لا يُعرض للمستخدم أثناء التسميع.
-      expectedWordsRef.current = await loadHiddenWords(chapterId, first, last);
+      const hiddenText = await loadHiddenWords(chapterId, first, last);
+      expectedWordsRef.current = hiddenText.words;
+      expectedAyahNumbersRef.current = hiddenText.ayahNumbers;
       const recognition = new SpeechRecognition();
       recognition.lang = 'ar-SA';
       recognition.continuous = true;
@@ -201,7 +209,7 @@ export default function TasmieGhaibi() {
             mismatchHandledRef.current = true;
             const expectedWord = expected[index];
             const heardWord = spoken[index];
-            setCorrection({ expected: expectedWord, heard: heardWord });
+            setCorrection({ expected: expectedWord, heard: heardWord, ayahNumber: expectedAyahNumbersRef.current[index] ?? first });
             setNotice('تم إيقاف التسميع عند أول كلمة تحتاج إلى مراجعة.');
             setScore({ correct: index, total: expected.length, percent: Math.round((index / Math.max(expected.length, 1)) * 100) });
             try {
@@ -299,7 +307,7 @@ export default function TasmieGhaibi() {
 
       {notice && <p role="status" className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm leading-6 text-slate-300">{notice}</p>}
 
-      {correction && <CorrectionPanel expected={correction.expected} heard={correction.heard} chapterId={Number(surahId)} ayahNumber={Number(fromAyah)} onDismiss={() => setCorrection(null)} />}
+      {correction && <CorrectionPanel expected={correction.expected} heard={correction.heard} chapterId={Number(surahId)} ayahNumber={correction.ayahNumber} onDismiss={() => setCorrection(null)} />}
 
       {score && <div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] p-4" aria-live="polite">
         <h4 className="font-semibold text-amber-200">نتيجة التسميع</h4>
