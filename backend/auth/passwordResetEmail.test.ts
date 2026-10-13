@@ -1,3 +1,4 @@
+import nodemailer from "nodemailer";
 import assert from "node:assert/strict";
 import { sendPasswordResetEmail } from "./passwordResetEmail.js";
 
