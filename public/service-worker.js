@@ -1,8 +1,8 @@
-const CACHE_VERSION = 'smart-time-religious-v1';
+const CACHE_VERSION = 'smart-time-religious-v2';
 const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const QURAN_CACHE = `${CACHE_VERSION}-quran`;
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
-const APP_SHELL = ['/religious', '/religious/muslim', '/religious/christian'];
+const APP_SHELL = ['/', '/religious', '/religious/muslim', '/religious/christian'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -29,7 +29,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Quran JSON: cache-first so previously opened/downloaded surahs remain available offline.
+  // Quran JSON stays cache-first so previously opened surahs remain available offline.
   if (url.pathname.startsWith('/quran/') && url.pathname.toLowerCase().endsWith('.json')) {
     event.respondWith((async () => {
       const cache = await caches.open(QURAN_CACHE);
@@ -49,25 +49,26 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static same-origin resources: serve cached assets immediately when available.
+  // App scripts/styles must prefer the newest deployed version to avoid stale UI.
   if (['script', 'style', 'image', 'font'].includes(request.destination)) {
     event.respondWith((async () => {
       const cache = await caches.open(STATIC_CACHE);
-      const cached = await cache.match(request);
-      const network = fetch(request).then((response) => {
+      try {
+        const response = await fetch(request, { cache: 'reload' });
         if (response.ok) cache.put(request, response.clone()).catch(() => undefined);
         return response;
-      }).catch(() => cached || Response.error());
-      return cached || network;
+      } catch {
+        return (await cache.match(request)) || Response.error();
+      }
     })());
     return;
   }
 
-  // SPA routes use network-first, with a cached route/root as an offline fallback.
+  // Navigation is network-first; the root religious landing page is the offline fallback.
   if (request.mode === 'navigate') {
     event.respondWith((async () => {
       try {
-        const response = await fetch(request);
+        const response = await fetch(request, { cache: 'no-cache' });
         if (response.ok) {
           const cache = await caches.open(APP_SHELL_CACHE);
           cache.put(request, response.clone()).catch(() => undefined);
@@ -75,7 +76,7 @@ self.addEventListener('fetch', (event) => {
         return response;
       } catch {
         const cache = await caches.open(APP_SHELL_CACHE);
-        return (await cache.match(request)) || (await cache.match('/religious')) || (await cache.match('/religious/muslim')) || Response.error();
+        return (await cache.match(request)) || (await cache.match('/')) || (await cache.match('/religious')) || (await cache.match('/religious/muslim')) || Response.error();
       }
     })());
   }
