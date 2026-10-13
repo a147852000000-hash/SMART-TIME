@@ -113,7 +113,7 @@ export default function WalletView({ onOpenAdmin }: { onOpenAdmin?: () => void }
           <option value="other">وسيلة أخرى</option>
         </select>
 
-        <input type="text" disabled={!paymentTarget || loading} maxLength={120 placeholder="رقم العملية أو آخر 4 أرقام من رقم التحويل (مستحسن)"
+        <input type="text" disabled={!paymentTarget || loading} maxLength={120} placeholder="رقم العملية أو آخر 4 أرقام من رقم التحويل (مستحسن)"
           value={note} onChange={(e) => setNote(e.target.value)}
           className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent mb-3 text-right" />
 
