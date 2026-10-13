@@ -25,7 +25,7 @@ try {
   delete process.env.EMAIL_FROM;
   await assert.rejects(
     () => sendPasswordResetEmail("user@example.com", "123456", 15),
-    /EMAIL_FROM مطلوب/
+    /خدمة البريد غير مكوّنة/
   );
 
 
@@ -46,6 +46,40 @@ try {
 
   process.env.ORACLE_EMAIL_RELAY_URL = "http://insecure.example/api/internal/send-reset";
   await assert.rejects(() => sendPasswordResetEmail("user@example.com", "654321", 15), /must use HTTPS/);
+
+  // SMTP provider can send a reset email using the configured transport.
+  process.env.EMAIL_PROVIDER = "smtp";
+  process.env.EMAIL_FALLBACK_PROVIDERS = "oracle-relay,resend";
+  process.env.SMTP_HOST = "smtp.example.test";
+  process.env.SMTP_PORT = "587";
+  process.env.SMTP_SECURE = "false";
+  process.env.SMTP_USER = "mailer@example.test";
+  process.env.SMTP_PASS = "test-password";
+  process.env.EMAIL_FROM = "Smart Time <mailer@example.test>";
+  let smtpConfig: any = null;
+  let smtpMessage: any = null;
+  const originalCreateTransport = nodemailer.createTransport;
+  (nodemailer as any).createTransport = (config: any) => {
+    smtpConfig = config;
+    return { sendMail: async (message: any) => { smtpMessage = message; return { messageId: "smtp-test-1" }; }, close: () => {} };
+  };
+  const smtpResult = await sendPasswordResetEmail("recipient@example.test", "789012", 15);
+  assert.equal(smtpResult.provider, "smtp");
+  assert.equal(smtpResult.messageId, "smtp-test-1");
+  assert.equal(smtpConfig.requireTLS, true);
+  assert.equal(smtpMessage.to, "recipient@example.test");
+  assert.match(smtpMessage.text, /789012/);
+
+  // If Oracle relay fails, SMTP is tried next; only a successful provider is reported.
+  process.env.EMAIL_PROVIDER = "oracle-relay";
+  process.env.EMAIL_FALLBACK_PROVIDERS = "smtp,resend";
+  process.env.ORACLE_EMAIL_RELAY_URL = "https://oracle.example.test/api/internal/send-reset";
+  process.env.ORACLE_EMAIL_RELAY_SECRET = "unit-test-secret";
+  globalThis.fetch = (async () => new Response(JSON.stringify({ ok: false }), { status: 503 })) as any;
+  const fallbackResult = await sendPasswordResetEmail("recipient@example.test", "456789", 15);
+  assert.equal(fallbackResult.provider, "smtp");
+  assert.equal(fallbackResult.messageId, "smtp-test-1");
+  (nodemailer as any).createTransport = originalCreateTransport;
 
   console.log("password reset email provider tests: PASS");
 } finally {
