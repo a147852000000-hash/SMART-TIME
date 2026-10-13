@@ -329,7 +329,6 @@ try {
   const serverSource = fs.readFileSync(path.join(process.cwd(), 'server.ts'), 'utf8');
   assert.match(serverSource, /crypto\.randomInt\(100000, 1000000\)/, 'reset code generation uses crypto.randomInt for six digits');
   assert.equal(serverSource.includes('storedHash.length!==providedHash.length'), true, 'buffer lengths must be checked before timingSafeEqual');
-  assert.equal(serverSource.includes('storedHash.length!==providedHash.length'), true, 'buffer lengths must be checked before timingSafeEqual');
   assert.match(serverSource, /timingSafeEqual\(providedHash,storedHash\)/, 'reset path uses constant-time comparison');
   assert.match(serverSource, /Number\(reset\.attempts\|\|0\)>=5/, 'reset path caps attempts');
   assert.equal(serverSource.includes("function passwordResetHash(code:string){const secret=String(process.env.PASSWORD_RESET_HMAC_SECRET||'')"), true, 'reset hashes must be keyed by PASSWORD_RESET_HMAC_SECRET');
