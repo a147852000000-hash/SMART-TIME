@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - feat/oracle-json-sqlite-unification
+      - fix/owner-admin-account-management
 
 jobs:
   legacy-migration:
