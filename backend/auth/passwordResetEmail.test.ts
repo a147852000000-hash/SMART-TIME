@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { sendPasswordResetEmail } from "./passwordResetEmail.js";
 
 const originalEnv = { ...process.env };
@@ -46,6 +47,11 @@ try {
 
   process.env.ORACLE_EMAIL_RELAY_URL = "http://insecure.example/api/internal/send-reset";
   await assert.rejects(() => sendPasswordResetEmail("user@example.com", "654321", 15), /must use HTTPS/);
+
+  const serverSource = fs.readFileSync("server.ts", "utf8");
+  assert.match(serverSource, /sendPasswordResetEmail as sendPasswordResetEmailWithProvider/);
+  assert.match(serverSource, /return sendPasswordResetEmailWithProvider\(email, code, PASSWORD_RESET_MINUTES\)/);
+  assert.doesNotMatch(serverSource, /async function sendPasswordResetEmail\(email:string, code:string\)\{\s*const provider=/);
 
   console.log("password reset email provider tests: PASS");
 } finally {
