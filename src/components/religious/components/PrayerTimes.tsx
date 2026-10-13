@@ -133,18 +133,21 @@ export default function PrayerTimes() {
   };
 
   useEffect(() => {
-    if (!timings || !nextPrayer || !currentPrayer) return;
-    const key = `${dateKey(now)}-${nextPrayer.key}-${nextPrayer.time}`;
-    if (now.getTime() < nextPrayer.at.getTime() || firedRef.current === key) return;
+    if (!timings) return;
+    const minuteNow = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    const duePrayer = prayers.find((prayer) => prayer.time === minuteNow);
+    if (!duePrayer) return;
+    const key = `${dateKey(now)}-${duePrayer.key}`;
+    if (firedRef.current === key) return;
     firedRef.current = key;
     try {
       if (notifications && 'Notification' in window && Notification.permission === 'granted') {
-        new Notification('حان وقت الصلاة', { body: `حان الآن وقت صلاة ${nextPrayer.label}` });
+        new Notification('حان وقت الصلاة', { body: `حان الآن وقت صلاة ${duePrayer.label}` });
       }
     } catch { /* قد تمنع بعض البيئات الإشعارات */ }
     if (adhanEnabled) void playAdhan();
-    try { localStorage.setItem(`prayer_${dateKey(now)}`, JSON.stringify({ timings, coordinates, lastPrayerAlert: nextPrayer.key, alertedAt: now.toISOString() })); } catch { /* اختياري */ }
-  }, [adhanEnabled, coordinates, currentPrayer, nextPrayer, now, notifications, timings]);
+    try { localStorage.setItem(`prayer_${dateKey(now)}-alert`, JSON.stringify({ prayer: duePrayer.key, alertedAt: now.toISOString() })); } catch { /* اختياري */ }
+  }, [adhanEnabled, now, notifications, prayers, timings]);
 
   const iqamaAt = currentPrayer?.at ? new Date(currentPrayer.at.getTime() + 15 * 60 * 1000) : null;
   const iqamaRemaining = iqamaAt && now.getTime() < iqamaAt.getTime() ? iqamaAt.getTime() - now.getTime() : null;
