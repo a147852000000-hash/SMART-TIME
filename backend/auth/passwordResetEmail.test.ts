@@ -46,7 +46,7 @@ try {
   assert.deepEqual(relayRequest.body, { email: "user@example.com", code: "654321", ttlMinutes: 15 });
 
   process.env.ORACLE_EMAIL_RELAY_URL = "http://insecure.example/api/internal/send-reset";
-  await assert.rejects(() => sendPasswordResetEmail("user@example.com", "654321", 15), /must use HTTPS/);
+  await assert.rejects(() => sendPasswordResetEmail("user@example.com", "654321", 15), /تعذر إرسال رسالة استعادة كلمة المرور/);
 
   // SMTP provider can send a reset email using the configured transport.
   process.env.EMAIL_PROVIDER = "smtp";
