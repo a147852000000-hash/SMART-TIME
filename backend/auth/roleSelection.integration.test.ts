@@ -194,6 +194,11 @@ try {
   const nameSearch = await request('/api/auth/owner/accounts?search=Test%20Owner', { headers: ownerHeaders });
   assert.equal(nameSearch.status, 200);
   assert.equal(nameSearch.body.users.some((account: any) => account.id === 'test-owner'), true, 'owner list search must match display name');
+  for (const literal of ['%25', '%5F', '%5C']) {
+    const escapedSearch = await request('/api/auth/owner/accounts?search=' + literal, { headers: ownerHeaders });
+    assert.equal(escapedSearch.status, 200);
+    assert.equal(escapedSearch.body.total, 0, 'literal LIKE metacharacter must not act as a wildcard');
+  }
 
   for (const denied of [
     { label: 'normal user', token: userLogin.body.token },
@@ -210,7 +215,9 @@ try {
   }
 
   assert.equal((await request('/api/auth/owner/accounts/no-such-account', { method: 'DELETE', headers: ownerHeaders })).status, 404, 'deleting a nonexistent id returns 404');
-  assert.equal((await request('/api/auth/owner/accounts/bad@id', { method: 'DELETE', headers: ownerHeaders })).status, 400, 'deletion rejects invalid account id format');
+  assert.equal((await request('/api/auth/owner/accounts/bad%40id', { method: 'DELETE', headers: ownerHeaders })).status, 404, 'nonempty account ids use exact lookup and return 404 when absent');
+  assert.equal((await request('/api/auth/owner/accounts/%20', { method: 'DELETE', headers: ownerHeaders })).status, 400, 'deletion rejects an empty account id');
+  assert.equal((await request('/api/auth/owner/accounts/' + 'x'.repeat(201), { method: 'DELETE', headers: ownerHeaders })).status, 400, 'deletion rejects account ids longer than 200 characters');
   const selfDelete = await request('/api/auth/owner/accounts/test-owner', { method: 'DELETE', headers: ownerHeaders });
   assert.equal(selfDelete.status, 400, 'Owner cannot delete their own account');
   const protectedOwnerDelete = await request('/api/auth/owner/accounts/test-owner-2', { method: 'DELETE', headers: ownerHeaders });
