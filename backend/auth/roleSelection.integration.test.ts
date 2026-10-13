@@ -244,6 +244,9 @@ try {
   const protectedOwnerRole = await post('/api/auth/owner/admin-role', { email: secondOwnerEmail, action: 'revoke' }, ownerSession.body.token);
   assert.equal(protectedOwnerRole.status, 409, 'another Owner role is protected');
   assert.equal(protectedOwnerRole.body.code, 'OWNER_ROLE_PROTECTED');
+  const appointOwnerRole = await post('/api/auth/owner/admin-role', { email: secondOwnerEmail, action: 'appoint' }, ownerSession.body.token);
+  assert.equal(appointOwnerRole.status, 409, 'an account whose DB role is owner cannot be appointed Admin');
+  assert.equal(appointOwnerRole.body.code, 'OWNER_ROLE_PROTECTED');
   const missingAdminTarget = await post('/api/auth/owner/admin-role', { email: 'missing-admin@example.test', action: 'appoint' }, ownerSession.body.token);
   assert.equal(missingAdminTarget.status, 404, 'unknown target account is not found');
   assert.equal(missingAdminTarget.body.code, 'ACCOUNT_NOT_FOUND');
