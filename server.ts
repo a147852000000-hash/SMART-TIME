@@ -12,6 +12,7 @@ import { estimateProviderPrice, type RideProvider, type RideCategory } from "./s
 import { askSmartAiCore } from "./backend/ai/smartAiCore.js";
 import { isLocalSmartAiConfigured } from "./backend/ai/localInference.js";
 import { createHttpVoiceDnaProvider, DisabledVoiceDnaProvider } from "./backend/voice/voiceDnaProvider.js";
+import { sendPasswordResetEmail as sendPasswordResetEmailWithProvider } from "./backend/auth/passwordResetEmail.js";
 
 dotenv.config();
 
@@ -252,19 +253,7 @@ async function checkPhoneOtp(phone: string, code: string): Promise<OtpCheckResul
 }
 
 async function sendPasswordResetEmail(email:string, code:string){
-  const provider=String(process.env.EMAIL_PROVIDER||'').trim().toLowerCase();
-  const from=String(process.env.EMAIL_FROM||'').trim();
-  const subject='SMART TIME - رمز إعادة تعيين كلمة المرور';
-  const text=`رمز إعادة تعيين كلمة المرور في SMART TIME هو: ${code}. صالح لمدة ${PASSWORD_RESET_MINUTES} دقيقة. إذا لم تطلب ذلك، تجاهل هذه الرسالة.`;
-  if(provider==='resend'){
-    const key=String(process.env.RESEND_API_KEY||'').trim();
-    if(!key||!from) throw new Error('إعدادات البريد غير مكتملة: RESEND_API_KEY و EMAIL_FROM مطلوبان.');
-    const r=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({from,to:[email],subject,text})});
-    if(!r.ok) throw new Error(`فشل إرسال البريد (${r.status}).`);
-    return {provider:'resend'};
-  }
-  if(String(process.env.ALLOW_DEV_EMAIL_CODE||'').toLowerCase()==='true') return {provider:'development',devCode:code};
-  throw new Error('خدمة البريد غير مكوّنة. اضبط EMAIL_PROVIDER=resend و RESEND_API_KEY و EMAIL_FROM أولاً.');
+  return sendPasswordResetEmailWithProvider(email, code, PASSWORD_RESET_MINUTES);
 }
 
 
