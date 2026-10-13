@@ -592,7 +592,7 @@ function ownerRouteRateLimited(req: express.Request, res: express.Response): boo
 function sqliteTableExists(tableName: string): boolean {
   return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(tableName));
 }
-function runIfTableExists(tableName: string, sql: string, ...params: unknown[]): any | null {
+function runIfTableExists(tableName: string, sql: string, ...params: any[]): any | null {
   if (!sqliteTableExists(tableName)) return null;
   return db.prepare(sql).run(...params);
 }
