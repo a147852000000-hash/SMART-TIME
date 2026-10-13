@@ -40,7 +40,7 @@ const getStreak = (days: string[]) => {
 };
 
 export default function KhatmaTracker() {
-  const [done, setDone] = useState<number[]>(() => readArray(KEY).filter((n): n is number => Number.isInteger(n) && Number(n) >= 1 && Number(n) <= 114) as number[]);
+  const [done, setDone] = useState<number[]>(() => readArray(KEY).filter((n): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= 114));
   const [activity, setActivity] = useState<string[]>(() => readArray(ACTIVITY_KEY).filter((day): day is string => typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day)));
   useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(done)); } catch { /* التخزين المحلي اختياري */ } }, [done]);
   useEffect(() => { try { localStorage.setItem(ACTIVITY_KEY, JSON.stringify(activity)); } catch { /* التخزين المحلي اختياري */ } }, [activity]);
