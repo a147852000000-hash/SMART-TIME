@@ -67,6 +67,7 @@ try {
   assert.equal(smtpResult.provider, "smtp");
   assert.equal(smtpResult.messageId, "smtp-unit-1");
   assert.equal(capturedConfig.port, 587);
+  assert.equal(capturedConfig.requireTLS, true);
   assert.equal(capturedMessage.to, "recipient@example.test");
   assert.match(capturedMessage.text, /789012/);
   process.env.SMTP_PORT = "invalid";
