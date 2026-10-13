@@ -620,8 +620,9 @@ app.get('/api/auth/owner/accounts', (req,res) => {
     return res.status(400).json({ code: 'INVALID_PAGINATION', message: 'قيم limit وoffset يجب أن تكون أعدادًا صحيحة ضمن الحدود المسموحة.' });
   }
   const search = rawSearch.trim();
-  const where = search ? " WHERE lower(email) LIKE lower(?) OR lower(COALESCE(display_name, '')) LIKE lower(?)" : '';
-  const parameters = search ? [`%${search}%`, `%${search}%`] : [];
+  const escapedSearch = search.replace(/[\\%_]/g, '\\$&');
+  const where = search ? " WHERE lower(email) LIKE lower(?) ESCAPE '\\' OR lower(COALESCE(display_name, '')) LIKE lower(?) ESCAPE '\\'" : '';
+  const parameters = search ? [`%${escapedSearch}%`, `%${escapedSearch}%`] : [];
 
   try {
     const totalRow = db.prepare(`SELECT COUNT(*) AS total FROM users${where}`).get(...parameters) as any;
@@ -644,7 +645,7 @@ app.delete('/api/auth/owner/accounts/:id', (req,res) => {
   if (ownerRouteRateLimited(req, res)) return;
 
   const targetId = String(req.params.id || '').trim();
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/.test(targetId)) {
+  if (!targetId || targetId.length > 200) {
     return res.status(400).json({ code: 'INVALID_ACCOUNT_ID', message: 'معرّف الحساب غير صحيح.' });
   }
 
