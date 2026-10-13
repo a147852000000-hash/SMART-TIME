@@ -1,4 +1,6 @@
-export type PasswordResetEmailResult = { provider: "resend" | "oracle-relay"; messageId?: string };
+import nodemailer from "nodemailer";
+
+export type PasswordResetEmailResult = { provider: "resend" | "oracle-relay" | "smtp"; messageId?: string };
 
 function required(name: string): string {
   const value = String(process.env[name] || "").trim();
@@ -16,8 +18,8 @@ function escapeHtml(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
-export async function sendPasswordResetEmail(email: string, code: string, ttlMinutes: number): Promise<PasswordResetEmailResult> {
-  const provider = String(process.env.EMAIL_PROVIDER || "").trim().toLowerCase();
+async function sendPasswordResetEmailWithProvider(email: string, code: string, ttlMinutes: number, providerOverride?: string): Promise<PasswordResetEmailResult> {
+  const provider = String(providerOverride || process.env.EMAIL_PROVIDER || "").trim().toLowerCase();
 
   if (provider === "oracle-relay") {
     const relayUrl = required("ORACLE_EMAIL_RELAY_URL");
@@ -55,8 +57,38 @@ export async function sendPasswordResetEmail(email: string, code: string, ttlMin
     }
   }
 
+  if (provider === "smtp") {
+    const host = required("SMTP_HOST");
+    const user = required("SMTP_USER");
+    const pass = required("SMTP_PASS");
+    const from = required("EMAIL_FROM");
+    const port = Number(String(process.env.SMTP_PORT || "587").trim());
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("SMTP_PORT must be a valid TCP port.");
+    const secure = String(process.env.SMTP_SECURE || (port === 465 ? "true" : "false")).trim().toLowerCase() === "true";
+    const frontendUrl = String(process.env.FRONTEND_URL || "https://smart-time-orcin-six.vercel.app").trim();
+    const transport = nodemailer.createTransport({
+      host, port, secure, requireTLS: !secure, auth: { user, pass },
+      connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 10000,
+    });
+    try {
+      const info = await transport.sendMail({
+        from, to: email, subject: "SMART-TIME password reset",
+        text: `رمز استعادة كلمة مرور SMART-TIME هو: ${code}. صالح لمدة ${ttlMinutes} دقيقة. إذا لم تطلب الاستعادة فتجاهل الرسالة.`,
+        html: `<!doctype html><html lang="ar"><body dir="rtl" style="font-family:Arial,sans-serif;line-height:1.8;color:#172033"><h2>استعادة كلمة مرور SMART-TIME</h2><p>استخدم الرمز التالي داخل التطبيق:</p><p style="font-size:30px;font-weight:700;letter-spacing:6px">${escapeHtml(code)}</p><p>صلاحية الرمز ${escapeHtml(String(ttlMinutes))} دقيقة.</p><p><a href="${escapeHtml(frontendUrl)}">فتح SMART-TIME</a></p><p>إذا لم تطلب الاستعادة، تجاهل هذه الرسالة.</p></body></html>`,
+      });
+      console.log("PASSWORD_RESET_EMAIL_ACCEPTED", { provider: "smtp", recipient: maskEmail(email) });
+      return { provider: "smtp", messageId: typeof info?.messageId === "string" ? info.messageId : undefined };
+    } catch (error: any) {
+      const wrapped: any = new Error("SMTP password reset email delivery failed.");
+      wrapped.code = typeof error?.code === "string" ? error.code : "SMTP_SEND_FAILED";
+      throw wrapped;
+    } finally {
+      transport.close();
+    }
+  }
+
   if (provider !== "resend") {
-    throw new Error("خدمة البريد غير مكوّنة. استخدم EMAIL_PROVIDER=oracle-relay أو resend.");
+    throw new Error("خدمة البريد غير مكوّنة. استخدم EMAIL_PROVIDER=oracle-relay أو smtp أو resend.");
   }
 
   const key = required("RESEND_API_KEY");
@@ -118,4 +150,38 @@ export async function sendPasswordResetEmail(email: string, code: string, ttlMin
   } finally {
     clearTimeout(timeout);
   }
+}
+
+
+/**
+ * Try the selected provider first, then explicitly configured alternatives.
+ * EMAIL_FALLBACK_PROVIDERS defaults to Oracle relay, SMTP, then Resend.
+ */
+export async function sendPasswordResetEmail(email: string, code: string, ttlMinutes: number): Promise<PasswordResetEmailResult> {
+  const primary = String(process.env.EMAIL_PROVIDER || "").trim().toLowerCase();
+  const fallbackList = String(process.env.EMAIL_FALLBACK_PROVIDERS || "oracle-relay,smtp,resend")
+    .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
+  const candidates = [...new Set([primary, ...fallbackList])]
+    .filter((provider) => ["oracle-relay", "smtp", "resend"].includes(provider))
+    .filter((provider) => {
+      if (provider === "oracle-relay") return !!process.env.ORACLE_EMAIL_RELAY_URL?.trim() && !!process.env.ORACLE_EMAIL_RELAY_SECRET?.trim();
+      if (provider === "smtp") return !!process.env.SMTP_HOST?.trim() && !!process.env.SMTP_USER?.trim() && !!process.env.SMTP_PASS?.trim() && !!process.env.EMAIL_FROM?.trim();
+      if (provider === "resend") return !!process.env.RESEND_API_KEY?.trim() && !!process.env.EMAIL_FROM?.trim();
+      return false;
+    });
+
+  if (!candidates.length) throw new Error("خدمة البريد غير مكوّنة. اضبط Oracle relay أو SMTP أو Resend بإعدادات صالحة.");
+
+  for (const provider of candidates) {
+    try {
+      return await sendPasswordResetEmailWithProvider(email, code, ttlMinutes, provider);
+    } catch (error: any) {
+      const codeName = typeof error?.code === "string" ? error.code : "PROVIDER_ERROR";
+      console.error("PASSWORD_RESET_PROVIDER_FAILED", { provider, code: codeName, recipient: maskEmail(email) });
+    }
+  }
+
+  const error: any = new Error("تعذر إرسال رسالة استعادة كلمة المرور عبر مزودي البريد المتاحين. حاول مرة أخرى لاحقًا.");
+  error.code = "PASSWORD_RESET_ALL_PROVIDERS_FAILED";
+  throw error;
 }
