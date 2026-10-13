@@ -233,6 +233,16 @@ try {
   assert.equal(deniedAdminAppointment.status, 403, 'admins cannot appoint admins');
   const selfAppointment = await post('/api/auth/owner/admin-role', { email: ownerEmail, action: 'appoint' }, ownerSession.body.token);
   assert.equal(selfAppointment.status, 400, 'owner cannot self-appoint');
+  assert.equal(selfAppointment.body.code, 'SELF_APPOINTMENT_FORBIDDEN');
+  const protectedOwnerRole = await post('/api/auth/owner/admin-role', { email: secondOwnerEmail, action: 'revoke' }, ownerSession.body.token);
+  assert.equal(protectedOwnerRole.status, 409, 'another Owner role is protected');
+  assert.equal(protectedOwnerRole.body.code, 'OWNER_ROLE_PROTECTED');
+  const missingAdminTarget = await post('/api/auth/owner/admin-role', { email: 'missing-admin@example.test', action: 'appoint' }, ownerSession.body.token);
+  assert.equal(missingAdminTarget.status, 404, 'unknown target account is not found');
+  assert.equal(missingAdminTarget.body.code, 'ACCOUNT_NOT_FOUND');
+  const revokeNonAdmin = await post('/api/auth/owner/admin-role', { email: 'other@example.test', action: 'revoke' }, ownerSession.body.token);
+  assert.equal(revokeNonAdmin.status, 409, 'revoking a non-Admin is rejected');
+  assert.equal(revokeNonAdmin.body.code, 'NOT_ADMIN');
   const selectedForAppointment = firstPage.body.users.find((account: any) => account.id === 'test-user')
     || (await request('/api/auth/owner/accounts?search=user%40example.test', { headers: ownerHeaders })).body.users[0];
   assert.equal(selectedForAppointment.email, userEmail, 'Owner must appoint from a listed account');
@@ -242,6 +252,9 @@ try {
   }
   assert.equal(appointUser.status, 200);
   assert.equal(appointUser.body.role, 'admin');
+  const appointAlreadyAdmin = await post('/api/auth/owner/admin-role', { email: selectedForAppointment.email, action: 'appoint' }, ownerSession.body.token);
+  assert.equal(appointAlreadyAdmin.status, 409, 'appointing an existing Admin is rejected');
+  assert.equal(appointAlreadyAdmin.body.code, 'ALREADY_ADMIN');
   assert.equal(db.prepare('SELECT role FROM users WHERE id=?').get('test-user').role, 'admin');
   const promotedLogin = await post('/api/auth/login', { identifier: userEmail, password });
   assert.equal(promotedLogin.status, 200);

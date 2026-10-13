@@ -780,10 +780,10 @@ app.post('/api/auth/owner/admin-role', (req,res) => {
     if (!target) return res.status(404).json({ code: 'ACCOUNT_NOT_FOUND', message: 'الحساب غير موجود.' });
     if (String(target.role) === 'owner') return res.status(409).json({ code: 'OWNER_ROLE_PROTECTED', message: 'لا يمكن خفض صلاحية المالك.' });
     if (action === 'appoint' && String(target.role) === 'admin') {
-      return res.status(200).json({ ok: true, role: 'admin', unchanged: true });
+      return res.status(409).json({ code: 'ALREADY_ADMIN', message: 'الحساب مسؤول بالفعل.' });
     }
     if (action === 'revoke' && String(target.role) !== 'admin') {
-      return res.status(200).json({ ok: true, role: String(target.role || 'user'), unchanged: true });
+      return res.status(409).json({ code: 'NOT_ADMIN', message: 'الحساب ليس مسؤولاً حاليًا.' });
     }
     const now = new Date().toISOString();
     const auditId = crypto.randomUUID();
