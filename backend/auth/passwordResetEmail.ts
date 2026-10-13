@@ -18,8 +18,8 @@ function escapeHtml(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
-export async function sendPasswordResetEmail(email: string, code: string, ttlMinutes: number): Promise<PasswordResetEmailResult> {
-  const provider = String(process.env.EMAIL_PROVIDER || "").trim().toLowerCase();
+async function sendPasswordResetEmailWithProvider(email: string, code: string, ttlMinutes: number, providerOverride?: string): Promise<PasswordResetEmailResult> {
+  const provider = String(providerOverride || process.env.EMAIL_PROVIDER || "").trim().toLowerCase();
 
   if (provider === "oracle-relay") {
     const relayUrl = required("ORACLE_EMAIL_RELAY_URL");
@@ -163,4 +163,45 @@ export async function sendPasswordResetEmail(email: string, code: string, ttlMin
   } finally {
     clearTimeout(timeout);
   }
+}
+
+
+/**
+ * Send through the configured primary provider, then try explicitly configured
+ * fallbacks. The default fallback order is Oracle relay -> SMTP -> Resend, but
+ * the primary is always attempted first. Secrets and reset codes are never logged.
+ */
+export async function sendPasswordResetEmail(email: string, code: string, ttlMinutes: number): Promise<PasswordResetEmailResult> {
+  const primary = String(process.env.EMAIL_PROVIDER || "").trim().toLowerCase();
+  const configuredFallbacks = String(process.env.EMAIL_FALLBACK_PROVIDERS || "oracle-relay,smtp,resend")
+    .split(",").map(value => value.trim().toLowerCase()).filter(Boolean);
+  const candidates = [...new Set([primary, ...configuredFallbacks])]
+    .filter(provider => ["oracle-relay", "smtp", "resend"].includes(provider))
+    .filter(provider => {
+      if (provider === "oracle-relay") return !!process.env.ORACLE_EMAIL_RELAY_URL?.trim() && !!process.env.ORACLE_EMAIL_RELAY_SECRET?.trim();
+      if (provider === "smtp") return !!process.env.SMTP_HOST?.trim() && !!process.env.SMTP_USER?.trim() && !!process.env.SMTP_PASS?.trim() && !!process.env.EMAIL_FROM?.trim();
+      if (provider === "resend") return !!process.env.RESEND_API_KEY?.trim() && !!process.env.EMAIL_FROM?.trim();
+      return false;
+    });
+
+  if (candidates.length === 0) {
+    throw new Error("خدمة البريد غير مكوّنة. اضبط Oracle relay أو SMTP موثّقًا، مع مزود بديل صالح.");
+  }
+
+  const failures: string[] = [];
+  for (const provider of candidates) {
+    try {
+      return await sendPasswordResetEmailWithProvider(email, code, ttlMinutes, provider);
+    } catch (error: any) {
+      const codeName = typeof error?.code === "string" ? error.code : "PROVIDER_ERROR";
+      failures.push(provider + ":" + codeName);
+      console.error("PASSWORD_RESET_PROVIDER_FAILED", { provider, code: codeName, recipient: maskEmail(email) });
+    }
+  }
+
+  // Avoid exposing provider configuration, recipient, or reset-code details to callers.
+  const error: any = new Error("تعذر إرسال رسالة استعادة كلمة المرور عبر مزودي البريد المتاحين. حاول مرة أخرى لاحقًا.");
+  error.code = "PASSWORD_RESET_ALL_PROVIDERS_FAILED";
+  error.providerFailures = failures;
+  throw error;
 }
