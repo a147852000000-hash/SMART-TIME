@@ -56,7 +56,8 @@ try {
   process.env.SMTP_SECURE = "false";
   process.env.SMTP_USER = "mailer@example.test";
   process.env.SMTP_PASS = "test-password";
-  process.env.EMAIL_FROM = "Smart Time <mailer@example.test>";
+  process.env.SMTP_FROM = "Smart Time <mailer@example.test>";
+  delete process.env.EMAIL_FROM;
   let smtpConfig: any = null;
   let smtpMessage: any = null;
   const originalCreateTransport = nodemailer.createTransport;
