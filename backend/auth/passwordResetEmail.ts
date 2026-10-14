@@ -166,7 +166,7 @@ export async function sendPasswordResetEmail(email: string, code: string, ttlMin
     .filter((provider) => ["oracle-relay", "smtp", "resend"].includes(provider))
     .filter((provider) => {
       if (provider === "oracle-relay") return !!process.env.ORACLE_EMAIL_RELAY_URL?.trim() && !!process.env.ORACLE_EMAIL_RELAY_SECRET?.trim();
-      if (provider === "smtp") return !!process.env.SMTP_HOST?.trim() && !!process.env.SMTP_USER?.trim() && !!process.env.SMTP_PASS?.trim() && !!process.env.EMAIL_FROM?.trim();
+      if (provider === "smtp") return !!process.env.SMTP_HOST?.trim() && !!process.env.SMTP_USER?.trim() && !!process.env.SMTP_PASS?.trim() && !!(process.env.SMTP_FROM?.trim() || process.env.EMAIL_FROM?.trim());
       if (provider === "resend") return !!process.env.RESEND_API_KEY?.trim() && !!process.env.EMAIL_FROM?.trim();
       return false;
     });
