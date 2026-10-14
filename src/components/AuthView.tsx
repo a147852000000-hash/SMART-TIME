@@ -48,10 +48,16 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
           if (!d.ok && !d.emailSent) {
             throw new Error(d.message || 'تعذر إرسال رمز الاستعادة حاليًا. حاول لاحقًا.');
           }
-          setResetSent(true); setCode('');
-          setError(d.emailSent
-            ? 'تم إرسال كود استعادة كلمة المرور إلى بريدك الإلكتروني'
-            : (d.message || 'لو البريد الإلكتروني مرتبط بحساب، هيوصلك كود استعادة كلمة المرور.'));
+          setCode('');
+          if (d.emailSent === true) {
+            setResetSent(true);
+            setError('تم إرسال كود استعادة كلمة المرور إلى بريدك الإلكتروني');
+          } else {
+            // Do not show a code-entry form unless the backend confirms email submission.
+            // Keep the response neutral so the UI does not reveal whether an account exists.
+            setResetSent(false);
+            setError(d.message || 'لو البريد الإلكتروني مرتبط بحساب، هيوصلك كود استعادة كلمة المرور.');
+          }
           return;
         }
         await resetPassword(email.trim(), code.trim(), password, challenge);
