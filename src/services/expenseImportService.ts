@@ -1,4 +1,5 @@
 import type { Expense } from "../types";
+import { apiUrl } from "./apiUrl";
 
 export interface ExpenseImportResponse {
   source: "smart-time-finance-sqlite";
@@ -11,7 +12,7 @@ export interface ExpenseImportResponse {
 }
 
 export async function importCanonicalExpenses(expenses: Expense[]): Promise<ExpenseImportResponse> {
-  const response = await fetch("/api/finance/expenses/import", {
+  const response = await fetch(apiUrl("/api/finance/expenses/import"), {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
