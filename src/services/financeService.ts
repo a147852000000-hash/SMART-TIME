@@ -1,4 +1,5 @@
 import type { ExpenseType } from "../contracts/financeContract";
+import { apiUrl } from "./apiUrl";
 
 export interface FinanceOverview {
   source: "smart-time-finance-sqlite";
@@ -12,7 +13,7 @@ export interface FinanceOverview {
 }
 
 export async function fetchCanonicalFinanceOverview(): Promise<FinanceOverview> {
-  const response = await fetch("/api/finance/overview", {
+  const response = await fetch(apiUrl("/api/finance/overview"), {
     credentials: "include",
     headers: { Accept: "application/json" },
   });
@@ -49,7 +50,7 @@ interface FinanceMutationPayload {
 }
 
 async function financeMutation(path: string, method: string, body?: unknown): Promise<FinanceMutationPayload> {
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
     method,
     credentials: "include",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
