@@ -426,8 +426,8 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
                 <span>
                   {mode === 'accident'
                     ? isAr
-                      ? 'تصوير حادث وتوثيقه بالخزنة'
-                      : 'Capture Accident & Vault Proof'
+                      ? 'تصوير حادث وتوثيقه'
+                      : 'Capture Accident'
                     : isAr
                     ? 'تصوير وقراءة عداد كم (Odometer)'
                     : 'Capture Odometer Reading'}
@@ -437,7 +437,7 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
                 {mode === 'accident'
                   ? isAr
                     ? 'التقاط صورة للحادث مع عداد زمني للتصوير وحفظها تلقائياً'
-                    : 'Capture accident damage with timer and save to vault/log'
+                    : 'Capture accident damage with timer and save to accident log'
                   : isAr
                   ? 'التقاط صورة للعداد وقراءة الكيلومترات تلقائياً'
                   : 'Scan odometer and extract kilometers'}
