@@ -6,6 +6,7 @@ const repository = read("backend/ai/finance/financeRepository.ts");
 const server = read("server.ts");
 const clientRepository = read("src/repositories/financeRepository.ts");
 const service = read("src/services/financeService.ts");
+const financeView = read("src/components/ExpensesView.tsx");
 
 const checks = [
   ["fuel schema has liters, unit price, and total cost", ["CREATE TABLE IF NOT EXISTS finance_fuel_records", "liters REAL NOT NULL", "price_per_liter REAL NOT NULL", "total_cost REAL NOT NULL"].every((value) => schema.includes(value))],
@@ -21,7 +22,7 @@ const checks = [
   ["car trip income table and user/date index exist", schema.includes("CREATE TABLE IF NOT EXISTS finance_car_trip_income") && schema.includes("idx_finance_car_trip_user_date")],
   ["income and certificate APIs authenticate the user", server.includes('app.put("/api/finance/income"') && server.includes('app.put("/api/finance/certificates"') && server.includes('app.delete("/api/finance/certificates/:id"')],
   ["car trip API authenticates the user", server.includes('app.put("/api/finance/car-trips"') && server.includes("replaceCanonicalCarTripIncome(userId, items)")],
-  ["income UI persists monthly income and certificates", service.includes('"/api/finance/income"') && service.includes('"/api/finance/certificates"') && clientRepository.includes("saveCanonicalMonthlyIncome") === false],
+  ["income UI persists monthly income and certificates", service.includes('"/api/finance/income"') && service.includes('"/api/finance/certificates"') && financeView.includes("saveCanonicalMonthlyIncome") && financeView.includes("saveCanonicalBankCertificates")],
 ];
 
 const failed = checks.filter(([, passed]) => !passed);
