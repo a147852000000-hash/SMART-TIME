@@ -73,6 +73,9 @@ try {
   assert.equal((projection.getFinanceOverview("user-b").associations as any[]).length, 0, "association records must be user-scoped");
   assert.equal((projection.getFinanceOverview("user-b").vehicleAccidents as any[]).length, 0, "accident records must be user-scoped");
   assert.throws(() => repository.replaceCanonicalUserFinanceRecords("user-a", "students", [{ ...students[0], id: "" }]), /IDs/);
+  assert.throws(() => repository.replaceCanonicalUserFinanceRecords("user-a", "students", [{ ...students[0], nationalId: "123" }]), /student/);
+  assert.throws(() => repository.replaceCanonicalUserFinanceRecords("user-a", "associations", [{ ...associations[0], roleNumber: 13 }]), /association/);
+  assert.throws(() => repository.replaceCanonicalUserFinanceRecords("user-a", "vehicle_accidents", [{ ...accidents[0], date: "bad-date" }]), /accident/);
   assert.throws(() => repository.replaceCanonicalUserFinanceRecords("user-a", "unknown", []), /Unsupported/);
   assert.equal(repository.replaceCanonicalUserFinanceRecords("user-a", "students", []), 0);
   assert.equal((projection.getFinanceOverview("user-a").students as any[]).length, 0);
