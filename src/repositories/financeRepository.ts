@@ -230,6 +230,7 @@ export class FinanceRepository {
       const [, kind, recordId] = specialized;
       const patch: Record<string, unknown> = { amount: transaction.amount, date: transaction.date, notes: transaction.note };
       if (kind === "education") patch.category = transaction.categoryId;
+      if (kind === "maintenance") patch.systemType = transaction.categoryId;
       return updateCanonicalFinanceRecord(kind as "fuel" | "maintenance" | "education", recordId, patch);
     }
     const patch: Partial<CanonicalExpenseInput> = { type: transaction.type, title: transaction.note?.trim() || transaction.categoryId || transaction.type, amount: transaction.amount, category: transaction.categoryId || transaction.type, date: transaction.date, paymentMethod: "cash", notes: transaction.note };
