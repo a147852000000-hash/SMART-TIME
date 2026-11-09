@@ -13,7 +13,7 @@ import { askSmartAiCore } from "./backend/ai/smartAiCore.js";
 import { isLocalSmartAiConfigured } from "./backend/ai/localInference.js";
 import { createHttpVoiceDnaProvider, DisabledVoiceDnaProvider } from "./backend/voice/voiceDnaProvider.js";
 import { sendPasswordResetEmail as sendPasswordResetEmailWithProvider } from "./backend/auth/passwordResetEmail.js";
-import { createCanonicalExpense, updateCanonicalExpense, deleteCanonicalExpense, ensureFinanceMutationSchema, migrateLegacyExpensesToCanonical, reconcileAiTransactionsToCanonical, type CanonicalExpenseInput } from "./backend/ai/finance/financeRepository.js";
+import { createCanonicalExpense, updateCanonicalExpense, deleteCanonicalExpense, updateCanonicalFinanceRecord, deleteCanonicalFinanceRecord, ensureFinanceMutationSchema, migrateLegacyExpensesToCanonical, reconcileAiTransactionsToCanonical, type CanonicalExpenseInput } from "./backend/ai/finance/financeRepository.js";
 import { getFinanceOverview } from "./backend/ai/finance/financeProjection.js";
 
 dotenv.config();
@@ -1818,6 +1818,33 @@ app.delete("/api/finance/expenses/:id", (req, res) => {
   }
 });
 
+app.patch("/api/finance/records/:kind/:id", (req, res) => {
+  const userId = financeUser(req, res);
+  if (!userId) return;
+  try {
+    ensureFinanceMutationSchema();
+    const record = updateCanonicalFinanceRecord(userId, req.params.kind, req.params.id, req.body || {});
+    return res.json({ source: "smart-time-finance-sqlite", record });
+  } catch (error: any) {
+    const message = String(error?.message || "");
+    const status = message.includes("not found") ? 404 : 400;
+    return res.status(status).json({ error: message || "تعذر تعديل السجل المالي." });
+  }
+});
+
+app.delete("/api/finance/records/:kind/:id", (req, res) => {
+  const userId = financeUser(req, res);
+  if (!userId) return;
+  try {
+    ensureFinanceMutationSchema();
+    deleteCanonicalFinanceRecord(userId, req.params.kind, req.params.id);
+    return res.json({ source: "smart-time-finance-sqlite", deleted: true, id: req.params.id });
+  } catch (error: any) {
+    const message = String(error?.message || "");
+    const status = message.includes("not found") ? 404 : 400;
+    return res.status(status).json({ error: message || "تعذر حذف السجل المالي." });
+  }
+});
 app.post("/api/finance/migrate", (req, res) => {
   const userId = financeUser(req, res);
   if (!userId) return;
