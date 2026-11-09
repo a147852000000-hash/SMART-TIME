@@ -441,6 +441,7 @@ app.get("/api/ai/state", (req, res) => {
   const user = authUser(req);
   if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
   try {
+    ensureFinanceMutationSchema();
     const canonical = getAiCanonicalState(String(user.id));
     const tasks = db.prepare(`SELECT id, title, completed, priority, category, due_date as dueDate,
       due_time as dueTime, note, created_at as createdAt, completed_at as completedAt
