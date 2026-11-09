@@ -27,7 +27,7 @@ export const FinancialReportsSection:React.FC<Props>=p=>{
     const type=String(x.type||'');
     const sectionName=labels[type]||'مصروفات';
     const details=x.notes?String(x.notes):undefined;
-    if(section==='all'||(section==='house'&&(type==='house'||type==='medical'))||(section==='work'&&type==='work')||(section==='personal'&&type==='personal')||(section==='vehicle'&&type.startsWith('vehicle_'))||(section==='education'&&type==='student')||(section==='income'&&false)) {
+    if(section==='all'||(section==='house'&&(type==='house'||type==='medical'))||(section==='work'&&type==='work')||(section==='personal'&&type==='personal')||(section==='vehicle'&&type.startsWith('vehicle_'))||(section==='education'&&type==='student')) {
       add(String(x.date||''),sectionName,String(x.title||x.category||'مصروف'),-Math.abs(Number(x.amount)||0),details);
     }
   });
@@ -37,7 +37,7 @@ export const FinancialReportsSection:React.FC<Props>=p=>{
   if(section==='all'||section==='income'){
     incomeList.forEach((doc:any)=>{
       const month=String(doc.month||'');
-      if(!/^\\d{4}-\\d{2}$/.test(month)) return;
+      if(!/^\d{4}-\d{2}$/.test(month)) return;
       const sources=Array.isArray(doc.sources)?doc.sources:[];
       if(sources.length){
         sources.forEach((source:any)=>{
