@@ -119,6 +119,9 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
   const handleSaveCertificates = (list: BankCertificate[]) => {
     setCertificates(list);
     ExpensesRepository.saveBankCertificates(list);
+    saveCanonicalBankCertificates(list as unknown as Array<Record<string, unknown>>).catch((error) => {
+      setCanonicalFinanceError(error instanceof Error ? error.message : 'تعذر حفظ الشهادات البنكية على الخادم.');
+    });
   };
 
   // --- 4. CANONICAL FINANCIAL CALCULATIONS FOR SELECTED MONTH ---
