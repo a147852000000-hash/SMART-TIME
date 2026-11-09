@@ -7,6 +7,7 @@ export interface FinanceOverview {
   expenses: Array<Record<string, unknown>>;
   monthlyIncome: Array<Record<string, unknown>>;
   bankCertificates: Array<Record<string, unknown>>;
+  carTripIncome: Array<Record<string, unknown>>;
   fuelRecords: Array<Record<string, unknown>>;
   maintenanceRecords: Array<Record<string, unknown>>;
   educationExpenses: Array<Record<string, unknown>>;
@@ -121,6 +122,10 @@ export async function deleteCanonicalBankCertificate(id: string): Promise<void> 
   await financeMutation(`/api/finance/certificates/${encodeURIComponent(id)}`, "DELETE");
 }
 
+export async function saveCanonicalCarTripIncome(items: Array<Record<string, unknown>>): Promise<FinanceMutationPayload> {
+  return financeMutation("/api/finance/car-trips", "PUT", { items });
+}
+
 export async function reconcileCanonicalFinance(expenses: Array<CanonicalExpenseInput>): Promise<FinanceMutationPayload> {
   return financeMutation("/api/finance/migrate", "POST", { expenses, reconcileAiTransactions: true });
 }
@@ -139,4 +144,5 @@ export const financeService = {
   saveCanonicalMonthlyIncome,
   saveCanonicalBankCertificates,
   deleteCanonicalBankCertificate,
+  saveCanonicalCarTripIncome,
 };
