@@ -372,8 +372,6 @@ export interface VehicleAccidentRecord {
   location?: string;
   estimatedDamage?: number;
   notes?: string;
-  savedToVault?: boolean;
-  vaultRecordId?: string;
   createdAt: string;
 }
 
