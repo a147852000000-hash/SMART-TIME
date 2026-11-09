@@ -356,6 +356,8 @@ export function upsertCanonicalBankCertificates(userId: string, items: Canonical
         Number.isFinite(Number(row.monthlyEquivalentProfit)) ? Number(row.monthlyEquivalentProfit) : null,
         text(row.returnType, 30) || null, row.issueDate, row.maturityDate, row.profitDate, profit,
         row.profitFrequency, text(row.notes, 2000) || null, text(row.createdAt, 100) || timestamp, timestamp);
+      const persisted = db.prepare("SELECT id FROM finance_bank_certificates WHERE id=? AND user_id=?").get(idValue, uid);
+      if (!persisted) throw new Error("Bank certificate write verification failed or certificate belongs to another user");
     }
     db.exec("COMMIT");
   } catch (error) {
