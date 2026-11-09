@@ -38,6 +38,7 @@ try {
   assert.equal(certificates.length, 1, "certificate upsert must not duplicate an id");
   assert.equal(Number(certificates[0].amount), 250000);
   assert.equal(projection.getFinanceOverview("user-b").bankCertificates.length, 0, "certificates must be user-scoped");
+  assert.throws(() => repository.upsertCanonicalBankCertificates("user-b", [certificate]), /another user/);
   assert.throws(() => repository.deleteCanonicalBankCertificate("user-b", "cert-a"), /not found/);
   assert.equal(projection.getFinanceOverview("user-a").bankCertificates.length, 1, "another user cannot delete the certificate");
   repository.deleteCanonicalBankCertificate("user-a", "cert-a");
