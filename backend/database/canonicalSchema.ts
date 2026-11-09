@@ -141,6 +141,23 @@ CREATE TABLE IF NOT EXISTS finance_bank_certificates (
 CREATE INDEX IF NOT EXISTS idx_finance_certificates_user_maturity
   ON finance_bank_certificates(user_id, maturity_date);
 
+CREATE TABLE IF NOT EXISTS finance_car_trip_income (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  trip_number TEXT NOT NULL,
+  amount REAL NOT NULL,
+  date TEXT NOT NULL,
+  day_name TEXT,
+  time TEXT,
+  notes TEXT,
+  trip_type TEXT,
+  payment_method TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_finance_car_trip_user_date
+  ON finance_car_trip_income(user_id, date);
+
 CREATE TABLE IF NOT EXISTS finance_fuel_records (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
