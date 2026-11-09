@@ -266,8 +266,8 @@ app.get('/api/trial/session', (req,res) => {
       const email = 'trial@smart-time.local';
       const username = 'smart_time_trial';
       db.prepare(
-        "INSERT INTO users (id,email,username,password_hash,display_name,created_at,phone,phone_verified,activation_status,trip_free_searches,wallet_balance) VALUES (?,?,?,?,?,?,?,?,?,?,?)"
-      ).run(TRIAL_USER_ID, email, username, hashPassword(crypto.randomBytes(24).toString('hex')), 'SMART TIME', now, null, 0, 'active', 0, 0);
+        "INSERT INTO users (id,email,username,password_hash,display_name,created_at,phone,phone_verified,activation_status,wallet_balance) VALUES (?,?,?,?,?,?,?,?,?,?)"
+      ).run(TRIAL_USER_ID, email, username, hashPassword(crypto.randomBytes(24).toString('hex')), 'SMART TIME', now, null, 0, 'active', 0);
       row = db.prepare('SELECT * FROM users WHERE id=?').get(TRIAL_USER_ID) as any;
     }
     const token = createSession(TRIAL_USER_ID);
@@ -287,7 +287,7 @@ app.post('/api/auth/register', async (req,res)=>{
     if(db.prepare('SELECT id FROM users WHERE email=?').get(email))return res.status(409).json({error:'البريد الإلكتروني مستخدم بالفعل'});
     if(db.prepare('SELECT id FROM users WHERE username=?').get(username))return res.status(409).json({error:'اسم المستخدم مستخدم بالفعل.'});
     const id=`usr_${crypto.randomUUID()}`, now=new Date().toISOString();
-    db.prepare("INSERT INTO users (id,email,username,password_hash,display_name,created_at,phone,phone_verified,activation_status,trip_free_searches) VALUES (?,?,?,?,?,?,?,?,?,0)").run(id,email,username,hashPassword(password),name,now,null,0,'active');
+    db.prepare("INSERT INTO users (id,email,username,password_hash,display_name,created_at,phone,phone_verified,activation_status) VALUES (?,?,?,?,?,?,?,?,?)").run(id,email,username,hashPassword(password),name,now,null,0,'active');
     res.json({token:createSession(id),user:{id,email,username,name,phoneVerified:false,activationStatus:'active'}});
   }catch(e:any){res.status(500).json({error:e.message||'تعذر إنشاء الحساب'});}
 });
