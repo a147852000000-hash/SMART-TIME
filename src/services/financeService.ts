@@ -100,6 +100,15 @@ export async function deleteCanonicalFinanceExpense(id: string): Promise<void> {
   await financeMutation(`/api/finance/expenses/${encodeURIComponent(id)}`, "DELETE");
 }
 
+export async function updateCanonicalFinanceRecord(kind: "fuel" | "maintenance" | "education", id: string, patch: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const payload = await financeMutation(`/api/finance/records/${kind}/${encodeURIComponent(id)}`, "PATCH", patch);
+  return payload.record as Record<string, unknown>;
+}
+
+export async function deleteCanonicalFinanceRecord(kind: "fuel" | "maintenance" | "education", id: string): Promise<void> {
+  await financeMutation(`/api/finance/records/${kind}/${encodeURIComponent(id)}`, "DELETE");
+}
+
 export async function reconcileCanonicalFinance(expenses: Array<CanonicalExpenseInput>): Promise<FinanceMutationPayload> {
   return financeMutation("/api/finance/migrate", "POST", { expenses, reconcileAiTransactions: true });
 }
@@ -112,5 +121,7 @@ export const financeService = {
   getExpenses,
   updateCanonicalFinanceExpense,
   deleteCanonicalFinanceExpense,
+  updateCanonicalFinanceRecord,
+  deleteCanonicalFinanceRecord,
   reconcileCanonicalFinance,
 };
