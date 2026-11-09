@@ -34,6 +34,7 @@ import {
   BankCertificate,
   CertificateProfitFrequency,
   IncomeSourceItem,
+  CarTripIncomeRecord,
 } from '../../types';
 
 interface IncomeAndCertificatesSectionProps {
@@ -46,7 +47,7 @@ interface IncomeAndCertificatesSectionProps {
   onSaveIncome: (list: MonthlyIncome[]) => void;
   certificates: BankCertificate[];
   onSaveCertificates: (list: BankCertificate[]) => void;
-  onIncomeChanged?: () => void;
+  onIncomeChanged?: (trips: CarTripIncomeRecord[]) => void;
 }
 
 export const IncomeAndCertificatesSection: React.FC<IncomeAndCertificatesSectionProps> = ({
@@ -59,6 +60,7 @@ export const IncomeAndCertificatesSection: React.FC<IncomeAndCertificatesSection
   onSaveIncome,
   certificates,
   onSaveCertificates,
+  onIncomeChanged,
 }) => {
   const isAr = language === 'ar';
   const BackIcon = isAr ? ArrowRight : ArrowLeft;
@@ -477,6 +479,7 @@ export const IncomeAndCertificatesSection: React.FC<IncomeAndCertificatesSection
               language={language}
               currency={currency}
               selectedMonth={selectedMonth}
+              onSyncWithMonthlyIncome={onIncomeChanged}
             />
           ) : (
             <>
