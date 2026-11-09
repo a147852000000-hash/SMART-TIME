@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Language, VehicleAccidentRecord, StudentProfile, MonthlyIncome, BankCertificate, CarTripIncomeRecord } from '../types';
-import { StorageAdapter, VehiclesRepository, ExpensesRepository, createCanonicalFinanceExpense, fetchCanonicalFinanceOverview, saveCanonicalMonthlyIncome, saveCanonicalBankCertificates, deleteCanonicalBankCertificate } from '../services';
+import { StorageAdapter, VehiclesRepository, ExpensesRepository, createCanonicalFinanceExpense, fetchCanonicalFinanceOverview, saveCanonicalMonthlyIncome, saveCanonicalBankCertificates, deleteCanonicalBankCertificate, saveCanonicalFinanceUserRecords } from '../services';
 import type { CanonicalExpenseInput } from '../services/financeService';
 import type { ExpenseType } from '../contracts/financeContract';
 import { isDateInMonth, getCertificatesProfitForMonth, getPrimaryIncomeForMonth } from '../services/financeCalculations';
@@ -56,6 +56,39 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
       setCarTripIncomeList((overview.carTripIncome || []) as unknown as CarTripIncomeRecord[]);
       const remoteIncome = (overview.monthlyIncome || []) as unknown as MonthlyIncome[];
       const remoteCertificates = (overview.bankCertificates || []) as unknown as BankCertificate[];
+      const remoteStudents = (overview.students || []) as unknown as StudentProfile[];
+      const remoteAssociations = (overview.associations || []) as unknown as AssociationRecord[];
+      const remoteAccidents = (overview.vehicleAccidents || []) as unknown as VehicleAccidentRecord[];
+      if (remoteStudents.length) {
+        setStudents(remoteStudents);
+        StorageAdapter.setItem('smart_time_students', remoteStudents);
+      } else {
+        const legacyStudents = StorageAdapter.getItem<StudentProfile[]>('smart_time_students', []);
+        if (legacyStudents.length) {
+          setStudents(legacyStudents);
+          await saveCanonicalFinanceUserRecords("students", legacyStudents as unknown as Array<Record<string, unknown>>);
+        }
+      }
+      if (remoteAssociations.length) {
+        setAssociationsList(remoteAssociations);
+        StorageAdapter.setItem('smart_time_personal_associations', remoteAssociations);
+      } else {
+        const legacyAssociations = StorageAdapter.getItem<AssociationRecord[]>('smart_time_personal_associations', []);
+        if (legacyAssociations.length) {
+          setAssociationsList(legacyAssociations);
+          await saveCanonicalFinanceUserRecords("associations", legacyAssociations as unknown as Array<Record<string, unknown>>);
+        }
+      }
+      if (remoteAccidents.length) {
+        setAccidentList(remoteAccidents);
+        VehiclesRepository.saveAccidentRecords(remoteAccidents);
+      } else {
+        const legacyAccidents = VehiclesRepository.getAccidentRecords();
+        if (legacyAccidents.length) {
+          setAccidentList(legacyAccidents);
+          await saveCanonicalFinanceUserRecords("vehicle_accidents", legacyAccidents as unknown as Array<Record<string, unknown>>);
+        }
+      }
       if (remoteIncome.length) { setIncomeList(remoteIncome); ExpensesRepository.saveMonthlyIncome(remoteIncome); }
       else if (incomeList.length) await saveCanonicalMonthlyIncome(incomeList as unknown as Array<Record<string, unknown>>);
       if (remoteCertificates.length) { setCertificates(remoteCertificates); ExpensesRepository.saveBankCertificates(remoteCertificates); }
@@ -82,12 +115,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
 
   // Education: Students & Records
   const [students, setStudents] = useState<StudentProfile[]>(() => {
-    const defaultStudents: StudentProfile[] = [
-      { id: 'std_salma', name: 'سلمى ممدوح سعد', nationalId: '31406150102468', age: '14', stage: 'إعدادي' },
-      { id: 'std_1', name: 'يوسف محمد', nationalId: '31205120102034', age: '16', stage: 'ثانوي' },
-      { id: 'std_2', name: 'فاطمة محمد', nationalId: '31808220105068', age: '11', stage: 'ابتدائي' },
-    ];
-    return StorageAdapter.getItem<StudentProfile[]>('smart_time_students', defaultStudents);
+    return StorageAdapter.getItem<StudentProfile[]>('smart_time_students', []);
   });
 
   // Income and certificates are loaded from canonical SQLite; browser storage remains a migration fallback.
@@ -98,16 +126,25 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
   const handleSaveAssociations = (list: AssociationRecord[]) => {
     setAssociationsList(list);
     StorageAdapter.setItem('smart_time_personal_associations', list);
+    saveCanonicalFinanceUserRecords("associations", list as unknown as Array<Record<string, unknown>>).catch((error) => {
+      setCanonicalFinanceError(error instanceof Error ? error.message : 'تعذر حفظ بيانات الجمعيات على الخادم.');
+    });
   };
 
   const handleSaveAccidents = (list: VehicleAccidentRecord[]) => {
     setAccidentList(list);
     VehiclesRepository.saveAccidentRecords(list);
+    saveCanonicalFinanceUserRecords("vehicle_accidents", list as unknown as Array<Record<string, unknown>>).catch((error) => {
+      setCanonicalFinanceError(error instanceof Error ? error.message : 'تعذر حفظ سجلات حوادث السيارات على الخادم.');
+    });
   };
 
   const handleSaveStudents = (list: StudentProfile[]) => {
     setStudents(list);
     StorageAdapter.setItem('smart_time_students', list);
+    saveCanonicalFinanceUserRecords("students", list as unknown as Array<Record<string, unknown>>).catch((error) => {
+      setCanonicalFinanceError(error instanceof Error ? error.message : 'تعذر حفظ بيانات الطلاب على الخادم.');
+    });
   };
 
   const handleSaveIncome = (list: MonthlyIncome[]) => {
