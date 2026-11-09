@@ -74,21 +74,11 @@ CREATE TABLE IF NOT EXISTS users (
   role TEXT NOT NULL DEFAULT 'user',
   activated_by TEXT,
   activated_at TEXT,
-  trip_free_searches INTEGER NOT NULL DEFAULT 0,
-  trip_gift_claimed_at TEXT
 );
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   expires_at TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS trip_gift_claims (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  device_hash TEXT,
-  ip_hash TEXT NOT NULL,
-  phone_hash TEXT,
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS conversations (
@@ -262,9 +252,6 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS phone_otps (phone TEXT PRIMARY KEY, co
 try { db.exec('ALTER TABLE phone_otps ADD COLUMN remote_provider TEXT'); } catch {}
 try { db.exec('ALTER TABLE phone_otps ADD COLUMN remote_verification_id TEXT'); } catch {}
 try { db.exec(`CREATE TABLE IF NOT EXISTS password_resets (email TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires_at TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)`); } catch {}
-try { db.exec('ALTER TABLE users ADD COLUMN trip_free_searches INTEGER NOT NULL DEFAULT 0'); } catch {}
-try { db.exec('ALTER TABLE users ADD COLUMN trip_gift_claimed_at TEXT'); } catch {}
-try { db.exec('ALTER TABLE trip_gift_claims ADD COLUMN phone_hash TEXT'); } catch {}
 
 // Safe migrations for conversations
 try { db.exec('ALTER TABLE conversations ADD COLUMN title TEXT'); } catch {}
@@ -305,9 +292,6 @@ try { db.exec('ALTER TABLE messages ADD COLUMN extra_json TEXT'); } catch {}
 try { db.exec("ALTER TABLE messages ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''"); } catch {}
 
 try { db.exec('ALTER TABLE users ADD COLUMN wallet_balance REAL NOT NULL DEFAULT 0'); } catch {}
-try { db.exec('ALTER TABLE users ADD COLUMN trip_free_searches INTEGER NOT NULL DEFAULT 0'); } catch {}
-try { db.exec('CREATE INDEX IF NOT EXISTS idx_trip_gift_claims_ip ON trip_gift_claims(ip_hash)'); } catch {}
-try { db.exec('CREATE INDEX IF NOT EXISTS idx_trip_gift_claims_device ON trip_gift_claims(device_hash)'); } catch {}
 try {
   db.exec(`CREATE TABLE IF NOT EXISTS wallet_topups (
     id TEXT PRIMARY KEY,
