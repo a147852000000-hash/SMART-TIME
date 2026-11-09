@@ -200,11 +200,6 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     [accidentList, selectedMonth]
   );
   const vehicleTotal = fuelTotal + maintTotal + oilTotal;
-  const monthlyExpenses = useMemo(
-    () => houseTotal + medicalTotal + workTotal + personalTotal + fuelTotal + maintTotal + oilTotal + educationTotal,
-    [houseTotal, medicalTotal, workTotal, personalTotal, fuelTotal, maintTotal, oilTotal, educationTotal]
-  );
-
   const associationFinancials = useMemo(() => {
     let installments = 0;
     let earned = 0;
@@ -222,6 +217,11 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     });
     return { installments, earned };
   }, [associationsList, selectedMonth]);
+
+  const monthlyExpenses = useMemo(
+    () => houseTotal + medicalTotal + workTotal + personalTotal + fuelTotal + maintTotal + oilTotal + educationTotal + associationFinancials.installments,
+    [houseTotal, medicalTotal, workTotal, personalTotal, fuelTotal, maintTotal, oilTotal, educationTotal, associationFinancials.installments]
+  );
 
   // Primary Income from Salary & Extra streams
   const primaryIncome = useMemo(
@@ -354,8 +354,10 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
           onSelectSection={(sec) => setCurrentScreen(sec)}
           houseTotal={homeAndMedicalTotal}
           houseCount={currentMonthHouse.length + currentMonthMedical.length}
-          workTotal={personalTotal + associationFinancials.installments}
-          workCount={currentMonthPersonal.length + associationsList.length}
+          workTotal={workTotal}
+          workCount={currentMonthWork.length}
+          personalTotal={personalTotal}
+          personalCount={currentMonthPersonal.length}
           vehicleTotal={vehicleTotal}
           vehicleCount={currentMonthFuel.length + currentMonthMaint.length + currentMonthOil.length + currentMonthAccidents.length}
           educationTotal={educationTotal}
