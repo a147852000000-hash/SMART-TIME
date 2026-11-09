@@ -59,11 +59,30 @@ try {
   assert.equal(repository.replaceCanonicalCarTripIncome("user-a", []), 0);
   assert.equal(projection.getFinanceOverview("user-a").carTripIncome.length, 0);
 
+  const students = [{ id: "student-1", name: "Student A", nationalId: "12345678901234", age: "14", stage: "إعدادي" }];
+  const associations = [{ id: "association-1", name: "Association A", value: 12000, memberCount: 12, installment: 1000, roleNumber: 4, payoutDate: "2026-12-01", startDate: "2026-01-01" }];
+  const accidents = [{ id: "accident-1", title: "Minor accident", photoUrl: "", date: "2026-11-03", time: "10:30", estimatedDamage: 5000, createdAt: "2026-11-03T10:30:00.000Z" }];
+  assert.equal(repository.replaceCanonicalUserFinanceRecords("user-a", "students", students), 1);
+  assert.equal(repository.replaceCanonicalUserFinanceRecords("user-a", "associations", associations), 1);
+  assert.equal(repository.replaceCanonicalUserFinanceRecords("user-a", "vehicle_accidents", accidents), 1);
+  const overview = projection.getFinanceOverview("user-a");
+  assert.equal((overview.students as any[]).length, 1);
+  assert.equal((overview.associations as any[]).length, 1);
+  assert.equal((overview.vehicleAccidents as any[]).length, 1);
+  assert.equal((projection.getFinanceOverview("user-b").students as any[]).length, 0, "student records must be user-scoped");
+  assert.equal((projection.getFinanceOverview("user-b").associations as any[]).length, 0, "association records must be user-scoped");
+  assert.equal((projection.getFinanceOverview("user-b").vehicleAccidents as any[]).length, 0, "accident records must be user-scoped");
+  assert.throws(() => repository.replaceCanonicalUserFinanceRecords("user-a", "students", [{ ...students[0], id: "" }]), /IDs/);
+  assert.throws(() => repository.replaceCanonicalUserFinanceRecords("user-a", "unknown", []), /Unsupported/);
+  assert.equal(repository.replaceCanonicalUserFinanceRecords("user-a", "students", []), 0);
+  assert.equal((projection.getFinanceOverview("user-a").students as any[]).length, 0);
+
   assert.throws(() => repository.upsertCanonicalMonthlyIncome("user-a", [{ ...income[0], month: "bad-month" }]), /month/);
   assert.throws(() => repository.upsertCanonicalBankCertificates("user-a", [{ ...certificate, amount: -1 }]), /certificate/);
   console.log("PASS: canonical monthly income upsert, source preservation, and user isolation");
   console.log("PASS: canonical certificate upsert, user isolation, and owner-scoped delete");
   console.log("PASS: car trip income replacement, user isolation, and cross-user collision rejection");
+  console.log("PASS: student, association, and vehicle accident persistence and user isolation");
   console.log("PASS: invalid income/certificate data rejected");
 } finally {
   db.close();
