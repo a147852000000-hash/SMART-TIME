@@ -109,6 +109,18 @@ export async function deleteCanonicalFinanceRecord(kind: "fuel" | "maintenance" 
   await financeMutation(`/api/finance/records/${kind}/${encodeURIComponent(id)}`, "DELETE");
 }
 
+export async function saveCanonicalMonthlyIncome(items: Array<Record<string, unknown>>): Promise<FinanceMutationPayload> {
+  return financeMutation("/api/finance/income", "PUT", { items });
+}
+
+export async function saveCanonicalBankCertificates(items: Array<Record<string, unknown>>): Promise<FinanceMutationPayload> {
+  return financeMutation("/api/finance/certificates", "PUT", { items });
+}
+
+export async function deleteCanonicalBankCertificate(id: string): Promise<void> {
+  await financeMutation(`/api/finance/certificates/${encodeURIComponent(id)}`, "DELETE");
+}
+
 export async function reconcileCanonicalFinance(expenses: Array<CanonicalExpenseInput>): Promise<FinanceMutationPayload> {
   return financeMutation("/api/finance/migrate", "POST", { expenses, reconcileAiTransactions: true });
 }
@@ -124,4 +136,7 @@ export const financeService = {
   updateCanonicalFinanceRecord,
   deleteCanonicalFinanceRecord,
   reconcileCanonicalFinance,
+  saveCanonicalMonthlyIncome,
+  saveCanonicalBankCertificates,
+  deleteCanonicalBankCertificate,
 };
