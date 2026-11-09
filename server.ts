@@ -1823,7 +1823,9 @@ app.post("/api/finance/migrate", (req, res) => {
   if (!userId) return;
   try {
     ensureFinanceMutationSchema();
-    const expenses = Array.isArray(req.body?.expenses) ? req.body.expenses as CanonicalExpenseInput[] : [];
+    const expenses = Array.isArray(req.body?.expenses)
+      ? (req.body.expenses as CanonicalExpenseInput[]).map((item) => ({ ...item, id: item.id || `legacy_${crypto.randomUUID()}` }))
+      : [];
     const legacy = migrateLegacyExpensesToCanonical(userId, expenses);
     const ai = req.body?.reconcileAiTransactions === true
       ? reconcileAiTransactionsToCanonical(userId)
