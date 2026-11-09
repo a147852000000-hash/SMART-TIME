@@ -164,6 +164,10 @@ export const CarIncomeSection: React.FC<CarIncomeSectionProps> = ({
   // Handle Save / Update Trip
   const handleSaveTrip = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!tripsLoaded) {
+      setSaveToast(isAr ? 'انتظر تحميل سجل الرحلات قبل الحفظ.' : 'Wait for trip records to load before saving.');
+      return;
+    }
     const amountVal = parseFloat(tripAmount);
     if (isNaN(amountVal) || amountVal <= 0) {
       window.alert(isAr ? 'من فضلك أدخل سعر الرحلة بشكل صحيح.' : 'Please enter a valid trip fare.');
@@ -219,6 +223,7 @@ export const CarIncomeSection: React.FC<CarIncomeSectionProps> = ({
 
   // Edit Trip
   const startEdit = (trip: CarTripIncomeRecord) => {
+    if (!tripsLoaded) return;
     setEditingTripId(trip.id);
     setTripNumber(String(trip.tripNumber));
     setTripAmount(String(trip.amount));
@@ -232,6 +237,7 @@ export const CarIncomeSection: React.FC<CarIncomeSectionProps> = ({
 
   // Delete Trip
   const handleDeleteTrip = (id: string) => {
+    if (!tripsLoaded) return;
     if (window.confirm(isAr ? 'هل أنت متأكد من حذف هذه الرحلة؟' : 'Are you sure you want to delete this trip?')) {
       setTrips((prev) => prev.filter((t) => t.id !== id));
       if (editingTripId === id) {
