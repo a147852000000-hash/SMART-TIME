@@ -9,6 +9,9 @@ export interface FinanceOverview {
   fuelRecords: unknown[];
   maintenanceRecords: unknown[];
   educationExpenses: unknown[];
+  students: unknown[];
+  associations: unknown[];
+  vehicleAccidents: unknown[];
   fetchedAt: string;
 }
 
@@ -91,6 +94,18 @@ export function getFinanceOverview(userId: string): FinanceOverview {
     ORDER BY date DESC, created_at DESC
   `).all(userId);
 
+  const readUserRecords = (kind: string) => db.prepare(`
+    SELECT data_json FROM finance_user_records
+    WHERE user_id = ? AND record_type = ?
+    ORDER BY created_at DESC
+  `).all(userId, kind).map((row: any) => {
+    try { return JSON.parse(String(row.data_json)); } catch { return null; }
+  }).filter((row: unknown) => row !== null);
+
+  const students = readUserRecords("students");
+  const associations = readUserRecords("associations");
+  const vehicleAccidents = readUserRecords("vehicle_accidents");
+
   return {
     source: "smart-time-finance-sqlite",
     expenses,
@@ -100,6 +115,9 @@ export function getFinanceOverview(userId: string): FinanceOverview {
     fuelRecords,
     maintenanceRecords,
     educationExpenses,
+    students,
+    associations,
+    vehicleAccidents,
     fetchedAt: new Date().toISOString(),
   };
 }
