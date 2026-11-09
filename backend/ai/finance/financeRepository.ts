@@ -74,6 +74,24 @@ export function replaceCanonicalUserFinanceRecords(
       const recordId = text(item.id, 200);
       if (!recordId || seen.has(recordId)) throw new Error("Finance record IDs must be present and unique");
       seen.add(recordId);
+      if (kind === "students") {
+        if (!text(item.name, 200) || !/^\\d{14}$/.test(text(item.nationalId, 14)) || !text(item.age, 20) || !text(item.stage, 100)) {
+          throw new Error("Invalid student profile");
+        }
+      } else if (kind === "associations") {
+        const value = Number(item.value), members = Number(item.memberCount), role = Number(item.roleNumber);
+        if (!text(item.name, 200) || !Number.isFinite(value) || value <= 0 || !Number.isInteger(members) || members < 1
+          || !Number.isInteger(role) || role < 1 || role > members || !/^\\d{4}-\\d{2}-\\d{2}$/.test(text(item.startDate, 20))
+          || !/^\\d{4}-\\d{2}-\\d{2}$/.test(text(item.payoutDate, 20))) {
+          throw new Error("Invalid association record");
+        }
+      } else if (kind === "vehicle_accidents") {
+        const damage = item.estimatedDamage === undefined ? undefined : Number(item.estimatedDamage);
+        if (!text(item.title, 300) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(text(item.date, 20))
+          || !/^\\d{2}:\\d{2}$/.test(text(item.time, 10)) || (damage !== undefined && (!Number.isFinite(damage) || damage < 0))) {
+          throw new Error("Invalid vehicle accident record");
+        }
+      }
       const serialized = JSON.stringify(item);
       if (serialized.length > 100000) throw new Error("Finance record is too large");
       const createdAt = text(item.createdAt, 100) || timestamp;
