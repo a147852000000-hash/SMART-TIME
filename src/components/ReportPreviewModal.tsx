@@ -17,7 +17,6 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { Language, VehicleAccidentRecord } from '../types';
-import { VaultRepository } from '../services';
 
 export interface ReportItem {
   id: string;
