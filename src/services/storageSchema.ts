@@ -35,7 +35,7 @@ export type HiddenSchemaStorageKey =
   | typeof STORAGE_KEYS.EXPENSES_SECTIONS_ORDER;
 
 export type StorageSchemaKey =
-  | (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS]
+  | Exclude<(typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS], typeof STORAGE_KEYS.SECURE_RECORDS>
   | HiddenSchemaStorageKey;
 
 export interface DashboardSectionPreference {
