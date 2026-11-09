@@ -1,21 +1,21 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, ArrowLeft, BarChart3, FileSpreadsheet, FileText, Printer, Home, UserRound, Users, Car, GraduationCap, WalletCards, Layers, X, Eye } from 'lucide-react';
+import { ArrowRight, ArrowLeft, BarChart3, FileSpreadsheet, FileText, Printer, Home, UserRound, Users, Car, Briefcase, GraduationCap, WalletCards, Layers, X, Eye } from 'lucide-react';
 import { formatMoney } from '../../services/financeCalculations';
 import { Language } from '../../types';
 import { financeService } from '../../services/financeService';
 
-interface Props { language:Language; currency:string; selectedMonth:string; onSelectMonth:(month:string)=>void; onBack:()=>void; monthlyIncome:number; monthlyExpenses:number; netIncome:number; houseTotal:number; workTotal:number; vehicleTotal:number; educationTotal:number; houseList?:any[]; medicalList?:any[]; personalList?:any[]; associationsList?:any[]; fuelList?:any[]; maintList?:any[]; oilFilterList?:any[]; accidentList?:any[]; studentExpensesList?:any[]; students?:any[]; incomeList?:any[]; }
-type ReportType='day'|'week'|'month'; type SectionKey='all'|'income'|'house'|'personal'|'associations'|'vehicle'|'education';
+interface Props { language:Language; currency:string; selectedMonth:string; onSelectMonth:(month:string)=>void; onBack:()=>void; monthlyIncome:number; monthlyExpenses:number; netIncome:number; houseTotal:number; workTotal:number; workExpensesTotal:number; vehicleTotal:number; educationTotal:number; houseList?:any[]; medicalList?:any[]; personalList?:any[]; associationsList?:any[]; fuelList?:any[]; maintList?:any[]; oilFilterList?:any[]; accidentList?:any[]; studentExpensesList?:any[]; students?:any[]; incomeList?:any[]; carTripIncomeList?:any[]; }
+type ReportType='day'|'week'|'month'; type SectionKey='all'|'income'|'house'|'work'|'personal'|'associations'|'vehicle'|'education';
 interface Row{date:string;section:string;item:string;amount:number;details?:string;}
 const addMonths=(date:string,n:number)=>{const d=new Date(date+'T12:00:00');const x=new Date(d.getFullYear(),d.getMonth()+n,d.getDate());return x.toISOString().slice(0,10)};
 const monthDiff=(a:string,b:string)=>{const x=new Date(a+'T12:00:00'),y=new Date(b+'T12:00:00');return (y.getFullYear()-x.getFullYear())*12+y.getMonth()-x.getMonth()};
 const assocRows=(a:any,from:string,to:string,add:(d:string,s:string,i:string,v:number,det?:string)=>void)=>{if(!a.startDate)return;const start=a.startDate.slice(0,10),payout=(a.payoutDate||'').slice(0,10);let d=start;let count=0;while(d<=to && count<Math.max(1,Number(a.memberCount)||1)){if(d>=from)add(d,'جمعياتى',`${a.name} - القسط رقم ${count+1}`,-(Number(a.installment)||0),`من بداية الأقساط ${start}`);count++;d=addMonths(start,count);}if(payout>=from&&payout<=to)add(payout,'جمعياتى',`${a.name} - قبض الجمعية`,Number(a.value)||0,`استحقاق الدور رقم ${a.roleNumber||''}`)};
 export const FinancialReportsSection:React.FC<Props>=p=>{
- const {language,currency,onBack,monthlyIncome,monthlyExpenses,netIncome,houseTotal,workTotal,vehicleTotal,educationTotal,houseList=[],medicalList=[],personalList=[],associationsList=[],fuelList=[],maintList=[],oilFilterList=[],accidentList=[],studentExpensesList=[],students=[],incomeList=[]}=p;
+ const {language,currency,onBack,monthlyIncome,monthlyExpenses,netIncome,houseTotal,workTotal,workExpensesTotal,vehicleTotal,educationTotal,houseList=[],medicalList=[],personalList=[],associationsList=[],fuelList=[],maintList=[],oilFilterList=[],accidentList=[],studentExpensesList=[],students=[],incomeList=[],carTripIncomeList=[]}=p;
  const isAr=language==='ar',BackIcon=isAr?ArrowRight:ArrowLeft;
  const [canonicalExpenses,setCanonicalExpenses]=useState<Array<Record<string,unknown>>>([]);
  useEffect(()=>{void financeService.getAllExpenses().then(setCanonicalExpenses).catch(()=>setCanonicalExpenses([]));},[]); const [section,setSection]=useState<SectionKey>('all'); const [reportType,setReportType]=useState<ReportType>('month'); const [fromDate,setFromDate]=useState(`${new Date().getFullYear()}-01-01`); const [toDate,setToDate]=useState(new Date().toISOString().slice(0,10)); const [dayDate,setDayDate]=useState(''); const [previewOpen,setPreviewOpen]=useState(false);
- const cards=[{id:'income' as const,title:'الدخل الشهري',icon:WalletCards,total:monthlyIncome,desc:'تفاصيل مصادر الدخل'},{id:'house' as const,title:'مصروفات منزلية والقسم الطبي',icon:Home,total:houseTotal,desc:'المنزل والكشوفات والأدوية'},{id:'personal' as const,title:'الإنفاق الشخصى',icon:UserRound,total:workTotal,desc:'تفاصيل الإنفاق الشخصي'},{id:'associations' as const,title:'جمعياتى',icon:Users,total:0,desc:'كل الأقساط والقبض'},{id:'vehicle' as const,title:'سيارتى',icon:Car,total:vehicleTotal,desc:'وقود وصيانة وزيوت وحوادث'},{id:'education' as const,title:'التعليم',icon:GraduationCap,total:educationTotal,desc:'تفاصيل مصروفات الطلاب'},{id:'all' as const,title:'التقرير الشامل',icon:Layers,total:netIncome,desc:'كل الحركات المالية بالتفصيل'}];
+ const cards=[{id:'income' as const,title:'الدخل الشهري',icon:WalletCards,total:monthlyIncome,desc:'تفاصيل مصادر الدخل'},{id:'house' as const,title:'مصروفات منزلية والقسم الطبي',icon:Home,total:houseTotal,desc:'المنزل والكشوفات والأدوية'},{id:'work' as const,title:'مصروفات العمل',icon:Briefcase,total:workExpensesTotal,desc:'مصروفات الأدوات والاحتياجات المهنية'},{id:'personal' as const,title:'الإنفاق الشخصى',icon:UserRound,total:workTotal,desc:'تفاصيل الإنفاق الشخصي'},{id:'associations' as const,title:'جمعياتى',icon:Users,total:0,desc:'كل الأقساط والقبض'},{id:'vehicle' as const,title:'سيارتى',icon:Car,total:vehicleTotal,desc:'وقود وصيانة وزيوت وحوادث'},{id:'education' as const,title:'التعليم',icon:GraduationCap,total:educationTotal,desc:'تفاصيل مصروفات الطلاب'},{id:'all' as const,title:'التقرير الشامل',icon:Layers,total:netIncome,desc:'كل الحركات المالية بالتفصيل'}];
  const effectiveFrom=reportType==='day'&&dayDate?dayDate:fromDate; const effectiveTo=reportType==='day'&&dayDate?dayDate:toDate;
  const daysInRange=useMemo(()=>{const arr:string[]=[];let d=effectiveFrom;let guard=0;while(d<=effectiveTo&&guard<370){arr.push(d);d=addMonths(d,0);const x=new Date(d+'T12:00:00');x.setDate(x.getDate()+1);d=x.toISOString().slice(0,10);guard++}return arr},[effectiveFrom,effectiveTo]);
  const rows=useMemo<Row[]>(()=>{
@@ -27,12 +27,37 @@ export const FinancialReportsSection:React.FC<Props>=p=>{
     const type=String(x.type||'');
     const sectionName=labels[type]||'مصروفات';
     const details=x.notes?String(x.notes):undefined;
-    if(section==='all'||(section==='house'&&(type==='house'||type==='medical'))||(section==='personal'&&type==='personal')||(section==='vehicle'&&type.startsWith('vehicle_'))||(section==='education'&&type==='student')||(section==='income'&&false)||((section as string)==='work'&&type==='work')) {
+    if(section==='all'||(section==='house'&&(type==='house'||type==='medical'))||(section==='work'&&type==='work')||(section==='personal'&&type==='personal')||(section==='vehicle'&&type.startsWith('vehicle_'))||(section==='education'&&type==='student')||(section==='income'&&false)) {
       add(String(x.date||''),sectionName,String(x.title||x.category||'مصروف'),-Math.abs(Number(x.amount)||0),details);
     }
   });
+  if(section==='all'||section==='associations'){
+    associationsList.forEach((item:any)=>assocRows(item,from,to,add));
+  }
+  if(section==='all'||section==='income'){
+    incomeList.forEach((doc:any)=>{
+      const month=String(doc.month||'');
+      if(!/^\\d{4}-\\d{2}$/.test(month)) return;
+      const sources=Array.isArray(doc.sources)?doc.sources:[];
+      if(sources.length){
+        sources.forEach((source:any)=>{
+          const isCurrent=source.type==='current_deposit'||source.type==='current_withdrawal';
+          const amount=Number(source.amount)||0;
+          add(source.date||month+'-01',isCurrent?'الحساب الجاري':'الدخل',String(source.source||source.type||'مصدر دخل'),isCurrent&&source.type==='current_withdrawal'?-Math.abs(amount):amount,source.notes);
+        });
+      }else{
+        add(month+'-01','الدخل','الراتب',Number(doc.salary)||0);
+        add(month+'-01','الدخل','المكافآت',Number(doc.bonuses)||0);
+        add(month+'-01','الدخل',String(doc.otherIncomeNote||'دخل إضافي'),Number(doc.otherIncome)||0);
+      }
+    });
+    carTripIncomeList.forEach((trip:any)=>add(String(trip.date||''),'دخل الرحلات',String(trip.tripNumber||'رحلة'),Number(trip.amount)||0,trip.notes));
+  }
+  if(section==='all'||section==='vehicle'){
+    accidentList.forEach((item:any)=>add(String(item.date||''),'سيارتي - الحوادث',String(item.title||'حادث'),0,item.location||item.notes|| (item.estimatedDamage!==undefined?`تقدير الأضرار: ${formatMoney(Number(item.estimatedDamage)||0)}`:undefined)));
+  }
   return out.sort((a,b)=>b.date.localeCompare(a.date));
- },[section,effectiveFrom,effectiveTo,canonicalExpenses]);
+ },[section,effectiveFrom,effectiveTo,canonicalExpenses,associationsList,incomeList,carTripIncomeList,accidentList]);
  const title=reportType==='day'?'تقرير يومى':reportType==='week'?'تقرير أسبوعى':'تقرير شهرى'; const total=rows.reduce((s,r)=>s+r.amount,0);
  const csv=()=>{const data=[['التاريخ','القسم','البيان','المبلغ','التفاصيل'],...rows.map(r=>[r.date,r.section,r.item,String(r.amount),r.details||''])];const blob=new Blob(['\uFEFF'+data.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n')],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`smart-time-${section}-${reportType}-${effectiveFrom}-${effectiveTo}.csv`;a.click()};
  const word=()=>{const html=`<html dir="rtl"><meta charset="utf-8"><body><h1>SMART TIME - ${title}</h1><p>القسم: ${cards.find(c=>c.id===section)?.title}</p><p>الفترة: ${effectiveFrom} إلى ${effectiveTo}</p><table border="1" cellpadding="7" cellspacing="0" style="width:100%;border-collapse:collapse"><tr><th>التاريخ</th><th>القسم</th><th>البيان</th><th>المبلغ</th><th>التفاصيل</th></tr>${rows.map(r=>`<tr><td>${r.date}</td><td>${r.section}</td><td>${r.item}</td><td>${formatMoney(r.amount)} ${currency}</td><td>${r.details||'—'}</td></tr>`).join('')}</table><h3>إجمالي الحركات: ${formatMoney(total)} ${currency}</h3></body></html>`;const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff',html],{type:'application/msword'}));a.download=`smart-time-${section}-${reportType}.doc`;a.click()};
