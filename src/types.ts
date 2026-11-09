@@ -114,8 +114,6 @@ export interface UserProfile {
   religiousPreference: ReligiousPreference;
   isOnboarded: boolean;
   authPhoneVerified?: boolean;
-  pin?: string;
-  pinCode?: string;
   biometricEnabled?: boolean;
   birthDate?: string;
   zodiacSign?: string;
