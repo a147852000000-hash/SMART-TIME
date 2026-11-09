@@ -49,6 +49,65 @@ function now(): string { return new Date().toISOString(); }
 function text(value: unknown, max = 2000): string { return String(value ?? "").trim().slice(0, max); }
 function id(prefix: string): string { return `${prefix}_${crypto.randomUUID()}`; }
 
+export type CanonicalUserFinanceRecordKind = "students" | "associations" | "vehicle_accidents";
+
+export function replaceCanonicalUserFinanceRecords(
+  userId: string,
+  kind: string,
+  items: Array<Record<string, unknown>>,
+): number {
+  const uid = text(userId, 200);
+  if (!uid) throw new Error("userId is required");
+  if (!["students", "associations", "vehicle_accidents"].includes(kind)) throw new Error("Unsupported finance record collection");
+  if (!Array.isArray(items) || items.length > 10000) throw new Error("Invalid finance record collection");
+  const insert = db.prepare(`INSERT INTO finance_user_records
+    (user_id,record_type,record_id,data_json,created_at,updated_at)
+    VALUES (?,?,?,?,?,?)
+    ON CONFLICT(user_id,record_type,record_id) DO UPDATE SET
+      data_json=excluded.data_json,updated_at=excluded.updated_at`);
+  const timestamp = now();
+  const seen = new Set<string>();
+  db.exec("BEGIN");
+  try {
+    for (const item of items) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error("Invalid finance record");
+      const recordId = text(item.id, 200);
+      if (!recordId || seen.has(recordId)) throw new Error("Finance record IDs must be present and unique");
+      seen.add(recordId);
+      const serialized = JSON.stringify(item);
+      if (serialized.length > 100000) throw new Error("Finance record is too large");
+      const createdAt = text(item.createdAt, 100) || timestamp;
+      insert.run(uid, kind, recordId, serialized, createdAt, timestamp);
+      const persisted = db.prepare("SELECT record_id FROM finance_user_records WHERE user_id=? AND record_type=? AND record_id=?")
+        .get(uid, kind, recordId);
+      if (!persisted) throw new Error("Finance record persistence verification failed");
+    }
+    if (seen.size) {
+      db.prepare(`DELETE FROM finance_user_records WHERE user_id=? AND record_type=? AND record_id NOT IN (${[...seen].map(() => "?").join(",")})`)
+        .run(uid, kind, ...seen);
+    } else {
+      db.prepare("DELETE FROM finance_user_records WHERE user_id=? AND record_type=?").run(uid, kind);
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  return items.length;
+}
+
+export function getCanonicalUserFinanceRecords(userId: string, kind: string): Array<Record<string, unknown>> {
+  const uid = text(userId, 200);
+  if (!uid || !["students", "associations", "vehicle_accidents"].includes(kind)) throw new Error("Invalid finance record collection");
+  return (db.prepare(`SELECT data_json FROM finance_user_records
+    WHERE user_id=? AND record_type=? ORDER BY created_at DESC`).all(uid, kind) as Array<{data_json:string}>)
+    .map((row) => {
+      try { return JSON.parse(row.data_json) as Record<string, unknown>; }
+      catch { throw new Error("Stored finance record is corrupted"); }
+    });
+}
+
+
 export function ensureFinanceMutationSchema(): void {
   const columns = db.prepare("PRAGMA table_info(finance_expenses)").all() as Array<{ name: string }>;
   if (!columns.some((column) => column.name === "expense_type")) {
