@@ -332,7 +332,7 @@ export function updateCanonicalFinanceRecord(
       values.push(amount);
     } else if (inputKey === "date") {
       const date = text(value, 100);
-      if (!/^\\d{4}-\\d{2}-\\d{2}(?:T.*)?$/.test(date)) throw new Error("Finance record date is invalid");
+      if (!/^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(date)) throw new Error("Finance record date is invalid");
       values.push(date);
     } else if (inputKey === "title" || inputKey === "category") {
       const normalized = text(value, 300);
