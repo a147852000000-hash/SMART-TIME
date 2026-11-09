@@ -322,7 +322,7 @@ export function updateCanonicalFinanceRecord(
   if (!current) throw new Error("Finance record not found for this user");
 
   const assignments: string[] = [];
-  const values: unknown[] = [];
+  const values: Array<string | number | null> = [];
   for (const [inputKey, column] of Object.entries(config.editableColumns)) {
     if (!Object.prototype.hasOwnProperty.call(patch, inputKey)) continue;
     const value = patch[inputKey];
