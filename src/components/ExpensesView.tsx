@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Language, VehicleAccidentRecord, StudentProfile, MonthlyIncome, BankCertificate } from '../types';
+import { Language, VehicleAccidentRecord, StudentProfile, MonthlyIncome, BankCertificate, CarTripIncomeRecord } from '../types';
 import { StorageAdapter, VehiclesRepository, ExpensesRepository, createCanonicalFinanceExpense, fetchCanonicalFinanceOverview, saveCanonicalMonthlyIncome, saveCanonicalBankCertificates, deleteCanonicalBankCertificate } from '../services';
 import type { CanonicalExpenseInput } from '../services/financeService';
 import type { ExpenseType } from '../contracts/financeContract';
@@ -46,12 +46,14 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
   // Universal Add Expense Modal
   const [isAddExpenseModalOpen, setIsAddExpenseModalOpen] = useState(false);
   const [allExpenses, setAllExpenses] = useState<Array<Record<string, unknown>>>([]);
+  const [carTripIncomeList, setCarTripIncomeList] = useState<CarTripIncomeRecord[]>([]);
   const [canonicalFinanceError, setCanonicalFinanceError] = useState<string | null>(null);
   const refreshCanonicalExpenses = async () => {
     try {
       setCanonicalFinanceError(null);
       const overview = await fetchCanonicalFinanceOverview();
       setAllExpenses(overview.expenses || []);
+      setCarTripIncomeList((overview.carTripIncome || []) as unknown as CarTripIncomeRecord[]);
       const remoteIncome = (overview.monthlyIncome || []) as unknown as MonthlyIncome[];
       const remoteCertificates = (overview.bankCertificates || []) as unknown as BankCertificate[];
       if (remoteIncome.length) { setIncomeList(remoteIncome); ExpensesRepository.saveMonthlyIncome(remoteIncome); }
@@ -204,8 +206,14 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     [incomeList, selectedMonth]
   );
 
-  // Master monthly income = earned income + certificate returns + current-account movement + association payouts.
-  const monthlyIncome = primaryIncome.total + certificatesProfit + currentAccountNet + associationFinancials.earned;
+  const carTripIncomeTotal = useMemo(
+    () => carTripIncomeList.filter((trip) => String(trip.date || '').slice(0, 7) === selectedMonth)
+      .reduce((sum, trip) => sum + (Number(trip.amount) || 0), 0),
+    [carTripIncomeList, selectedMonth]
+  );
+
+  // Master monthly income = earned income + certificate returns + current-account movement + car trips + association payouts.
+  const monthlyIncome = primaryIncome.total + certificatesProfit + currentAccountNet + carTripIncomeTotal + associationFinancials.earned;
 
   // Master net income is always derived from the same monthly income and all expense sections.
   const netIncome = monthlyIncome - monthlyExpenses;
@@ -393,6 +401,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
           onSaveIncome={handleSaveIncome}
           certificates={certificates}
           onSaveCertificates={handleSaveCertificates}
+          onIncomeChanged={setCarTripIncomeList}
         />
       )}
 
