@@ -16,8 +16,8 @@ import {
   Eye,
   RefreshCw,
 } from 'lucide-react';
-import { VehicleAccidentRecord, Language, SecureRecord } from '../types';
-import { VaultRepository, VehiclesRepository } from '../services';
+import { VehicleAccidentRecord, Language } from '../types';
+import { VehiclesRepository } from '../services';
 
 interface VehicleCameraModalProps {
   isOpen: boolean;
@@ -68,7 +68,6 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
   const [accidentLocation, setAccidentLocation] = useState<string>('');
   const [accidentDamageCost, setAccidentDamageCost] = useState<string>('');
   const [accidentNotes, setAccidentNotes] = useState<string>('');
-  const [saveToVault, setSaveToVault] = useState<boolean>(true);
   const [saveToAccidentsLog, setSaveToAccidentsLog] = useState<boolean>(true);
 
   // Odometer detected value
@@ -354,26 +353,7 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
     const accidentId = `acc_${Date.now()}`;
     const damageVal = parseFloat(accidentDamageCost) || 0;
 
-    let vaultId = '';
-    // 1. Save to Secure Vault if checked
-    if (saveToVault) {
-      vaultId = `vault_acc_${Date.now()}`;
-      const secureRecord: SecureRecord = {
-        id: vaultId,
-        title: `🚨 ${accidentTitle || (isAr ? 'حادث سير موثق' : 'Accident Report')}`,
-        category: 'photo',
-        value: `${isAr ? 'تاريخ الحادث:' : 'Date:'} ${accidentDate} ${accidentTime} - ${isAr ? 'الموقع:' : 'Location:'} ${accidentLocation}`,
-        notes: `${accidentNotes ? `${accidentNotes}\n` : ''}${isAr ? 'تقدير الأضرار:' : 'Damage:'} ${damageVal} ${currency}`,
-        mediaUrl: capturedPhotoUrl,
-        fileName: `accident_${accidentDate}_${accidentTime.replace(':', '')}.jpg`,
-        mimeType: 'image/jpeg',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      VaultRepository.addRecord(secureRecord);
-    }
-
-    // 2. Save to Vehicle Accidents Log if checked
+    // Save to Vehicle Accidents Log if checked
     const newAccident: VehicleAccidentRecord = {
       id: accidentId,
       vehicleId: vehicleId || 'default_veh',
@@ -384,8 +364,6 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
       location: accidentLocation,
       estimatedDamage: damageVal,
       notes: accidentNotes,
-      savedToVault: saveToVault,
-      vaultRecordId: vaultId,
       createdAt: new Date().toISOString(),
     };
 
@@ -407,19 +385,6 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
       onOdometerCaptured(km, capturedPhotoUrl || undefined);
     }
 
-    // Also optional save proof in vault
-    if (saveToVault && capturedPhotoUrl) {
-      const secureRecord: SecureRecord = {
-        id: `vault_odo_${Date.now()}`,
-        title: `⚡ ${isAr ? 'توثيق عداد السيارة' : 'Odometer Proof'}: ${km} KM`,
-        category: 'photo',
-        value: `${isAr ? 'قراءة العداد:' : 'Reading:'} ${km} KM - ${new Date().toLocaleDateString('ar-EG')}`,
-        mediaUrl: capturedPhotoUrl,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      VaultRepository.addRecord(secureRecord);
-    }
 
     onClose();
   };
@@ -851,61 +816,28 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Storage Options (خزنة رقمية + سجل الحوادث) */}
-                  <div className="pt-2 border-t border-slate-800/80 space-y-2">
-                    <label className="text-xs font-bold text-white block">
-                      {isAr ? 'وجهات الحفظ والتوثيق:' : 'Saving Destinations:'}
-                    </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <label
-                        className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
-                          saveToVault
-                            ? 'bg-accent-500/10 border-accent-500/40 text-white'
-                            : 'bg-slate-900/50 border-slate-800 text-slate-400'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={saveToVault}
-                          onChange={(e) => setSaveToVault(e.target.checked)}
-                          className="rounded text-accent-500 focus:ring-0"
-                        />
-                        <div className="text-start">
-                          <div className="text-xs font-bold flex items-center gap-1 text-accent-500">
-                            <ShieldCheck className="w-3.5 h-3.5" />
-                            <span>{isAr ? 'حفظ في الخزنة الرقمية' : 'Save to Secure Vault'}</span>
-                          </div>
-                          <div className="text-[10px] text-slate-400">
-                            {isAr ? 'تشفير وحماية ضمن الخزنة السرية' : 'Protected in your encrypted vault'}
-                          </div>
-                        </div>
-                      </label>
-
-                      <label
-                        className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
-                          saveToAccidentsLog
-                            ? 'bg-rose-500/10 border-rose-500/40 text-white'
-                            : 'bg-slate-900/50 border-slate-800 text-slate-400'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={saveToAccidentsLog}
-                          onChange={(e) => setSaveToAccidentsLog(e.target.checked)}
-                          className="rounded text-rose-500 focus:ring-0"
-                        />
-                        <div className="text-start">
-                          <div className="text-xs font-bold flex items-center gap-1 text-rose-400">
-                            <AlertTriangle className="w-3.5 h-3.5" />
-                            <span>{isAr ? 'سجل حوادث المركبة' : 'Vehicle Accidents Log'}</span>
-                          </div>
-                          <div className="text-[10px] text-slate-400">
-                            {isAr ? 'إدراج ضمن تقارير المركبة والصيانة' : 'Included in vehicle reports'}
-                          </div>
-                        </div>
-                      </label>
+                  {/* Accident log option */}
+                  <label className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                    saveToAccidentsLog
+                      ? 'bg-rose-500/10 border-rose-500/40 text-white'
+                      : 'bg-slate-900/50 border-slate-800 text-slate-400'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={saveToAccidentsLog}
+                      onChange={(e) => setSaveToAccidentsLog(e.target.checked)}
+                      className="rounded text-rose-500 focus:ring-0"
+                    />
+                    <div className="text-start">
+                      <div className="text-xs font-bold flex items-center gap-1 text-rose-400">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        <span>{isAr ? 'سجل حوادث المركبة' : 'Vehicle Accidents Log'}</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        {isAr ? 'إدراج ضمن تقارير المركبة والصيانة' : 'Included in vehicle reports'}
+                      </div>
                     </div>
-                  </div>
+                  </label>
 
                   {/* Submit Button */}
                   <div className="pt-2">
@@ -957,18 +889,6 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
                         : 'You can adjust the number manually if needed.'}
                     </p>
                   </div>
-
-                  <label className="flex items-center gap-2 p-3 rounded-xl bg-slate-900 border border-slate-800 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={saveToVault}
-                      onChange={(e) => setSaveToVault(e.target.checked)}
-                      className="rounded text-accent-500"
-                    />
-                    <span className="text-xs text-slate-300">
-                      {isAr ? 'حفظ نسخة موثقة من صورة العداد بالخزنة الرقمية' : 'Save documented photo in vault'}
-                    </span>
-                  </label>
 
                   <button
                     type="button"
