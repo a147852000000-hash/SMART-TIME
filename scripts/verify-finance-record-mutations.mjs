@@ -17,6 +17,11 @@ const checks = [
   ["specialized API routes authenticate the user", server.includes('app.patch("/api/finance/records/:kind/:id"') && server.includes('app.delete("/api/finance/records/:kind/:id"') && server.includes("financeUser(req, res)")],
   ["frontend dispatches prefixed specialized IDs", clientRepository.includes("/^(fuel|maintenance|education):(.*)$/")],
   ["frontend service calls specialized mutation endpoints", service.includes("/api/finance/records/${kind}/")],
+  ["canonical income and certificate tables exist", schema.includes("CREATE TABLE IF NOT EXISTS finance_monthly_income") && schema.includes("CREATE TABLE IF NOT EXISTS finance_bank_certificates")],
+  ["car trip income table and user/date index exist", schema.includes("CREATE TABLE IF NOT EXISTS finance_car_trip_income") && schema.includes("idx_finance_car_trip_user_date")],
+  ["income and certificate APIs authenticate the user", server.includes('app.put("/api/finance/income"') && server.includes('app.put("/api/finance/certificates"') && server.includes('app.delete("/api/finance/certificates/:id"')],
+  ["car trip API authenticates the user", server.includes('app.put("/api/finance/car-trips"') && server.includes("replaceCanonicalCarTripIncome(userId, items)")],
+  ["income UI persists monthly income and certificates", service.includes('"/api/finance/income"') && service.includes('"/api/finance/certificates"') && clientRepository.includes("saveCanonicalMonthlyIncome") === false],
 ];
 
 const failed = checks.filter(([, passed]) => !passed);
