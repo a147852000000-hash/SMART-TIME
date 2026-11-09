@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Language, VehicleAccidentRecord, StudentProfile, MonthlyIncome, BankCertificate } from '../types';
-import { StorageAdapter, VehiclesRepository, ExpensesRepository, createCanonicalFinanceExpense, getAllExpenses } from '../services';
+import { StorageAdapter, VehiclesRepository, ExpensesRepository, createCanonicalFinanceExpense, fetchCanonicalFinanceOverview, saveCanonicalMonthlyIncome, saveCanonicalBankCertificates, deleteCanonicalBankCertificate } from '../services';
 import type { CanonicalExpenseInput } from '../services/financeService';
 import type { ExpenseType } from '../contracts/financeContract';
 import { isDateInMonth, getCertificatesProfitForMonth, getPrimaryIncomeForMonth } from '../services/financeCalculations';
@@ -50,7 +50,14 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
   const refreshCanonicalExpenses = async () => {
     try {
       setCanonicalFinanceError(null);
-      setAllExpenses(await getAllExpenses());
+      const overview = await fetchCanonicalFinanceOverview();
+      setAllExpenses(overview.expenses || []);
+      const remoteIncome = (overview.monthlyIncome || []) as unknown as MonthlyIncome[];
+      const remoteCertificates = (overview.bankCertificates || []) as unknown as BankCertificate[];
+      if (remoteIncome.length) { setIncomeList(remoteIncome); ExpensesRepository.saveMonthlyIncome(remoteIncome); }
+      else if (incomeList.length) await saveCanonicalMonthlyIncome(incomeList as unknown as Array<Record<string, unknown>>);
+      if (remoteCertificates.length) { setCertificates(remoteCertificates); ExpensesRepository.saveBankCertificates(remoteCertificates); }
+      else if (certificates.length) await saveCanonicalBankCertificates(certificates as unknown as Array<Record<string, unknown>>);
     } catch (error) {
       setCanonicalFinanceError(error instanceof Error ? error.message : 'تعذر قراءة البيانات المالية الموحدة.');
     }
