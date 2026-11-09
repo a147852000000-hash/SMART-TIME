@@ -292,7 +292,7 @@ const FINANCE_RECORD_TABLES: Record<CanonicalFinanceRecordKind, {
   maintenance: {
     table: "finance_maintenance_records",
     amountColumn: "cost",
-    editableColumns: { title: "title", amount: "cost", date: "date", notes: "notes" },
+    editableColumns: { systemType: "system_type", title: "title", amount: "cost", date: "date", notes: "notes" },
   },
   education: {
     table: "finance_education_expenses",
@@ -329,12 +329,19 @@ export function updateCanonicalFinanceRecord(
     if (inputKey === "amount") {
       const amount = Number(value);
       if (!Number.isFinite(amount) || amount < 0) throw new Error("Finance record amount is invalid");
+      if (kind === "fuel") {
+        const liters = Number(current.liters);
+        if (!Number.isFinite(liters) || liters <= 0) throw new Error("Cannot update fuel total without a valid liters value");
+        assignments.push("total_cost=?", "price_per_liter=?");
+        values.push(amount, amount / liters);
+        continue;
+      }
       values.push(amount);
     } else if (inputKey === "date") {
       const date = text(value, 100);
       if (!/^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(date)) throw new Error("Finance record date is invalid");
       values.push(date);
-    } else if (inputKey === "title" || inputKey === "category") {
+    } else if (inputKey === "title" || inputKey === "category" || inputKey === "systemType") {
       const normalized = text(value, 300);
       if (!normalized) throw new Error(`Finance record ${inputKey} is required`);
       values.push(normalized);
