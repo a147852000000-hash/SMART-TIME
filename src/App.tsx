@@ -91,7 +91,7 @@ export default function App() {
   // Global App State
   const [authChecked, setAuthChecked] = useState(false);
   const [authenticated, setAuthenticated] = useState(() => Boolean(getStoredSession()?.token));
-  const [currentView, setCurrentView] = useState<AppView>('dashboard');
+  const [currentView, setCurrentView] = useState<AppView>(servicePath === '/app' ? 'expenses' : 'dashboard');
   const [viewHistory, setViewHistory] = useState<AppView[]>([]);
   const [language, setLanguage] = useState<Language>('ar');
   const [theme, setTheme] = useState<ThemeMode>(() => UserRepository.getProfile().theme || 'light');
