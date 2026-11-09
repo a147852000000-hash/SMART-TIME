@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Language, VehicleAccidentRecord, StudentProfile, MonthlyIncome, BankCertificate } from '../types';
-import { StorageAdapter, VehiclesRepository, ExpensesRepository, createCanonicalFinanceExpense, getAllExpenses } from '../services';
+import { Language, VehicleAccidentRecord, StudentProfile, MonthlyIncome, BankCertificate, CarTripIncomeRecord } from '../types';
+import { StorageAdapter, VehiclesRepository, ExpensesRepository, createCanonicalFinanceExpense, fetchCanonicalFinanceOverview, saveCanonicalMonthlyIncome, saveCanonicalBankCertificates, deleteCanonicalBankCertificate, saveCanonicalFinanceUserRecords } from '../services';
 import type { CanonicalExpenseInput } from '../services/financeService';
 import type { ExpenseType } from '../contracts/financeContract';
 import { isDateInMonth, getCertificatesProfitForMonth, getPrimaryIncomeForMonth } from '../services/financeCalculations';
@@ -46,11 +46,53 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
   // Universal Add Expense Modal
   const [isAddExpenseModalOpen, setIsAddExpenseModalOpen] = useState(false);
   const [allExpenses, setAllExpenses] = useState<Array<Record<string, unknown>>>([]);
+  const [carTripIncomeList, setCarTripIncomeList] = useState<CarTripIncomeRecord[]>([]);
   const [canonicalFinanceError, setCanonicalFinanceError] = useState<string | null>(null);
   const refreshCanonicalExpenses = async () => {
     try {
       setCanonicalFinanceError(null);
-      setAllExpenses(await getAllExpenses());
+      const overview = await fetchCanonicalFinanceOverview();
+      setAllExpenses(overview.expenses || []);
+      setCarTripIncomeList((overview.carTripIncome || []) as unknown as CarTripIncomeRecord[]);
+      const remoteIncome = (overview.monthlyIncome || []) as unknown as MonthlyIncome[];
+      const remoteCertificates = (overview.bankCertificates || []) as unknown as BankCertificate[];
+      const remoteStudents = (overview.students || []) as unknown as StudentProfile[];
+      const remoteAssociations = (overview.associations || []) as unknown as AssociationRecord[];
+      const remoteAccidents = (overview.vehicleAccidents || []) as unknown as VehicleAccidentRecord[];
+      if (remoteStudents.length) {
+        setStudents(remoteStudents);
+        StorageAdapter.setItem('smart_time_students', remoteStudents);
+      } else {
+        const legacyStudents = StorageAdapter.getItem<StudentProfile[]>('smart_time_students', []);
+        if (legacyStudents.length) {
+          setStudents(legacyStudents);
+          await saveCanonicalFinanceUserRecords("students", legacyStudents as unknown as Array<Record<string, unknown>>);
+        }
+      }
+      if (remoteAssociations.length) {
+        setAssociationsList(remoteAssociations);
+        StorageAdapter.setItem('smart_time_personal_associations', remoteAssociations);
+      } else {
+        const legacyAssociations = StorageAdapter.getItem<AssociationRecord[]>('smart_time_personal_associations', []);
+        if (legacyAssociations.length) {
+          setAssociationsList(legacyAssociations);
+          await saveCanonicalFinanceUserRecords("associations", legacyAssociations as unknown as Array<Record<string, unknown>>);
+        }
+      }
+      if (remoteAccidents.length) {
+        setAccidentList(remoteAccidents);
+        VehiclesRepository.saveAccidentRecords(remoteAccidents);
+      } else {
+        const legacyAccidents = VehiclesRepository.getAccidentRecords();
+        if (legacyAccidents.length) {
+          setAccidentList(legacyAccidents);
+          await saveCanonicalFinanceUserRecords("vehicle_accidents", legacyAccidents as unknown as Array<Record<string, unknown>>);
+        }
+      }
+      if (remoteIncome.length) { setIncomeList(remoteIncome); ExpensesRepository.saveMonthlyIncome(remoteIncome); }
+      else if (incomeList.length) await saveCanonicalMonthlyIncome(incomeList as unknown as Array<Record<string, unknown>>);
+      if (remoteCertificates.length) { setCertificates(remoteCertificates); ExpensesRepository.saveBankCertificates(remoteCertificates); }
+      else if (certificates.length) await saveCanonicalBankCertificates(certificates as unknown as Array<Record<string, unknown>>);
     } catch (error) {
       setCanonicalFinanceError(error instanceof Error ? error.message : 'تعذر قراءة البيانات المالية الموحدة.');
     }
@@ -73,89 +115,58 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
 
   // Education: Students & Records
   const [students, setStudents] = useState<StudentProfile[]>(() => {
-    const defaultStudents: StudentProfile[] = [
-      { id: 'std_salma', name: 'سلمى ممدوح سعد', nationalId: '31406150102468', age: '14', stage: 'إعدادي' },
-      { id: 'std_1', name: 'يوسف محمد', nationalId: '31205120102034', age: '16', stage: 'ثانوي' },
-      { id: 'std_2', name: 'فاطمة محمد', nationalId: '31808220105068', age: '11', stage: 'ابتدائي' },
-    ];
-    return StorageAdapter.getItem<StudentProfile[]>('smart_time_students', defaultStudents);
+    return StorageAdapter.getItem<StudentProfile[]>('smart_time_students', []);
   });
 
-  // Income Sources List
-  const [incomeList, setIncomeList] = useState<MonthlyIncome[]>(() => {
-    const existing = ExpensesRepository.getMonthlyIncome();
-    if (existing && existing.length > 0) return existing;
-    // Default initial income for current month
-    const defaultIncome: MonthlyIncome = {
-      id: `income_${currentYearMonth}`,
-      month: currentYearMonth,
-      salary: 25000,
-      bonuses: 2000,
-      otherIncome: 3000,
-      sources: [
-        { id: 'src_1', source: 'الراتب الأساسي', amount: 25000, date: `${currentYearMonth}-01`, type: 'salary', notes: 'الراتب الشهري الرئيسي', createdAt: new Date().toISOString() },
-        { id: 'src_2', source: 'دخل عمل حر (Freelance)', amount: 5000, date: `${currentYearMonth}-05`, type: 'extra', notes: 'تطوير تطبيق ويب', createdAt: new Date().toISOString() },
-      ],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    ExpensesRepository.saveMonthlyIncome([defaultIncome]);
-    return [defaultIncome];
-  });
-
-  // Bank Certificates
-  const [certificates, setCertificates] = useState<BankCertificate[]>(() => {
-    const existing = ExpensesRepository.getBankCertificates();
-    if (existing && existing.length > 0) return existing;
-    // Default initial certificate as requested in prompt (240,000 at 18% = 43,200 annual, 3,600 monthly)
-    const defaultCert: BankCertificate = {
-      id: 'cert_sample_1',
-      bankName: 'البنك الأهلي المصري',
-      certificateNumber: 'CERT-884920',
-      duration: '1 سنة',
-      amount: 240000,
-      annualRate: 18,
-      annualProfit: 43200,
-      periodicProfit: 3600,
-      monthlyEquivalentProfit: 3600,
-      returnType: 'simple',
-      issueDate: `${currentYearMonth}-01`,
-      maturityDate: `${new Date().getFullYear() + 1}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`,
-      profitDate: `${currentYearMonth}-01`,
-      profitAmount: 3600,
-      profitFrequency: 'monthly',
-      notes: 'شهادة العائد البلاتيني الشهري 18%',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    ExpensesRepository.saveBankCertificates([defaultCert]);
-    return [defaultCert];
-  });
+  // Income and certificates are loaded from canonical SQLite; browser storage remains a migration fallback.
+  const [incomeList, setIncomeList] = useState<MonthlyIncome[]>(() => ExpensesRepository.getMonthlyIncome());
+  const [certificates, setCertificates] = useState<BankCertificate[]>(() => ExpensesRepository.getBankCertificates());
 
   // --- 3. PERSISTENCE WRAPPERS ---
   const handleSaveAssociations = (list: AssociationRecord[]) => {
     setAssociationsList(list);
     StorageAdapter.setItem('smart_time_personal_associations', list);
+    saveCanonicalFinanceUserRecords("associations", list as unknown as Array<Record<string, unknown>>).catch((error) => {
+      setCanonicalFinanceError(error instanceof Error ? error.message : 'تعذر حفظ بيانات الجمعيات على الخادم.');
+    });
   };
 
   const handleSaveAccidents = (list: VehicleAccidentRecord[]) => {
     setAccidentList(list);
     VehiclesRepository.saveAccidentRecords(list);
+    saveCanonicalFinanceUserRecords("vehicle_accidents", list as unknown as Array<Record<string, unknown>>).catch((error) => {
+      setCanonicalFinanceError(error instanceof Error ? error.message : 'تعذر حفظ سجلات حوادث السيارات على الخادم.');
+    });
   };
 
   const handleSaveStudents = (list: StudentProfile[]) => {
     setStudents(list);
     StorageAdapter.setItem('smart_time_students', list);
+    saveCanonicalFinanceUserRecords("students", list as unknown as Array<Record<string, unknown>>).catch((error) => {
+      setCanonicalFinanceError(error instanceof Error ? error.message : 'تعذر حفظ بيانات الطلاب على الخادم.');
+    });
   };
 
   const handleSaveIncome = (list: MonthlyIncome[]) => {
     setIncomeList(list);
     ExpensesRepository.saveMonthlyIncome(list);
+    saveCanonicalMonthlyIncome(list as unknown as Array<Record<string, unknown>>).catch((error) => {
+      setCanonicalFinanceError(error instanceof Error ? error.message : 'تعذر حفظ بيانات الدخل على الخادم.');
+    });
   };
 
   const handleSaveCertificates = (list: BankCertificate[]) => {
+    const removedIds = certificates.filter((item) => !list.some((next) => next.id === item.id)).map((item) => item.id);
     setCertificates(list);
     ExpensesRepository.saveBankCertificates(list);
+    void (async () => {
+      try {
+        await saveCanonicalBankCertificates(list as unknown as Array<Record<string, unknown>>);
+        for (const id of removedIds) await deleteCanonicalBankCertificate(id);
+      } catch (error) {
+        setCanonicalFinanceError(error instanceof Error ? error.message : 'تعذر حفظ الشهادات البنكية على الخادم.');
+      }
+    })();
   };
 
   // --- 4. CANONICAL FINANCIAL CALCULATIONS FOR SELECTED MONTH ---
@@ -189,19 +200,14 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     [accidentList, selectedMonth]
   );
   const vehicleTotal = fuelTotal + maintTotal + oilTotal;
-  const monthlyExpenses = useMemo(
-    () => houseTotal + medicalTotal + workTotal + personalTotal + fuelTotal + maintTotal + oilTotal + educationTotal,
-    [houseTotal, medicalTotal, workTotal, personalTotal, fuelTotal, maintTotal, oilTotal, educationTotal]
-  );
-
   const associationFinancials = useMemo(() => {
     let installments = 0;
     let earned = 0;
     const [yy, mm] = selectedMonth.split('-').map(Number);
-    const monthStart = new Date(yy, mm - 1, 1, 0, 0, 0);
+    const monthEnd = new Date(yy, mm, 0, 23, 59, 59);
     associationsList.forEach((a) => {
       const start = new Date(`${a.startDate}T00:00:00`);
-      if (!Number.isNaN(start.getTime()) && start <= monthStart) {
+      if (!Number.isNaN(start.getTime()) && start <= monthEnd) {
         const monthIndex = (yy - start.getFullYear()) * 12 + (mm - 1 - start.getMonth());
         if (monthIndex >= 0 && monthIndex < Math.max(1, Math.floor(Number(a.memberCount) || 1))) {
           installments += Number(a.installment) || 0;
@@ -211,6 +217,11 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     });
     return { installments, earned };
   }, [associationsList, selectedMonth]);
+
+  const monthlyExpenses = useMemo(
+    () => houseTotal + medicalTotal + workTotal + personalTotal + fuelTotal + maintTotal + oilTotal + educationTotal + associationFinancials.installments,
+    [houseTotal, medicalTotal, workTotal, personalTotal, fuelTotal, maintTotal, oilTotal, educationTotal, associationFinancials.installments]
+  );
 
   // Primary Income from Salary & Extra streams
   const primaryIncome = useMemo(
@@ -232,8 +243,14 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     [incomeList, selectedMonth]
   );
 
-  // Master monthly income = earned income + certificate returns + current-account movement + association payouts.
-  const monthlyIncome = primaryIncome.total + certificatesProfit + currentAccountNet + associationFinancials.earned;
+  const carTripIncomeTotal = useMemo(
+    () => carTripIncomeList.filter((trip) => String(trip.date || '').slice(0, 7) === selectedMonth)
+      .reduce((sum, trip) => sum + (Number(trip.amount) || 0), 0),
+    [carTripIncomeList, selectedMonth]
+  );
+
+  // Master monthly income = earned income + certificate returns + current-account movement + car trips + association payouts.
+  const monthlyIncome = primaryIncome.total + certificatesProfit + currentAccountNet + carTripIncomeTotal + associationFinancials.earned;
 
   // Master net income is always derived from the same monthly income and all expense sections.
   const netIncome = monthlyIncome - monthlyExpenses;
@@ -337,8 +354,10 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
           onSelectSection={(sec) => setCurrentScreen(sec)}
           houseTotal={homeAndMedicalTotal}
           houseCount={currentMonthHouse.length + currentMonthMedical.length}
-          workTotal={personalTotal + associationFinancials.installments}
-          workCount={currentMonthPersonal.length + associationsList.length}
+          workTotal={workTotal}
+          workCount={currentMonthWork.length}
+          personalTotal={personalTotal}
+          personalCount={currentMonthPersonal.length}
           vehicleTotal={vehicleTotal}
           vehicleCount={currentMonthFuel.length + currentMonthMaint.length + currentMonthOil.length + currentMonthAccidents.length}
           educationTotal={educationTotal}
@@ -421,6 +440,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
           onSaveIncome={handleSaveIncome}
           certificates={certificates}
           onSaveCertificates={handleSaveCertificates}
+          onIncomeChanged={setCarTripIncomeList}
         />
       )}
 
@@ -437,10 +457,13 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
           netIncome={netIncome}
           houseTotal={homeAndMedicalTotal}
           workTotal={personalTotal}
+          workExpensesTotal={workTotal}
           vehicleTotal={vehicleTotal}
           educationTotal={educationTotal}
           associationsList={associationsList}
           incomeList={incomeList}
+          carTripIncomeList={carTripIncomeList}
+          accidentList={accidentList}
         />
       )}
 

@@ -13,6 +13,7 @@ import {
   Printer,
   X,
   CheckCircle2,
+  AlertTriangle,
 } from 'lucide-react';
 import { formatMoney, isDateInMonth } from '../../services/financeCalculations';
 import { Language, VehicleAccidentRecord } from '../../types';
@@ -85,6 +86,9 @@ export const VehicleExpensesSection: React.FC<VehicleExpensesSectionProps> = ({
   currency,
   selectedMonth,
   onBack,
+  accidentList = [],
+  onSaveAccidents,
+  onOpenCamera,
 }) => {
   const isAr = language === 'ar';
   const [fuelList, setFuelList] = useState<VehicleFuelRecord[]>([]);
@@ -104,7 +108,14 @@ export const VehicleExpensesSection: React.FC<VehicleExpensesSectionProps> = ({
   useEffect(()=>{void loadCanonicalVehicleExpenses();},[]);
   const BackIcon = isAr ? ArrowRight : ArrowLeft;
 
-  const [screen, setScreen] = useState<'menu' | 'fuel' | 'maintenance' | 'oils'>('menu');
+  const [screen, setScreen] = useState<'menu' | 'fuel' | 'maintenance' | 'oils' | 'accidents'>('menu');
+  const [accidentTitle, setAccidentTitle] = useState('');
+  const [accidentDate, setAccidentDate] = useState(new Date().toISOString().slice(0, 10));
+  const [accidentTime, setAccidentTime] = useState(new Date().toTimeString().slice(0, 5));
+  const [accidentLocation, setAccidentLocation] = useState('');
+  const [accidentDamage, setAccidentDamage] = useState('');
+  const [accidentNotes, setAccidentNotes] = useState('');
+  const [editingAccidentId, setEditingAccidentId] = useState<string | null>(null);
   const [oilTab, setOilTab] = useState<'oil' | 'filters'>('oil');
   const [searchQuery, setSearchQuery] = useState('');
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -398,6 +409,15 @@ export const VehicleExpensesSection: React.FC<VehicleExpensesSectionProps> = ({
             <div className="mt-4 text-xs font-bold text-cyan-600">{maintList.length} سجل صيانة</div>
           </button>
 
+          <button onClick={() => setScreen('accidents')} className="text-right bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm hover:-translate-y-1 hover:border-rose-300 transition-all group">
+            <div className="w-14 h-14 rounded-2xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+              <AlertTriangle className="w-7 h-7" />
+            </div>
+            <h2 className="text-xl font-black text-slate-900 dark:text-white">حوادث السيارة</h2>
+            <p className="text-sm text-slate-500 mt-1">تسجيل الحوادث وموقعها وتقدير الأضرار والملاحظات</p>
+            <div className="mt-4 text-xs font-bold text-rose-600">{accidentList.length} سجل حادث</div>
+          </button>
+
           <button onClick={() => setScreen('oils')} className="text-right bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm hover:-translate-y-1 hover:border-emerald-300 transition-all group">
             <div className="w-14 h-14 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
               <Fuel className="w-7 h-7" />
@@ -406,6 +426,64 @@ export const VehicleExpensesSection: React.FC<VehicleExpensesSectionProps> = ({
             <p className="text-sm text-slate-500 mt-1">متابعة تغيير الزيوت والفلاتر وقراءة العداد</p>
             <div className="mt-4 text-xs font-bold text-emerald-600">{oilFilterList.length} سجل زيوت وفلاتر</div>
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (screen === 'accidents') {
+    const resetAccidentForm = () => {
+      setEditingAccidentId(null); setAccidentTitle(''); setAccidentDate(new Date().toISOString().slice(0, 10));
+      setAccidentTime(new Date().toTimeString().slice(0, 5)); setAccidentLocation(''); setAccidentDamage(''); setAccidentNotes('');
+    };
+    const saveAccident = (event: React.FormEvent) => {
+      event.preventDefault();
+      if (!accidentTitle.trim() || !accidentDate || !accidentTime) return;
+      const record: VehicleAccidentRecord = {
+        id: editingAccidentId || `accident_${Date.now()}`, title: accidentTitle.trim(), photoUrl: '',
+        date: accidentDate, time: accidentTime, location: accidentLocation.trim() || undefined,
+        estimatedDamage: accidentDamage.trim() ? Number(accidentDamage) : undefined,
+        notes: accidentNotes.trim() || undefined, createdAt: editingAccidentId
+          ? accidentList.find((item) => item.id === editingAccidentId)?.createdAt || new Date().toISOString()
+          : new Date().toISOString(),
+      };
+      onSaveAccidents?.(editingAccidentId
+        ? accidentList.map((item) => item.id === editingAccidentId ? record : item)
+        : [record, ...accidentList]);
+      resetAccidentForm();
+    };
+    return (
+      <div className="space-y-4" dir={isAr ? 'rtl' : 'ltr'}>
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-3xl border shadow-sm flex items-center gap-3">
+          <button onClick={() => setScreen('menu')} className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center"><BackIcon /></button>
+          <div className="flex-1"><h2 className="font-black text-lg">حوادث السيارة</h2><p className="text-xs text-slate-500">سجل الحوادث وتقدير الأضرار</p></div>
+        </div>
+        <form onSubmit={saveAccident} className="bg-white dark:bg-slate-900 rounded-2xl border p-4 space-y-3">
+          <h3 className="font-black">{editingAccidentId ? 'تعديل سجل حادث' : 'إضافة حادث جديد'}</h3>
+          <input required value={accidentTitle} onChange={(e) => setAccidentTitle(e.target.value)} placeholder="وصف الحادث" className="w-full p-3 rounded-xl border bg-transparent" />
+          <div className="grid grid-cols-2 gap-2">
+            <input required type="date" value={accidentDate} onChange={(e) => setAccidentDate(e.target.value)} className="w-full p-3 rounded-xl border bg-transparent" />
+            <input required type="time" value={accidentTime} onChange={(e) => setAccidentTime(e.target.value)} className="w-full p-3 rounded-xl border bg-transparent" />
+          </div>
+          <input value={accidentLocation} onChange={(e) => setAccidentLocation(e.target.value)} placeholder="مكان الحادث" className="w-full p-3 rounded-xl border bg-transparent" />
+          <input type="number" min="0" value={accidentDamage} onChange={(e) => setAccidentDamage(e.target.value)} placeholder="التكلفة التقديرية للأضرار" className="w-full p-3 rounded-xl border bg-transparent" />
+          <textarea value={accidentNotes} onChange={(e) => setAccidentNotes(e.target.value)} placeholder="ملاحظات" className="w-full p-3 rounded-xl border bg-transparent" />
+          <div className="flex gap-2">
+            <button type="submit" className="flex-1 py-3 rounded-xl bg-rose-600 text-white font-black">حفظ الحادث</button>
+            {editingAccidentId && <button type="button" onClick={resetAccidentForm} className="px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-800">إلغاء</button>}
+          </div>
+        </form>
+        <div className="space-y-2">
+          {accidentList.length ? accidentList.map((item) => <div key={item.id} className="bg-white dark:bg-slate-900 rounded-2xl border p-4 flex justify-between gap-3">
+            <div className="min-w-0"><b>{item.title}</b><p className="text-xs text-slate-500 mt-1">{item.date} • {item.time}{item.location ? ` • ${item.location}` : ''}</p>
+              {item.estimatedDamage !== undefined && <p className="text-xs text-rose-600 mt-1">تقدير الأضرار: {formatMoney(item.estimatedDamage)} {currency}</p>}
+              {item.notes && <p className="text-xs text-slate-500 mt-1">{item.notes}</p>}
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button type="button" onClick={() => { setEditingAccidentId(item.id); setAccidentTitle(item.title); setAccidentDate(item.date); setAccidentTime(item.time); setAccidentLocation(item.location || ''); setAccidentDamage(item.estimatedDamage === undefined ? '' : String(item.estimatedDamage)); setAccidentNotes(item.notes || ''); }} className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800"><Edit2 className="w-4 h-4" /></button>
+              <button type="button" onClick={() => { if (window.confirm('هل تريد حذف سجل الحادث؟')) onSaveAccidents?.(accidentList.filter((x) => x.id !== item.id)); }} className="p-2 rounded-lg bg-rose-50 text-rose-600"><Trash2 className="w-4 h-4" /></button>
+            </div>
+          </div>) : <div className="bg-white dark:bg-slate-900 rounded-2xl border p-8 text-center text-slate-400">لا توجد حوادث مسجلة</div>}
         </div>
       </div>
     );

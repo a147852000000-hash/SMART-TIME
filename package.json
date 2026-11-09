@@ -25,6 +25,7 @@
     "verify:phase5-ai-canonical": "node scripts/verify-phase5-ai-canonical.mjs",
     "verify:phase5-no-duplicate-writes": "node scripts/verify-phase5-no-duplicate-writes.mjs",
     "verify:phase5-final": "node scripts/verify-phase5-final.mjs",
+    "verify:finance-record-mutations": "node scripts/verify-finance-record-mutations.mjs",
     "validate:smart-ai-v2-json": "node scripts/validate-smart-ai-v2-json.mjs",
     "test:phase2-db": "tsx backend/database.phase2.test.ts",
     "test:phase3-api": "node scripts/test-phase3-api.mjs",
@@ -35,7 +36,8 @@
     "test:groq-provider": "tsx backend/ai/providers/groqProvider.test.ts",
     "test:turnstile": "tsx backend/security/turnstile.test.ts",
     "verify:phase-a2-stt": "node scripts/verify-phase-a2-stt.mjs",
-    "test:password-reset-email": "tsx backend/auth/passwordResetEmail.test.ts"
+    "test:password-reset-email": "tsx backend/auth/passwordResetEmail.test.ts",
+    "test:finance-canonical": "tsx backend/ai/finance/financePersistence.test.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

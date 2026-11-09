@@ -2,7 +2,7 @@ import type {
   Budget, Category, ExpenseType, FinanceReports, Income, Transaction,
 } from "../types/finance";
 import type { EducationExpense, Expense, FuelRecord, MaintenanceRecord } from "../types";
-import { createCanonicalFinanceExpense, deleteCanonicalFinanceExpense, fetchCanonicalFinanceOverview, updateCanonicalFinanceExpense, type CanonicalExpenseInput, type FinanceOverview } from "../services/financeService";
+import { createCanonicalFinanceExpense, deleteCanonicalFinanceExpense, fetchCanonicalFinanceOverview, updateCanonicalFinanceExpense, updateCanonicalFinanceRecord, deleteCanonicalFinanceRecord, type CanonicalExpenseInput, type FinanceOverview } from "../services/financeService";
 
 export interface FinanceRepositorySnapshot {
   finance: FinanceOverview;
@@ -225,10 +225,23 @@ export class FinanceRepository {
     return createCanonicalFinanceExpense(input);
   }
   static async updateTransaction(transaction: Transaction): Promise<Record<string, unknown>> {
+    const specialized = /^(fuel|maintenance|education):(.*)$/.exec(transaction.id);
+    if (specialized) {
+      const [, kind, recordId] = specialized;
+      const patch: Record<string, unknown> = { amount: transaction.amount, date: transaction.date, notes: transaction.note };
+      if (kind === "education") patch.category = transaction.categoryId;
+      if (kind === "maintenance") patch.systemType = transaction.categoryId;
+      return updateCanonicalFinanceRecord(kind as "fuel" | "maintenance" | "education", recordId, patch);
+    }
     const patch: Partial<CanonicalExpenseInput> = { type: transaction.type, title: transaction.note?.trim() || transaction.categoryId || transaction.type, amount: transaction.amount, category: transaction.categoryId || transaction.type, date: transaction.date, paymentMethod: "cash", notes: transaction.note };
     return updateCanonicalFinanceExpense(transaction.id, patch);
   }
   static async deleteTransaction(id: string): Promise<void> {
+    const specialized = /^(fuel|maintenance|education):(.*)$/.exec(id);
+    if (specialized) {
+      await deleteCanonicalFinanceRecord(specialized[1] as "fuel" | "maintenance" | "education", specialized[2]);
+      return;
+    }
     await deleteCanonicalFinanceExpense(id);
   }
 }

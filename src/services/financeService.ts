@@ -1,20 +1,26 @@
 import type { ExpenseType } from "../contracts/financeContract";
+import { apiUrl } from "./apiConfig";
+import { authHeaders } from "./authService";
 
 export interface FinanceOverview {
   source: "smart-time-finance-sqlite";
   expenses: Array<Record<string, unknown>>;
   monthlyIncome: Array<Record<string, unknown>>;
   bankCertificates: Array<Record<string, unknown>>;
+  carTripIncome: Array<Record<string, unknown>>;
   fuelRecords: Array<Record<string, unknown>>;
   maintenanceRecords: Array<Record<string, unknown>>;
   educationExpenses: Array<Record<string, unknown>>;
+  students: Array<Record<string, unknown>>;
+  associations: Array<Record<string, unknown>>;
+  vehicleAccidents: Array<Record<string, unknown>>;
   fetchedAt: string;
 }
 
 export async function fetchCanonicalFinanceOverview(): Promise<FinanceOverview> {
-  const response = await fetch("/api/finance/overview", {
-    credentials: "include",
-    headers: { Accept: "application/json" },
+  const response = await fetch(apiUrl("/api/finance/overview"), {
+    credentials: "omit",
+    headers: { Accept: "application/json", ...authHeaders() },
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(String(payload?.error || "تعذر قراءة بيانات التمويل."));
@@ -49,10 +55,10 @@ interface FinanceMutationPayload {
 }
 
 async function financeMutation(path: string, method: string, body?: unknown): Promise<FinanceMutationPayload> {
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
     method,
-    credentials: "include",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    credentials: "omit",
+    headers: { "Content-Type": "application/json", Accept: "application/json", ...authHeaders() },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   const payload = await response.json().catch(() => ({}));
@@ -98,6 +104,38 @@ export async function deleteCanonicalFinanceExpense(id: string): Promise<void> {
   await financeMutation(`/api/finance/expenses/${encodeURIComponent(id)}`, "DELETE");
 }
 
+export async function updateCanonicalFinanceRecord(kind: "fuel" | "maintenance" | "education", id: string, patch: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const payload = await financeMutation(`/api/finance/records/${kind}/${encodeURIComponent(id)}`, "PATCH", patch);
+  return payload.record as Record<string, unknown>;
+}
+
+export async function deleteCanonicalFinanceRecord(kind: "fuel" | "maintenance" | "education", id: string): Promise<void> {
+  await financeMutation(`/api/finance/records/${kind}/${encodeURIComponent(id)}`, "DELETE");
+}
+
+export async function saveCanonicalMonthlyIncome(items: Array<Record<string, unknown>>): Promise<FinanceMutationPayload> {
+  return financeMutation("/api/finance/income", "PUT", { items });
+}
+
+export async function saveCanonicalBankCertificates(items: Array<Record<string, unknown>>): Promise<FinanceMutationPayload> {
+  return financeMutation("/api/finance/certificates", "PUT", { items });
+}
+
+export async function deleteCanonicalBankCertificate(id: string): Promise<void> {
+  await financeMutation(`/api/finance/certificates/${encodeURIComponent(id)}`, "DELETE");
+}
+
+export async function saveCanonicalCarTripIncome(items: Array<Record<string, unknown>>): Promise<FinanceMutationPayload> {
+  return financeMutation("/api/finance/car-trips", "PUT", { items });
+}
+
+export async function saveCanonicalFinanceUserRecords(
+  kind: "students" | "associations" | "vehicle_accidents",
+  items: Array<Record<string, unknown>>,
+): Promise<FinanceMutationPayload> {
+  return financeMutation(`/api/finance/user-records/${kind}`, "PUT", { items });
+}
+
 export async function reconcileCanonicalFinance(expenses: Array<CanonicalExpenseInput>): Promise<FinanceMutationPayload> {
   return financeMutation("/api/finance/migrate", "POST", { expenses, reconcileAiTransactions: true });
 }
@@ -110,5 +148,12 @@ export const financeService = {
   getExpenses,
   updateCanonicalFinanceExpense,
   deleteCanonicalFinanceExpense,
+  updateCanonicalFinanceRecord,
+  deleteCanonicalFinanceRecord,
   reconcileCanonicalFinance,
+  saveCanonicalMonthlyIncome,
+  saveCanonicalBankCertificates,
+  deleteCanonicalBankCertificate,
+  saveCanonicalCarTripIncome,
+  saveCanonicalFinanceUserRecords,
 };

@@ -19,7 +19,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { Language, CarTripIncomeRecord } from '../../types';
-import { StorageAdapter } from '../../services';
+import { StorageAdapter, fetchCanonicalFinanceOverview, saveCanonicalCarTripIncome } from '../../services';
 import { formatMoney } from '../../services/financeCalculations';
 
 interface CarIncomeSectionProps {
@@ -74,43 +74,10 @@ export const CarIncomeSection: React.FC<CarIncomeSectionProps> = ({
   };
 
   // State: List of all car trips
-  const [trips, setTrips] = useState<CarTripIncomeRecord[]>(() => {
-    return StorageAdapter.getItem<CarTripIncomeRecord[]>(STORAGE_KEY, [
-      {
-        id: 'trip_1',
-        tripNumber: 'رحلة 1',
-        amount: 85,
-        date: `${selectedMonth}-01`,
-        dayName: 'الأحد',
-        time: '09:30',
-        tripType: 'أوبر Uber',
-        notes: 'مشوار من مدينة نصر إلى التجمع الخامس',
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'trip_2',
-        tripNumber: 'رحلة 2',
-        amount: 120,
-        date: `${selectedMonth}-01`,
-        dayName: 'الأحد',
-        time: '12:15',
-        tripType: 'إندرايف inDrive',
-        notes: 'مشوار من المعادي إلى مصر الجديدة',
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'trip_3',
-        tripNumber: 'رحلة 3',
-        amount: 150,
-        date: `${selectedMonth}-02`,
-        dayName: 'الإثنين',
-        time: '16:45',
-        tripType: 'مشوار خاص 🚘',
-        notes: 'توصيل مطار القاهرة الدولي',
-        createdAt: new Date().toISOString(),
-      },
-    ]);
-  });
+  const [trips, setTrips] = useState<CarTripIncomeRecord[]>(() =>
+    StorageAdapter.getItem<CarTripIncomeRecord[]>(STORAGE_KEY, [])
+  );
+  const [tripsLoaded, setTripsLoaded] = useState(false);
 
   // Active view: 'entry' (تسجيل الرحلات) | 'report' (تقرير ومعاينة الدخل)
   const [activeSubTab, setActiveSubTab] = useState<'entry' | 'report'>('entry');
@@ -140,13 +107,37 @@ export const CarIncomeSection: React.FC<CarIncomeSectionProps> = ({
   const [reportFilterType, setReportFilterType] = useState<string>('all');
   const [reportSearchQuery, setReportSearchQuery] = useState<string>('');
 
-  // Persist trips to storage whenever changed
+  // Load canonical trip records first; migrate browser records only when the server has none.
   useEffect(() => {
+    let active = true;
+    void fetchCanonicalFinanceOverview().then(async (overview) => {
+      if (!active) return;
+      const remoteTrips = (overview.carTripIncome || []) as unknown as CarTripIncomeRecord[];
+      if (remoteTrips.length > 0) {
+        setTrips(remoteTrips);
+      } else {
+        const legacyTrips = StorageAdapter.getItem<CarTripIncomeRecord[]>(STORAGE_KEY, []);
+        if (legacyTrips.length > 0) {
+          setTrips(legacyTrips);
+          await saveCanonicalCarTripIncome(legacyTrips as unknown as Array<Record<string, unknown>>);
+        }
+      }
+      if (active) setTripsLoaded(true);
+    }).catch(() => {
+      if (active) setSaveToast(isAr ? 'تعذر تحميل سجل دخل الرحلات من الخادم؛ لم يتم تغيير البيانات المحفوظة.' : 'Could not load canonical trip income; saved records were left untouched.');
+    });
+    return () => { active = false; };
+  }, [isAr]);
+
+  // Persist only after the canonical list has loaded or legacy migration has completed.
+  useEffect(() => {
+    if (!tripsLoaded) return;
     StorageAdapter.setItem(STORAGE_KEY, trips);
-    if (onSyncWithMonthlyIncome) {
-      onSyncWithMonthlyIncome(trips);
-    }
-  }, [trips, onSyncWithMonthlyIncome]);
+    if (onSyncWithMonthlyIncome) onSyncWithMonthlyIncome(trips);
+    void saveCanonicalCarTripIncome(trips as unknown as Array<Record<string, unknown>>).catch((error) => {
+      setSaveToast(error instanceof Error ? error.message : (isAr ? 'تعذر حفظ دخل الرحلات.' : 'Could not save trip income.'));
+    });
+  }, [trips, tripsLoaded, onSyncWithMonthlyIncome, isAr]);
 
   // Next recommended trip number
   const nextTripNumberName = useMemo(() => {
@@ -173,6 +164,10 @@ export const CarIncomeSection: React.FC<CarIncomeSectionProps> = ({
   // Handle Save / Update Trip
   const handleSaveTrip = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!tripsLoaded) {
+      setSaveToast(isAr ? 'انتظر تحميل سجل الرحلات قبل الحفظ.' : 'Wait for trip records to load before saving.');
+      return;
+    }
     const amountVal = parseFloat(tripAmount);
     if (isNaN(amountVal) || amountVal <= 0) {
       window.alert(isAr ? 'من فضلك أدخل سعر الرحلة بشكل صحيح.' : 'Please enter a valid trip fare.');
@@ -228,6 +223,7 @@ export const CarIncomeSection: React.FC<CarIncomeSectionProps> = ({
 
   // Edit Trip
   const startEdit = (trip: CarTripIncomeRecord) => {
+    if (!tripsLoaded) return;
     setEditingTripId(trip.id);
     setTripNumber(String(trip.tripNumber));
     setTripAmount(String(trip.amount));
@@ -241,6 +237,7 @@ export const CarIncomeSection: React.FC<CarIncomeSectionProps> = ({
 
   // Delete Trip
   const handleDeleteTrip = (id: string) => {
+    if (!tripsLoaded) return;
     if (window.confirm(isAr ? 'هل أنت متأكد من حذف هذه الرحلة؟' : 'Are you sure you want to delete this trip?')) {
       setTrips((prev) => prev.filter((t) => t.id !== id));
       if (editingTripId === id) {

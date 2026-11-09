@@ -5,15 +5,19 @@ export interface FinanceOverview {
   expenses: unknown[];
   monthlyIncome: unknown[];
   bankCertificates: unknown[];
+  carTripIncome: unknown[];
   fuelRecords: unknown[];
   maintenanceRecords: unknown[];
   educationExpenses: unknown[];
+  students: unknown[];
+  associations: unknown[];
+  vehicleAccidents: unknown[];
   fetchedAt: string;
 }
 
 export function getFinanceOverview(userId: string): FinanceOverview {
   const expenses = db.prepare(`
-    SELECT id, title, amount, currency, category, date,
+    SELECT id, expense_type as type, title, amount, currency, category, date,
            payment_method as paymentMethod, receipt_url as receiptUrl,
            notes, created_at as createdAt, updated_at as updatedAt
     FROM finance_expenses
@@ -51,6 +55,15 @@ export function getFinanceOverview(userId: string): FinanceOverview {
     ORDER BY maturity_date ASC, created_at DESC
   `).all(userId);
 
+  const carTripIncome = db.prepare(`
+    SELECT id, trip_number as tripNumber, amount, date, day_name as dayName,
+           time, notes, trip_type as tripType, payment_method as paymentMethod,
+           created_at as createdAt, updated_at as updatedAt
+    FROM finance_car_trip_income
+    WHERE user_id = ?
+    ORDER BY date DESC, created_at DESC
+  `).all(userId);
+
   const fuelRecords = db.prepare(`
     SELECT id, vehicle_id as vehicleId, liters,
            price_per_liter as pricePerLiter, total_cost as totalCost,
@@ -81,14 +94,30 @@ export function getFinanceOverview(userId: string): FinanceOverview {
     ORDER BY date DESC, created_at DESC
   `).all(userId);
 
+  const readUserRecords = (kind: string) => db.prepare(`
+    SELECT data_json FROM finance_user_records
+    WHERE user_id = ? AND record_type = ?
+    ORDER BY created_at DESC
+  `).all(userId, kind).map((row: any) => {
+    try { return JSON.parse(String(row.data_json)); } catch { return null; }
+  }).filter((row: unknown) => row !== null);
+
+  const students = readUserRecords("students");
+  const associations = readUserRecords("associations");
+  const vehicleAccidents = readUserRecords("vehicle_accidents");
+
   return {
     source: "smart-time-finance-sqlite",
     expenses,
     monthlyIncome,
     bankCertificates,
+    carTripIncome,
     fuelRecords,
     maintenanceRecords,
     educationExpenses,
+    students,
+    associations,
+    vehicleAccidents,
     fetchedAt: new Date().toISOString(),
   };
 }
