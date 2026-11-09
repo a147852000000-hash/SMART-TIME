@@ -13,7 +13,7 @@ import { askSmartAiCore } from "./backend/ai/smartAiCore.js";
 import { isLocalSmartAiConfigured } from "./backend/ai/localInference.js";
 import { createHttpVoiceDnaProvider, DisabledVoiceDnaProvider } from "./backend/voice/voiceDnaProvider.js";
 import { sendPasswordResetEmail as sendPasswordResetEmailWithProvider } from "./backend/auth/passwordResetEmail.js";
-import { createCanonicalExpense, updateCanonicalExpense, deleteCanonicalExpense, updateCanonicalFinanceRecord, deleteCanonicalFinanceRecord, ensureFinanceMutationSchema, migrateLegacyExpensesToCanonical, reconcileAiTransactionsToCanonical, upsertCanonicalMonthlyIncome, upsertCanonicalBankCertificates, deleteCanonicalBankCertificate, type CanonicalExpenseInput, type CanonicalMonthlyIncomeInput, type CanonicalBankCertificateInput } from "./backend/ai/finance/financeRepository.js";
+import { createCanonicalExpense, updateCanonicalExpense, deleteCanonicalExpense, updateCanonicalFinanceRecord, deleteCanonicalFinanceRecord, ensureFinanceMutationSchema, migrateLegacyExpensesToCanonical, reconcileAiTransactionsToCanonical, upsertCanonicalMonthlyIncome, upsertCanonicalBankCertificates, deleteCanonicalBankCertificate, replaceCanonicalCarTripIncome, type CanonicalExpenseInput, type CanonicalMonthlyIncomeInput, type CanonicalBankCertificateInput, type CanonicalCarTripIncomeInput } from "./backend/ai/finance/financeRepository.js";
 import { getFinanceOverview } from "./backend/ai/finance/financeProjection.js";
 import { getAiCanonicalState } from "./backend/ai/finance/aiCanonicalProjection.js";
 
@@ -1837,6 +1837,19 @@ app.delete("/api/finance/certificates/:id", (req, res) => {
     return res.status(message.includes("not found") ? 404 : 400).json({ error: message || "تعذر حذف الشهادة البنكية." });
   }
 });
+app.put("/api/finance/car-trips", (req, res) => {
+  const userId = financeUser(req, res);
+  if (!userId) return;
+  try {
+    ensureFinanceMutationSchema();
+    const items = Array.isArray(req.body?.items) ? req.body.items as CanonicalCarTripIncomeInput[] : [];
+    const saved = replaceCanonicalCarTripIncome(userId, items);
+    return res.json({ source: "smart-time-finance-sqlite", saved, records: getFinanceOverview(userId).carTripIncome });
+  } catch (error: any) {
+    return res.status(400).json({ error: error?.message || "تعذر حفظ دخل الرحلات." });
+  }
+});
+
 app.get("/api/finance/overview", (req, res) => {
   const userId = financeUser(req, res);
   if (!userId) return;
