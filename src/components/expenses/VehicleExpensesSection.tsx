@@ -87,7 +87,7 @@ export const VehicleExpensesSection: React.FC<VehicleExpensesSectionProps> = ({
   selectedMonth,
   onBack,
   accidentList = [],
-  onSaveAccidents = () => {},
+  onSaveAccidents,
   onOpenCamera,
 }) => {
   const isAr = language === 'ar';
@@ -447,7 +447,7 @@ export const VehicleExpensesSection: React.FC<VehicleExpensesSectionProps> = ({
           ? accidentList.find((item) => item.id === editingAccidentId)?.createdAt || new Date().toISOString()
           : new Date().toISOString(),
       };
-      onSaveAccidents(editingAccidentId
+      onSaveAccidents?.(editingAccidentId
         ? accidentList.map((item) => item.id === editingAccidentId ? record : item)
         : [record, ...accidentList]);
       resetAccidentForm();
@@ -481,7 +481,7 @@ export const VehicleExpensesSection: React.FC<VehicleExpensesSectionProps> = ({
             </div>
             <div className="flex gap-2 shrink-0">
               <button type="button" onClick={() => { setEditingAccidentId(item.id); setAccidentTitle(item.title); setAccidentDate(item.date); setAccidentTime(item.time); setAccidentLocation(item.location || ''); setAccidentDamage(item.estimatedDamage === undefined ? '' : String(item.estimatedDamage)); setAccidentNotes(item.notes || ''); }} className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800"><Edit2 className="w-4 h-4" /></button>
-              <button type="button" onClick={() => { if (window.confirm('هل تريد حذف سجل الحادث؟')) onSaveAccidents(accidentList.filter((x) => x.id !== item.id)); }} className="p-2 rounded-lg bg-rose-50 text-rose-600"><Trash2 className="w-4 h-4" /></button>
+              <button type="button" onClick={() => { if (window.confirm('هل تريد حذف سجل الحادث؟')) onSaveAccidents?.(accidentList.filter((x) => x.id !== item.id)); }} className="p-2 rounded-lg bg-rose-50 text-rose-600"><Trash2 className="w-4 h-4" /></button>
             </div>
           </div>) : <div className="bg-white dark:bg-slate-900 rounded-2xl border p-8 text-center text-slate-400">لا توجد حوادث مسجلة</div>}
         </div>
