@@ -161,18 +161,6 @@ const ALL_SECTIONS: SectionCard[] = [
     darkGradient: 'from-amber-950/40 via-orange-950/20 to-slate-900',
   },
   {
-    id: 'vault',
-    titleAr: 'الخزانة الخاصة',
-    titleEn: 'Secure Vault',
-    subtitleAr: 'تشفير وحماية البيانات الحساسة برقم سري',
-    subtitleEn: 'Encrypted passwords & private records',
-    icon: Shield,
-    emoji: '🔐',
-    tone: 'vault',
-    gradient: 'from-slate-500/20 via-zinc-500/10 to-transparent',
-    darkGradient: 'from-slate-800/50 via-zinc-900/30 to-slate-900',
-  },
-  {
     id: 'vehicles',
     titleAr: 'المركبات والصيانة',
     titleEn: 'Vehicles',
@@ -841,8 +829,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         return chatRooms.length > 0 ? `${chatRooms.length} غرف` : undefined;
       case 'ai':
         return 'نشط ⚡';
-      case 'vault':
-        return 'مشفر 🛡️';
       default:
         return undefined;
     }

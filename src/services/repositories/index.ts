@@ -4,7 +4,6 @@ export * from './expensesRepository';
 export * from './vehiclesRepository';
 export * from './educationRepository';
 export * from './religiousRepository';
-export * from './vaultRepository';
 export * from './tripsRepository';
 export * from './chatRepository';
 export * from './mediaRepository';
