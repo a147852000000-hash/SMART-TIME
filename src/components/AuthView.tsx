@@ -6,12 +6,11 @@ interface Props {
   onAuthenticated: () => void;
   onGuest: () => void;
   loginNotice?: string;
-  requireTripPhoneVerification?: boolean;
 }
 
 type Mode = 'login'|'register'|'forgot';
 
-export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotice, requireTripPhoneVerification = false }) => {
+export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotice }) => {
   const [mode, setMode] = useState<Mode>('login');
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');

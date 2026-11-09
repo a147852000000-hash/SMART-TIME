@@ -15,7 +15,6 @@ export type AppView =
   | 'vehicles'
   | 'education'
   | 'religious'
-  | 'vault'
   | 'ai'
   | 'chat'
   | 'media'
@@ -115,8 +114,6 @@ export interface UserProfile {
   religiousPreference: ReligiousPreference;
   isOnboarded: boolean;
   authPhoneVerified?: boolean;
-  pin?: string;
-  pinCode?: string;
   biometricEnabled?: boolean;
   birthDate?: string;
   zodiacSign?: string;
@@ -373,8 +370,6 @@ export interface VehicleAccidentRecord {
   location?: string;
   estimatedDamage?: number;
   notes?: string;
-  savedToVault?: boolean;
-  vaultRecordId?: string;
   createdAt: string;
 }
 
@@ -463,26 +458,6 @@ export interface FavoritePlace {
   title: string;
   type: 'home' | 'work' | 'family' | 'other';
   point: TripPoint;
-}
-
-// ---------------------------
-// 7. SECURE VAULT
-// ---------------------------
-export type SecureCategory = 'password' | 'code' | 'phone' | 'document' | 'note' | 'photo' | 'video' | 'file' | 'bank_card';
-
-export interface SecureRecord {
-  id: string;
-  title: string;
-  category: SecureCategory;
-  value: string;
-  username?: string;
-  notes?: string;
-  mediaUrl?: string;
-  fileName?: string;
-  fileSize?: string;
-  mimeType?: string;
-  createdAt: string;
-  updatedAt: string;
 }
 
 // ---------------------------

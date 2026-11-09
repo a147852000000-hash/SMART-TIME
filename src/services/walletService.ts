@@ -4,7 +4,6 @@ import { getStoredSession, authHeaders } from './authService';
 export interface WalletInfo {
   balance: number;
   tripCost: number;
-  freeSearches?: number;
   isOwner?: boolean;
   walletNumber?: string;
   instapayAddress?: string;
