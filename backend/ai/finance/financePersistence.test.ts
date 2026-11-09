@@ -45,10 +45,25 @@ try {
   repository.deleteCanonicalBankCertificate("user-a", "cert-a");
   assert.equal(projection.getFinanceOverview("user-a").bankCertificates.length, 0);
 
+  const trips = [
+    { id: "trip-1", tripNumber: "رحلة 1", amount: 85, date: "2026-11-01", dayName: "الأحد", time: "09:30", tripType: "uber", notes: "test trip", createdAt: "2026-11-01T09:30:00.000Z" },
+    { id: "trip-2", tripNumber: "رحلة 2", amount: 120, date: "2026-11-02", dayName: "الإثنين", time: "12:15", tripType: "inDrive", createdAt: "2026-11-02T12:15:00.000Z" },
+  ];
+  assert.equal(repository.replaceCanonicalCarTripIncome("user-a", trips), 2);
+  assert.equal(projection.getFinanceOverview("user-a").carTripIncome.length, 2);
+  assert.equal(projection.getFinanceOverview("user-b").carTripIncome.length, 0, "car trip income must be user-scoped");
+  assert.throws(() => repository.replaceCanonicalCarTripIncome("user-b", [trips[0]]), /another user/);
+  assert.equal(projection.getFinanceOverview("user-a").carTripIncome.length, 2, "cross-user ID collision must not replace a trip");
+  assert.equal(repository.replaceCanonicalCarTripIncome("user-a", [trips[1]]), 1);
+  assert.equal(projection.getFinanceOverview("user-a").carTripIncome.length, 1, "replace operation must remove only this user's omitted trips");
+  assert.equal(repository.replaceCanonicalCarTripIncome("user-a", []), 0);
+  assert.equal(projection.getFinanceOverview("user-a").carTripIncome.length, 0);
+
   assert.throws(() => repository.upsertCanonicalMonthlyIncome("user-a", [{ ...income[0], month: "bad-month" }]), /month/);
   assert.throws(() => repository.upsertCanonicalBankCertificates("user-a", [{ ...certificate, amount: -1 }]), /certificate/);
   console.log("PASS: canonical monthly income upsert, source preservation, and user isolation");
   console.log("PASS: canonical certificate upsert, user isolation, and owner-scoped delete");
+  console.log("PASS: car trip income replacement, user isolation, and cross-user collision rejection");
   console.log("PASS: invalid income/certificate data rejected");
 } finally {
   db.close();
