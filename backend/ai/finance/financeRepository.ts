@@ -304,7 +304,7 @@ export function upsertCanonicalMonthlyIncome(userId: string, items: CanonicalMon
   try {
     for (const row of items) {
       const month = text(row.month, 7);
-      if (!/^\\d{4}-\\d{2}$/.test(month)) throw new Error("Invalid income month");
+      if (!/^\d{4}-\d{2}$/.test(month)) throw new Error("Invalid income month");
       const salary = Number(row.salary || 0), bonuses = Number(row.bonuses || 0), other = Number(row.otherIncome || 0);
       if (![salary, bonuses, other].every((n) => Number.isFinite(n) && n >= 0)) throw new Error("Invalid income amounts");
       const sources = Array.isArray(row.sources) ? row.sources : [];
@@ -346,7 +346,7 @@ export function upsertCanonicalBankCertificates(userId: string, items: Canonical
       const amount = Number(row.amount), profit = Number(row.profitAmount);
       if (!idValue || !bank || !duration || !Number.isFinite(amount) || amount <= 0 || !Number.isFinite(profit) || profit < 0) throw new Error("Invalid bank certificate");
       for (const date of [row.issueDate, row.maturityDate, row.profitDate]) {
-        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(text(date, 20))) throw new Error("Invalid certificate date");
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(text(date, 20))) throw new Error("Invalid certificate date");
       }
       if (!["monthly","quarterly","semiannual","annual","maturity"].includes(text(row.profitFrequency, 30))) throw new Error("Invalid certificate profit frequency");
       upsert.run(idValue, uid, bank, text(row.certificateNumber, 200) || null, duration, amount,
