@@ -275,3 +275,92 @@ export function migrateLegacyExpensesToCanonical(userId: string, items: Array<Ca
   }
   return { source: "legacy_storage", inserted, skipped, conflicts, verified, verificationPassed: conflicts === 0 && verified === inserted, records };
 }
+
+
+export type CanonicalFinanceRecordKind = "fuel" | "maintenance" | "education";
+
+const FINANCE_RECORD_TABLES: Record<CanonicalFinanceRecordKind, {
+  table: string;
+  amountColumn: string;
+  editableColumns: Record<string, string>;
+}> = {
+  fuel: {
+    table: "finance_fuel_records",
+    amountColumn: "total_cost",
+    editableColumns: { amount: "total_cost", date: "date", notes: "notes" },
+  },
+  maintenance: {
+    table: "finance_maintenance_records",
+    amountColumn: "cost",
+    editableColumns: { title: "title", amount: "cost", date: "date", notes: "notes" },
+  },
+  education: {
+    table: "finance_education_expenses",
+    amountColumn: "amount",
+    editableColumns: { title: "title", amount: "amount", category: "category", date: "date", notes: "notes" },
+  },
+};
+
+function financeRecordConfig(kind: string) {
+  if (!Object.prototype.hasOwnProperty.call(FINANCE_RECORD_TABLES, kind)) {
+    throw new Error("Unsupported finance record type");
+  }
+  return FINANCE_RECORD_TABLES[kind as CanonicalFinanceRecordKind];
+}
+
+export function updateCanonicalFinanceRecord(
+  userId: string,
+  kind: string,
+  recordId: string,
+  patch: Record<string, unknown>,
+): any {
+  const uid = text(userId, 200);
+  const idValue = text(recordId, 200);
+  if (!uid || !idValue) throw new Error("userId and recordId are required");
+  const config = financeRecordConfig(kind);
+  const current = db.prepare(`SELECT * FROM ${config.table} WHERE id=? AND user_id=?`).get(idValue, uid) as Record<string, unknown> | undefined;
+  if (!current) throw new Error("Finance record not found for this user");
+
+  const assignments: string[] = [];
+  const values: unknown[] = [];
+  for (const [inputKey, column] of Object.entries(config.editableColumns)) {
+    if (!Object.prototype.hasOwnProperty.call(patch, inputKey)) continue;
+    const value = patch[inputKey];
+    if (inputKey === "amount") {
+      const amount = Number(value);
+      if (!Number.isFinite(amount) || amount < 0) throw new Error("Finance record amount is invalid");
+      values.push(amount);
+    } else if (inputKey === "date") {
+      const date = text(value, 100);
+      if (!/^\\d{4}-\\d{2}-\\d{2}(?:T.*)?$/.test(date)) throw new Error("Finance record date is invalid");
+      values.push(date);
+    } else if (inputKey === "title" || inputKey === "category") {
+      const normalized = text(value, 300);
+      if (!normalized) throw new Error(`Finance record ${inputKey} is required`);
+      values.push(normalized);
+    } else {
+      values.push(value == null ? null : text(value, 2000) || null);
+    }
+    assignments.push(`${column}=?`);
+  }
+  if (!assignments.length) return current;
+  assignments.push("updated_at=?");
+  values.push(now(), idValue, uid);
+  db.prepare(`UPDATE ${config.table} SET ${assignments.join(",")} WHERE id=? AND user_id=?`).run(...values);
+  const updated = db.prepare(`SELECT * FROM ${config.table} WHERE id=? AND user_id=?`).get(idValue, uid);
+  if (!updated) throw new Error("Finance record update verification failed");
+  return updated;
+}
+
+export function deleteCanonicalFinanceRecord(userId: string, kind: string, recordId: string): void {
+  const uid = text(userId, 200);
+  const idValue = text(recordId, 200);
+  if (!uid || !idValue) throw new Error("userId and recordId are required");
+  const config = financeRecordConfig(kind);
+  const current = db.prepare(`SELECT id FROM ${config.table} WHERE id=? AND user_id=?`).get(idValue, uid);
+  if (!current) throw new Error("Finance record not found for this user");
+  db.prepare(`DELETE FROM ${config.table} WHERE id=? AND user_id=?`).run(idValue, uid);
+  if (db.prepare(`SELECT id FROM ${config.table} WHERE id=? AND user_id=?`).get(idValue, uid)) {
+    throw new Error("Finance record delete verification failed");
+  }
+}
