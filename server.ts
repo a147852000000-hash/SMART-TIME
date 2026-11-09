@@ -15,6 +15,7 @@ import { createHttpVoiceDnaProvider, DisabledVoiceDnaProvider } from "./backend/
 import { sendPasswordResetEmail as sendPasswordResetEmailWithProvider } from "./backend/auth/passwordResetEmail.js";
 import { createCanonicalExpense, updateCanonicalExpense, deleteCanonicalExpense, updateCanonicalFinanceRecord, deleteCanonicalFinanceRecord, ensureFinanceMutationSchema, migrateLegacyExpensesToCanonical, reconcileAiTransactionsToCanonical, type CanonicalExpenseInput } from "./backend/ai/finance/financeRepository.js";
 import { getFinanceOverview } from "./backend/ai/finance/financeProjection.js";
+import { getAiCanonicalState } from "./backend/ai/finance/aiCanonicalProjection.js";
 
 dotenv.config();
 
@@ -436,6 +437,37 @@ const handleAiChat = async (req: express.Request, res: express.Response) => {
 app.post("/api/ai/chat", handleAiChat);
 app.post("/api/gemini/chat", handleAiChat);
 
+app.get("/api/ai/state", (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  try {
+    const canonical = getAiCanonicalState(String(user.id));
+    const tasks = db.prepare(`SELECT id, title, completed, priority, category, due_date as dueDate,
+      due_time as dueTime, note, created_at as createdAt, completed_at as completedAt
+      FROM ai_tasks WHERE user_id = ? ORDER BY due_date ASC, created_at DESC`).all(user.id) as any[];
+    const calendarEvents = (db.prepare(`SELECT id, title, description, start_at as startAt, end_at as endAt,
+      timezone, location, category, all_day as allDay, reminder_enabled as reminderEnabled,
+      reminder_minutes as reminderMinutes, recurrence_json as recurrenceJson,
+      created_at as createdAt, updated_at as updatedAt
+      FROM ai_events WHERE user_id = ? ORDER BY start_at ASC`).all(user.id) as any[]).map((event) => {
+        let recurrence;
+        try { recurrence = event.recurrenceJson ? JSON.parse(String(event.recurrenceJson)) : undefined; } catch { recurrence = undefined; }
+        const { recurrenceJson, ...rest } = event;
+        return { ...rest, allDay: Boolean(event.allDay), reminderEnabled: Boolean(event.reminderEnabled), recurrence };
+      });
+    return res.json({
+      source: "smart-ai-sqlite",
+      transactions: canonical.transactions,
+      budget: canonical.budget,
+      tasks: tasks.map((task) => ({ ...task, completed: Boolean(task.completed), reminderEnabled: true })),
+      calendarEvents,
+      fetchedAt: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    console.error("SMART AI state error:", error?.message || error);
+    return res.status(500).json({ error: "تعذر قراءة بيانات SMART AI." });
+  }
+});
 app.get("/api/ai/status", (req, res) => {
   const user = authUser(req);
   if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
