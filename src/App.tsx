@@ -20,7 +20,6 @@ import {
   LessonItem,
   EducationExpense,
   AthkarItem,
-  SecureRecord,
   MediaFolder,
   MediaItem,
   FavoritePlace,
@@ -36,7 +35,6 @@ import {
   VehiclesRepository,
   EducationRepository,
   ReligiousRepository,
-  VaultRepository,
   TripsRepository,
   ChatRepository,
   MediaRepository,
@@ -59,7 +57,6 @@ import { ReligiousView } from './components/ReligiousView';
 import ReligiousChoice from './components/religious/ReligiousChoice';
 import MuslimDashboard from './components/religious/MuslimDashboard';
 import ChristianDashboard from './components/religious/ChristianDashboard';
-import { SecureVaultView } from './components/SecureVaultView';
 import { AiCenterView } from './components/AiCenterView';
 import { HotChatView } from './components/HotChatView';
 import { MediaCenterView } from './components/MediaCenterView';
@@ -146,7 +143,6 @@ export default function App() {
     EducationRepository.getEducationExpenses()
   );
   const [athkarItems, setAthkarItems] = useState<AthkarItem[]>(() => ReligiousRepository.getAthkarItems());
-  const [secureRecords, setSecureRecords] = useState<SecureRecord[]>(() => VaultRepository.getRecords());
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>(() => ChatRepository.getChatRooms());
   const [mediaFolders, setMediaFolders] = useState<MediaFolder[]>(() => MediaRepository.getFolders());
   const [mediaItems, setMediaItems] = useState<MediaItem[]>(() => MediaRepository.getItems());
@@ -590,18 +586,6 @@ export default function App() {
               onUpdateAthkar={(updated) => {
                 setAthkarItems(updated);
                 ReligiousRepository.saveAthkarItems(updated);
-              }}
-            />
-          )}
-
-          {currentView === 'vault' && (
-            <SecureVaultView
-              language={language}
-              userPin={userProfile.pin || '1234'}
-              secureRecords={secureRecords}
-              onUpdateRecords={(updated) => {
-                setSecureRecords(updated);
-                VaultRepository.saveRecords(updated);
               }}
             />
           )}

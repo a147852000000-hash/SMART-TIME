@@ -91,7 +91,6 @@ export const TripsView: React.FC<TripsViewProps> = ({
   const [walletChecked, setWalletChecked] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
   const [tripCost, setTripCost] = useState(5);
-  const [freeSearches, setFreeSearches] = useState(0);
   const [myTripsOpen, setMyTripsOpen] = useState(false);
   const [storedTrips, setStoredTrips] = useState<RecentTrip[]>(() => (recentTrips || []).slice(0, 10));
   const mapSectionRef = useRef<HTMLDivElement | null>(null);
@@ -112,7 +111,6 @@ export const TripsView: React.FC<TripsViewProps> = ({
         if (cancelled) return;
         setWalletBalance(w.balance);
         setTripCost(w.tripCost);
-        setFreeSearches(Math.max(0, Number(w.freeSearches || 0)));
         setWalletChecked(true);
       })
       .catch((e: any) => {
@@ -371,7 +369,6 @@ export const TripsView: React.FC<TripsViewProps> = ({
         if (data.code === 'INSUFFICIENT_BALANCE') {
           setWalletError(data.error || 'الرصيد غير كافٍ');
           if (typeof data.balance === 'number') setWalletBalance(data.balance);
-          if (typeof data.freeSearches === 'number') setFreeSearches(Math.max(0, data.freeSearches));
         } else {
           setWalletError(data.error || 'تعذر جلب الأسعار الآن');
         }
@@ -381,8 +378,6 @@ export const TripsView: React.FC<TripsViewProps> = ({
         setComparisonData(data.result);
         saveSearchedTrip(data.result);
         if (typeof data.walletBalance === 'number') setWalletBalance(data.walletBalance);
-        if (typeof data.freeSearchesRemaining === 'number')
-          setFreeSearches(Math.max(0, data.freeSearchesRemaining));
       }
     } catch (e) {
       console.error('Transport comparison failed:', e);
@@ -781,11 +776,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
                     className="smart-compare-button"
                   >
                     {isComparing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Car className="w-4 h-4" />}
-                    {isComparing
-                      ? 'جاري تحديث الأسعار...'
-                      : freeSearches > 0
-                      ? `عرض الأسعار · مجاني (${freeSearches})`
-                      : `عرض الأسعار · ${Number(tripCost || 0).toFixed(2)} ${currency}`}
+                    {isComparing ? 'جاري تحديث الأسعار...' : `عرض الأسعار · ${Number(tripCost || 0).toFixed(2)} ${currency}`}
                   </button>
                 </div>
               </div>

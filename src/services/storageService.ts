@@ -14,7 +14,6 @@ import {
   EducationExpense,
   FavoritePlace,
   RecentTrip,
-  SecureRecord,
   ChatRoom,
   ChatMessage,
   MediaFolder,
@@ -30,7 +29,6 @@ import {
   VehiclesRepository,
   EducationRepository,
   ReligiousRepository,
-  VaultRepository,
   TripsRepository,
   ChatRepository,
   MediaRepository,
@@ -151,14 +149,6 @@ export class StorageService {
   }
   static saveRecentTrips(trips: RecentTrip[]): void {
     TripsRepository.saveRecentTrips(trips);
-  }
-
-  // Secure Vault
-  static getSecureRecords(): SecureRecord[] {
-    return VaultRepository.getRecords();
-  }
-  static saveSecureRecords(records: SecureRecord[]): void {
-    VaultRepository.saveRecords(records);
   }
 
   // Chat

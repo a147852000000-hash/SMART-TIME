@@ -6,7 +6,6 @@ import { ExpensesRepository } from './expensesRepository';
 import { VehiclesRepository } from './vehiclesRepository';
 import { EducationRepository } from './educationRepository';
 import { TripsRepository } from './tripsRepository';
-import { VaultRepository } from './vaultRepository';
 import { ChatRepository } from './chatRepository';
 import { MediaRepository } from './mediaRepository';
 import { NotificationsRepository } from './notificationsRepository';
@@ -36,7 +35,6 @@ export class BackupRepository {
         educationExpenses: EducationRepository.getEducationExpenses(),
         favoritePlaces: TripsRepository.getFavoritePlaces(),
         recentTrips: TripsRepository.getRecentTrips(),
-        secureRecords: VaultRepository.getRecords(),
         chatRooms: ChatRepository.getChatRooms(),
         chatMessages: ChatRepository.getChatMessages(),
         mediaFolders: MediaRepository.getFolders(),
@@ -72,7 +70,6 @@ export class BackupRepository {
       if (d.educationExpenses) EducationRepository.saveEducationExpenses(d.educationExpenses);
       if (d.favoritePlaces) TripsRepository.saveFavoritePlaces(d.favoritePlaces);
       if (d.recentTrips) TripsRepository.saveRecentTrips(d.recentTrips);
-      if (d.secureRecords) VaultRepository.saveRecords(d.secureRecords);
       if (d.chatRooms) ChatRepository.saveChatRooms(d.chatRooms);
       if (d.chatMessages) ChatRepository.saveChatMessages(d.chatMessages);
       if (d.mediaFolders) MediaRepository.saveFolders(d.mediaFolders);
