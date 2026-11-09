@@ -13,7 +13,7 @@ import { askSmartAiCore } from "./backend/ai/smartAiCore.js";
 import { isLocalSmartAiConfigured } from "./backend/ai/localInference.js";
 import { createHttpVoiceDnaProvider, DisabledVoiceDnaProvider } from "./backend/voice/voiceDnaProvider.js";
 import { sendPasswordResetEmail as sendPasswordResetEmailWithProvider } from "./backend/auth/passwordResetEmail.js";
-import { createCanonicalExpense, updateCanonicalExpense, deleteCanonicalExpense, updateCanonicalFinanceRecord, deleteCanonicalFinanceRecord, ensureFinanceMutationSchema, migrateLegacyExpensesToCanonical, reconcileAiTransactionsToCanonical, upsertCanonicalMonthlyIncome, upsertCanonicalBankCertificates, deleteCanonicalBankCertificate, replaceCanonicalCarTripIncome, type CanonicalExpenseInput, type CanonicalMonthlyIncomeInput, type CanonicalBankCertificateInput, type CanonicalCarTripIncomeInput } from "./backend/ai/finance/financeRepository.js";
+import { createCanonicalExpense, updateCanonicalExpense, deleteCanonicalExpense, updateCanonicalFinanceRecord, deleteCanonicalFinanceRecord, ensureFinanceMutationSchema, migrateLegacyExpensesToCanonical, reconcileAiTransactionsToCanonical, upsertCanonicalMonthlyIncome, upsertCanonicalBankCertificates, deleteCanonicalBankCertificate, replaceCanonicalCarTripIncome, replaceCanonicalUserFinanceRecords, type CanonicalExpenseInput, type CanonicalMonthlyIncomeInput, type CanonicalBankCertificateInput, type CanonicalCarTripIncomeInput } from "./backend/ai/finance/financeRepository.js";
 import { getFinanceOverview } from "./backend/ai/finance/financeProjection.js";
 import { getAiCanonicalState } from "./backend/ai/finance/aiCanonicalProjection.js";
 
@@ -1847,6 +1847,25 @@ app.put("/api/finance/car-trips", (req, res) => {
     return res.json({ source: "smart-time-finance-sqlite", saved, records: getFinanceOverview(userId).carTripIncome });
   } catch (error: any) {
     return res.status(400).json({ error: error?.message || "تعذر حفظ دخل الرحلات." });
+  }
+});
+
+app.put("/api/finance/user-records/:kind", (req, res) => {
+  const userId = financeUser(req, res);
+  if (!userId) return;
+  try {
+    ensureFinanceMutationSchema();
+    const items = Array.isArray(req.body?.items) ? req.body.items as Array<Record<string, unknown>> : [];
+    const saved = replaceCanonicalUserFinanceRecords(userId, req.params.kind, items);
+    const overview = getFinanceOverview(userId);
+    const recordsByKind: Record<string, unknown[]> = {
+      students: overview.students as unknown[],
+      associations: overview.associations as unknown[],
+      vehicle_accidents: overview.vehicleAccidents as unknown[],
+    };
+    return res.json({ source: "smart-time-finance-sqlite", saved, records: recordsByKind[req.params.kind] || [] });
+  } catch (error: any) {
+    return res.status(400).json({ error: error?.message || "تعذر حفظ السجلات المالية." });
   }
 });
 
