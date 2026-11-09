@@ -9,6 +9,7 @@ const service = read("src/services/financeService.ts");
 const financeView = read("src/components/ExpensesView.tsx");
 const carIncomeView = read("src/components/expenses/CarIncomeSection.tsx");
 const educationView = read("src/components/expenses/EducationExpensesSection.tsx");
+const vehicleView = read("src/components/expenses/VehicleExpensesSection.tsx");
 const expensesView = read("src/components/ExpensesView.tsx");
 
 const checks = [
@@ -32,6 +33,7 @@ const checks = [
   ["authenticated API exposes canonical user records", server.includes('app.put("/api/finance/user-records/:kind"') && server.includes("replaceCanonicalUserFinanceRecords(userId, req.params.kind, items)")],
   ["frontend overview and save service include student/association/accident data", service.includes("saveCanonicalFinanceUserRecords") && expensesView.includes("overview.students") && expensesView.includes("overview.associations") && expensesView.includes("overview.vehicleAccidents")],
   ["student and association screens use the connected view state", educationView.includes("onSaveStudents") && expensesView.includes("saveCanonicalFinanceUserRecords(\"students\"") && expensesView.includes("saveCanonicalFinanceUserRecords(\"associations\"")],
+  ["vehicle accident screen supports create, edit, and delete", vehicleView.includes("screen === 'accidents'") && vehicleView.includes("onSaveAccidents") && vehicleView.includes("editingAccidentId")],
 
 ];
 
