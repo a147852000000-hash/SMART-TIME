@@ -15,7 +15,7 @@ export interface FinanceOverview {
 
 export async function fetchCanonicalFinanceOverview(): Promise<FinanceOverview> {
   const response = await fetch(apiUrl("/api/finance/overview"), {
-    credentials: "include",
+    credentials: "omit",
     headers: { Accept: "application/json", ...authHeaders() },
   });
   const payload = await response.json().catch(() => ({}));
@@ -53,7 +53,7 @@ interface FinanceMutationPayload {
 async function financeMutation(path: string, method: string, body?: unknown): Promise<FinanceMutationPayload> {
   const response = await fetch(apiUrl(path), {
     method,
-    credentials: "include",
+    credentials: "omit",
     headers: { "Content-Type": "application/json", Accept: "application/json", ...authHeaders() },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
