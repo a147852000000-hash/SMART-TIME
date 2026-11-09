@@ -11,6 +11,7 @@ const projection = await import("./financeProjection.js");
 const { db } = await import("../../database.js");
 
 try {
+  repository.ensureFinanceMutationSchema();
   const income = [{
     id: "income_2026-11", month: "2026-11", salary: 25000, bonuses: 2000,
     otherIncome: 3000, otherIncomeNote: "Freelance",
