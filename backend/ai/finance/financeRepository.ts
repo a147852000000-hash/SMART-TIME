@@ -374,6 +374,55 @@ export function deleteCanonicalBankCertificate(userId: string, certificateId: st
   if (Number(result.changes) !== 1) throw new Error("Bank certificate not found for this user");
 }
 
+export interface CanonicalCarTripIncomeInput {
+  id: string; tripNumber: string | number; amount: number; date: string;
+  dayName?: string; time?: string; notes?: string; tripType?: string;
+  paymentMethod?: string; createdAt?: string;
+}
+
+export function replaceCanonicalCarTripIncome(userId: string, items: CanonicalCarTripIncomeInput[]): number {
+  const uid = text(userId, 200);
+  if (!uid) throw new Error("userId is required");
+  if (!Array.isArray(items) || items.length > 5000) throw new Error("Invalid car trip income list");
+  const upsert = db.prepare(`INSERT INTO finance_car_trip_income
+    (id,user_id,trip_number,amount,date,day_name,time,notes,trip_type,payment_method,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET trip_number=excluded.trip_number,amount=excluded.amount,date=excluded.date,
+    day_name=excluded.day_name,time=excluded.time,notes=excluded.notes,trip_type=excluded.trip_type,
+    payment_method=excluded.payment_method,updated_at=excluded.updated_at
+    WHERE finance_car_trip_income.user_id=excluded.user_id`);
+  const timestamp = now();
+  db.exec("BEGIN");
+  try {
+    const ids: string[] = [];
+    for (const row of items) {
+      const idValue = text(row.id, 200), amount = Number(row.amount);
+      const date = text(row.date, 20);
+      if (!idValue || !Number.isFinite(amount) || amount <= 0 || !/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) {
+        throw new Error("Invalid car trip income record");
+      }
+      const createdAt = text(row.createdAt, 100) || timestamp;
+      upsert.run(idValue, uid, text(row.tripNumber, 100) || "1", amount, date,
+        text(row.dayName, 50) || null, text(row.time, 20) || null, text(row.notes, 2000) || null,
+        text(row.tripType, 100) || null, text(row.paymentMethod, 50) || null, createdAt, timestamp);
+      if (!db.prepare("SELECT id FROM finance_car_trip_income WHERE id=? AND user_id=?").get(idValue, uid)) {
+        throw new Error("Car trip income belongs to another user");
+      }
+      ids.push(idValue);
+    }
+    if (ids.length) {
+      db.prepare(`DELETE FROM finance_car_trip_income WHERE user_id=? AND id NOT IN (${ids.map(() => "?").join(",")})`).run(uid, ...ids);
+    } else {
+      db.prepare("DELETE FROM finance_car_trip_income WHERE user_id=?").run(uid);
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  return items.length;
+}
+
 export type CanonicalFinanceRecordKind = "fuel" | "maintenance" | "education";
 
 const FINANCE_RECORD_TABLES: Record<CanonicalFinanceRecordKind, {
