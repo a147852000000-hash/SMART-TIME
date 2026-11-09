@@ -10,6 +10,8 @@ const financeView = read("src/components/ExpensesView.tsx");
 const carIncomeView = read("src/components/expenses/CarIncomeSection.tsx");
 const educationView = read("src/components/expenses/EducationExpensesSection.tsx");
 const vehicleView = read("src/components/expenses/VehicleExpensesSection.tsx");
+const sectionsMenu = read("src/components/expenses/SectionsMenuScreen.tsx");
+const reportsView = read("src/components/expenses/FinancialReportsSection.tsx");
 const expensesView = read("src/components/ExpensesView.tsx");
 
 const checks = [
@@ -34,6 +36,9 @@ const checks = [
   ["frontend overview and save service include student/association/accident data", service.includes("saveCanonicalFinanceUserRecords") && expensesView.includes("overview.students") && expensesView.includes("overview.associations") && expensesView.includes("overview.vehicleAccidents")],
   ["student and association screens use the connected view state", educationView.includes("onSaveStudents") && expensesView.includes("saveCanonicalFinanceUserRecords(\"students\"") && expensesView.includes("saveCanonicalFinanceUserRecords(\"associations\"")],
   ["vehicle accident screen supports create, edit, and delete", vehicleView.includes("screen === 'accidents'") && vehicleView.includes("onSaveAccidents") && vehicleView.includes("editingAccidentId")],
+  ["work expenses are visible separately from personal expenses", sectionsMenu.includes("id: 'work'") && sectionsMenu.includes("personalTotal") && expensesView.includes("workTotal={workTotal}")],
+  ["reports include work, income, associations, trips, and accidents", reportsView.includes("id:'work'") && reportsView.includes("incomeList.forEach") && reportsView.includes("assocRows(item") && reportsView.includes("carTripIncomeList.forEach") && reportsView.includes("accidentList.forEach")],
+
 
 ];
 
