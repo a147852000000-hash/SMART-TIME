@@ -15,7 +15,6 @@ export type AppView =
   | 'vehicles'
   | 'education'
   | 'religious'
-  | 'vault'
   | 'ai'
   | 'chat'
   | 'media'
