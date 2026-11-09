@@ -32,6 +32,8 @@ interface SectionsMenuScreenProps {
   houseCount: number;
   workTotal: number;
   workCount: number;
+  personalTotal: number;
+  personalCount: number;
   vehicleTotal: number;
   vehicleCount: number;
   educationTotal: number;
@@ -45,13 +47,14 @@ interface SectionsMenuScreenProps {
   userProfile?: UserProfile;
 }
 
-type SectionKey = 'vehicle' | 'income_certs' | 'education' | 'house' | 'personal' | 'reports';
+type SectionKey = 'vehicle' | 'income_certs' | 'education' | 'house' | 'work' | 'personal' | 'reports';
 
 const DEFAULT_SECTIONS_ORDER: SectionKey[] = [
   'vehicle',
   'income_certs',
   'education',
   'house',
+  'work',
   'personal',
   'reports',
 ];
@@ -67,6 +70,8 @@ export const SectionsMenuScreen: React.FC<SectionsMenuScreenProps> = ({
   houseCount,
   workTotal,
   workCount,
+  personalTotal,
+  personalCount,
   vehicleTotal,
   vehicleCount,
   educationTotal,
@@ -152,12 +157,20 @@ export const SectionsMenuScreen: React.FC<SectionsMenuScreenProps> = ({
       count: houseCount,
       desc: isAr ? 'كل مصروفات المنزل' : 'All home expenses',
     },
+    work: {
+      id: 'work',
+      title: isAr ? 'مصروفات العمل' : 'Work Expenses',
+      icon: Briefcase,
+      total: -Math.abs(workTotal),
+      count: workCount,
+      desc: isAr ? 'مصروفات الأدوات والاحتياجات المهنية' : 'Business and work-related expenses',
+    },
     personal: {
       id: 'personal',
       title: isAr ? 'المصروفات الشخصية' : 'Personal Expenses',
       icon: UserRound,
-      total: -Math.abs(workTotal),
-      count: workCount,
+      total: -Math.abs(personalTotal),
+      count: personalCount,
       desc: isAr ? 'المصروفات الشخصية اليومية' : 'Personal daily expenses',
     },
     reports: {
