@@ -8,6 +8,8 @@ const clientRepository = read("src/repositories/financeRepository.ts");
 const service = read("src/services/financeService.ts");
 const financeView = read("src/components/ExpensesView.tsx");
 const carIncomeView = read("src/components/expenses/CarIncomeSection.tsx");
+const educationView = read("src/components/expenses/EducationExpensesSection.tsx");
+const expensesView = read("src/components/ExpensesView.tsx");
 
 const checks = [
   ["fuel schema has liters, unit price, and total cost", ["CREATE TABLE IF NOT EXISTS finance_fuel_records", "liters REAL NOT NULL", "price_per_liter REAL NOT NULL", "total_cost REAL NOT NULL"].every((value) => schema.includes(value))],
@@ -25,6 +27,12 @@ const checks = [
   ["car trip API authenticates the user", server.includes('app.put("/api/finance/car-trips"') && server.includes("replaceCanonicalCarTripIncome(userId, items)")],
   ["income UI persists monthly income and certificates", service.includes('"/api/finance/income"') && service.includes('"/api/finance/certificates"') && financeView.includes("saveCanonicalMonthlyIncome") && financeView.includes("saveCanonicalBankCertificates")],
   ["car trip income UI loads and saves canonical records", service.includes('"/api/finance/car-trips"') && carIncomeView.includes("fetchCanonicalFinanceOverview") && carIncomeView.includes("saveCanonicalCarTripIncome")],
+  ["student, association, and accident records have a canonical table", schema.includes("CREATE TABLE IF NOT EXISTS finance_user_records") && schema.includes("PRIMARY KEY(user_id, record_type, record_id)")],
+  ["record collections are allow-listed and owner-scoped", repository.includes('["students", "associations", "vehicle_accidents"]') && repository.includes("WHERE user_id=? AND record_type=?")],
+  ["authenticated API exposes canonical user records", server.includes('app.put("/api/finance/user-records/:kind"') && server.includes("replaceCanonicalUserFinanceRecords(userId, req.params.kind, items)")],
+  ["frontend overview and save service include student/association/accident data", service.includes("saveCanonicalFinanceUserRecords") && expensesView.includes("overview.students") && expensesView.includes("overview.associations") && expensesView.includes("overview.vehicleAccidents")],
+  ["student and association screens use the connected view state", educationView.includes("onSaveStudents") && expensesView.includes("saveCanonicalFinanceUserRecords(\"students\"") && expensesView.includes("saveCanonicalFinanceUserRecords(\"associations\"")],
+
 ];
 
 const failed = checks.filter(([, passed]) => !passed);
