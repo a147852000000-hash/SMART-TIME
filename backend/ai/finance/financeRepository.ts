@@ -300,8 +300,9 @@ export function upsertCanonicalMonthlyIncome(userId: string, items: CanonicalMon
     other_income=excluded.other_income,other_income_note=excluded.other_income_note,
     sources_json=excluded.sources_json,updated_at=excluded.updated_at`);
   const timestamp = now();
-  const run = db.transaction((rows: CanonicalMonthlyIncomeInput[]) => {
-    for (const row of rows) {
+  db.exec("BEGIN");
+  try {
+    for (const row of items) {
       const month = text(row.month, 7);
       if (!/^\\d{4}-\\d{2}$/.test(month)) throw new Error("Invalid income month");
       const salary = Number(row.salary || 0), bonuses = Number(row.bonuses || 0), other = Number(row.otherIncome || 0);
@@ -313,8 +314,11 @@ export function upsertCanonicalMonthlyIncome(userId: string, items: CanonicalMon
       upsert.run(idValue, uid, month, salary, bonuses, other, text(row.otherIncomeNote, 1000) || null,
         JSON.stringify(sources), createdAt, timestamp);
     }
-  });
-  run(items);
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
   return items.length;
 }
 
@@ -335,8 +339,9 @@ export function upsertCanonicalBankCertificates(userId: string, items: Canonical
     profit_amount=excluded.profit_amount,profit_frequency=excluded.profit_frequency,notes=excluded.notes,
     updated_at=excluded.updated_at WHERE finance_bank_certificates.user_id=excluded.user_id`);
   const timestamp = now();
-  const run = db.transaction((rows: CanonicalBankCertificateInput[]) => {
-    for (const row of rows) {
+  db.exec("BEGIN");
+  try {
+    for (const row of items) {
       const idValue = text(row.id, 200), bank = text(row.bankName, 200), duration = text(row.duration, 100);
       const amount = Number(row.amount), profit = Number(row.profitAmount);
       if (!idValue || !bank || !duration || !Number.isFinite(amount) || amount <= 0 || !Number.isFinite(profit) || profit < 0) throw new Error("Invalid bank certificate");
@@ -352,8 +357,11 @@ export function upsertCanonicalBankCertificates(userId: string, items: Canonical
         text(row.returnType, 30) || null, row.issueDate, row.maturityDate, row.profitDate, profit,
         row.profitFrequency, text(row.notes, 2000) || null, text(row.createdAt, 100) || timestamp, timestamp);
     }
-  });
-  run(items);
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
   return items.length;
 }
 
