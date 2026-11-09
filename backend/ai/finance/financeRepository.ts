@@ -277,6 +277,93 @@ export function migrateLegacyExpensesToCanonical(userId: string, items: Array<Ca
 }
 
 
+
+export interface CanonicalMonthlyIncomeInput {
+  id?: string; month: string; salary: number; bonuses: number; otherIncome: number;
+  otherIncomeNote?: string | null; sources?: unknown[]; createdAt?: string;
+}
+export interface CanonicalBankCertificateInput {
+  id: string; bankName: string; certificateNumber?: string; duration: string; amount: number;
+  annualRate?: number; annualProfit?: number; periodicProfit?: number; monthlyEquivalentProfit?: number;
+  returnType?: string; issueDate: string; maturityDate: string; profitDate: string;
+  profitAmount: number; profitFrequency: string; notes?: string | null; createdAt?: string;
+}
+
+export function upsertCanonicalMonthlyIncome(userId: string, items: CanonicalMonthlyIncomeInput[]): number {
+  const uid = text(userId, 200);
+  if (!uid) throw new Error("userId is required");
+  if (!Array.isArray(items) || items.length > 240) throw new Error("Invalid monthly income list");
+  const upsert = db.prepare(`INSERT INTO finance_monthly_income
+    (id,user_id,month,salary,bonuses,other_income,other_income_note,sources_json,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(user_id,month) DO UPDATE SET salary=excluded.salary,bonuses=excluded.bonuses,
+    other_income=excluded.other_income,other_income_note=excluded.other_income_note,
+    sources_json=excluded.sources_json,updated_at=excluded.updated_at`);
+  const timestamp = now();
+  const run = db.transaction((rows: CanonicalMonthlyIncomeInput[]) => {
+    for (const row of rows) {
+      const month = text(row.month, 7);
+      if (!/^\\d{4}-\\d{2}$/.test(month)) throw new Error("Invalid income month");
+      const salary = Number(row.salary || 0), bonuses = Number(row.bonuses || 0), other = Number(row.otherIncome || 0);
+      if (![salary, bonuses, other].every((n) => Number.isFinite(n) && n >= 0)) throw new Error("Invalid income amounts");
+      const sources = Array.isArray(row.sources) ? row.sources : [];
+      if (sources.length > 1000) throw new Error("Too many income source records");
+      const idValue = text(row.id, 200) || `income_${month}`;
+      const createdAt = text(row.createdAt, 100) || timestamp;
+      upsert.run(idValue, uid, month, salary, bonuses, other, text(row.otherIncomeNote, 1000) || null,
+        JSON.stringify(sources), createdAt, timestamp);
+    }
+  });
+  run(items);
+  return items.length;
+}
+
+export function upsertCanonicalBankCertificates(userId: string, items: CanonicalBankCertificateInput[]): number {
+  const uid = text(userId, 200);
+  if (!uid) throw new Error("userId is required");
+  if (!Array.isArray(items) || items.length > 500) throw new Error("Invalid certificate list");
+  const upsert = db.prepare(`INSERT INTO finance_bank_certificates
+    (id,user_id,bank_name,certificate_number,duration,amount,annual_rate,annual_profit,periodic_profit,
+     monthly_equivalent_profit,return_type,issue_date,maturity_date,profit_date,profit_amount,
+     profit_frequency,notes,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET bank_name=excluded.bank_name,certificate_number=excluded.certificate_number,
+    duration=excluded.duration,amount=excluded.amount,annual_rate=excluded.annual_rate,
+    annual_profit=excluded.annual_profit,periodic_profit=excluded.periodic_profit,
+    monthly_equivalent_profit=excluded.monthly_equivalent_profit,return_type=excluded.return_type,
+    issue_date=excluded.issue_date,maturity_date=excluded.maturity_date,profit_date=excluded.profit_date,
+    profit_amount=excluded.profit_amount,profit_frequency=excluded.profit_frequency,notes=excluded.notes,
+    updated_at=excluded.updated_at WHERE finance_bank_certificates.user_id=excluded.user_id`);
+  const timestamp = now();
+  const run = db.transaction((rows: CanonicalBankCertificateInput[]) => {
+    for (const row of rows) {
+      const idValue = text(row.id, 200), bank = text(row.bankName, 200), duration = text(row.duration, 100);
+      const amount = Number(row.amount), profit = Number(row.profitAmount);
+      if (!idValue || !bank || !duration || !Number.isFinite(amount) || amount <= 0 || !Number.isFinite(profit) || profit < 0) throw new Error("Invalid bank certificate");
+      for (const date of [row.issueDate, row.maturityDate, row.profitDate]) {
+        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(text(date, 20))) throw new Error("Invalid certificate date");
+      }
+      if (!["monthly","quarterly","semiannual","annual","maturity"].includes(text(row.profitFrequency, 30))) throw new Error("Invalid certificate profit frequency");
+      upsert.run(idValue, uid, bank, text(row.certificateNumber, 200) || null, duration, amount,
+        Number.isFinite(Number(row.annualRate)) ? Number(row.annualRate) : null,
+        Number.isFinite(Number(row.annualProfit)) ? Number(row.annualProfit) : null,
+        Number.isFinite(Number(row.periodicProfit)) ? Number(row.periodicProfit) : null,
+        Number.isFinite(Number(row.monthlyEquivalentProfit)) ? Number(row.monthlyEquivalentProfit) : null,
+        text(row.returnType, 30) || null, row.issueDate, row.maturityDate, row.profitDate, profit,
+        row.profitFrequency, text(row.notes, 2000) || null, text(row.createdAt, 100) || timestamp, timestamp);
+    }
+  });
+  run(items);
+  return items.length;
+}
+
+export function deleteCanonicalBankCertificate(userId: string, certificateId: string): void {
+  const uid = text(userId, 200), idValue = text(certificateId, 200);
+  if (!uid || !idValue) throw new Error("Invalid certificate identity");
+  const result = db.prepare("DELETE FROM finance_bank_certificates WHERE id=? AND user_id=?").run(idValue, uid);
+  if (Number(result.changes) !== 1) throw new Error("Bank certificate not found for this user");
+}
+
 export type CanonicalFinanceRecordKind = "fuel" | "maintenance" | "education";
 
 const FINANCE_RECORD_TABLES: Record<CanonicalFinanceRecordKind, {
