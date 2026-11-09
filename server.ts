@@ -13,7 +13,7 @@ import { askSmartAiCore } from "./backend/ai/smartAiCore.js";
 import { isLocalSmartAiConfigured } from "./backend/ai/localInference.js";
 import { createHttpVoiceDnaProvider, DisabledVoiceDnaProvider } from "./backend/voice/voiceDnaProvider.js";
 import { sendPasswordResetEmail as sendPasswordResetEmailWithProvider } from "./backend/auth/passwordResetEmail.js";
-import { createCanonicalExpense, updateCanonicalExpense, deleteCanonicalExpense, updateCanonicalFinanceRecord, deleteCanonicalFinanceRecord, ensureFinanceMutationSchema, migrateLegacyExpensesToCanonical, reconcileAiTransactionsToCanonical, type CanonicalExpenseInput } from "./backend/ai/finance/financeRepository.js";
+import { createCanonicalExpense, updateCanonicalExpense, deleteCanonicalExpense, updateCanonicalFinanceRecord, deleteCanonicalFinanceRecord, ensureFinanceMutationSchema, migrateLegacyExpensesToCanonical, reconcileAiTransactionsToCanonical, upsertCanonicalMonthlyIncome, upsertCanonicalBankCertificates, deleteCanonicalBankCertificate, type CanonicalExpenseInput, type CanonicalMonthlyIncomeInput, type CanonicalBankCertificateInput } from "./backend/ai/finance/financeRepository.js";
 import { getFinanceOverview } from "./backend/ai/finance/financeProjection.js";
 import { getAiCanonicalState } from "./backend/ai/finance/aiCanonicalProjection.js";
 
@@ -1797,6 +1797,46 @@ function financeUser(req: express.Request, res: express.Response): string | null
   return String(user.id);
 }
 
+app.put("/api/finance/income", (req, res) => {
+  const userId = financeUser(req, res);
+  if (!userId) return;
+  try {
+    ensureFinanceMutationSchema();
+    const items = Array.isArray(req.body?.items) ? req.body.items as CanonicalMonthlyIncomeInput[] : [];
+    const saved = upsertCanonicalMonthlyIncome(userId, items);
+    const records = getFinanceOverview(userId).monthlyIncome;
+    return res.json({ source: "smart-time-finance-sqlite", saved, records });
+  } catch (error: any) {
+    return res.status(400).json({ error: error?.message || "تعذر حفظ بيانات الدخل." });
+  }
+});
+
+app.put("/api/finance/certificates", (req, res) => {
+  const userId = financeUser(req, res);
+  if (!userId) return;
+  try {
+    ensureFinanceMutationSchema();
+    const items = Array.isArray(req.body?.items) ? req.body.items as CanonicalBankCertificateInput[] : [];
+    const saved = upsertCanonicalBankCertificates(userId, items);
+    const records = getFinanceOverview(userId).bankCertificates;
+    return res.json({ source: "smart-time-finance-sqlite", saved, records });
+  } catch (error: any) {
+    return res.status(400).json({ error: error?.message || "تعذر حفظ الشهادات البنكية." });
+  }
+});
+
+app.delete("/api/finance/certificates/:id", (req, res) => {
+  const userId = financeUser(req, res);
+  if (!userId) return;
+  try {
+    ensureFinanceMutationSchema();
+    deleteCanonicalBankCertificate(userId, req.params.id);
+    return res.json({ source: "smart-time-finance-sqlite", deleted: true, id: req.params.id });
+  } catch (error: any) {
+    const message = String(error?.message || "");
+    return res.status(message.includes("not found") ? 404 : 400).json({ error: message || "تعذر حذف الشهادة البنكية." });
+  }
+});
 app.get("/api/finance/overview", (req, res) => {
   const userId = financeUser(req, res);
   if (!userId) return;
