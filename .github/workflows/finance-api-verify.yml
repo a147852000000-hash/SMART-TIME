@@ -1,0 +1,42 @@
+name: Finance API Verification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/ai/finance/**"
+      - "backend/database/canonicalSchema.ts"
+      - "server.ts"
+      - "src/repositories/financeRepository.ts"
+      - "src/services/financeService.ts"
+      - "scripts/verify-phase5-*.mjs"
+      - "scripts/verify-finance-record-mutations.mjs"
+      - "package.json"
+      - ".github/workflows/finance-api-verify.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/ai/finance/**"
+      - "backend/database/canonicalSchema.ts"
+      - "server.ts"
+      - "src/repositories/financeRepository.ts"
+      - "src/services/financeService.ts"
+      - "scripts/verify-phase5-*.mjs"
+      - "scripts/verify-finance-record-mutations.mjs"
+      - "package.json"
+      - ".github/workflows/finance-api-verify.yml"
+
+jobs:
+  finance-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm run verify:phase5-final
+      - run: npm run verify:finance-record-mutations
+      - run: npm run lint
+      - run: npm run build
