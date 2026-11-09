@@ -5,6 +5,7 @@ export interface FinanceOverview {
   expenses: unknown[];
   monthlyIncome: unknown[];
   bankCertificates: unknown[];
+  carTripIncome: unknown[];
   fuelRecords: unknown[];
   maintenanceRecords: unknown[];
   educationExpenses: unknown[];
@@ -51,6 +52,15 @@ export function getFinanceOverview(userId: string): FinanceOverview {
     ORDER BY maturity_date ASC, created_at DESC
   `).all(userId);
 
+  const carTripIncome = db.prepare(`
+    SELECT id, trip_number as tripNumber, amount, date, day_name as dayName,
+           time, notes, trip_type as tripType, payment_method as paymentMethod,
+           created_at as createdAt, updated_at as updatedAt
+    FROM finance_car_trip_income
+    WHERE user_id = ?
+    ORDER BY date DESC, created_at DESC
+  `).all(userId);
+
   const fuelRecords = db.prepare(`
     SELECT id, vehicle_id as vehicleId, liters,
            price_per_liter as pricePerLiter, total_cost as totalCost,
@@ -86,6 +96,7 @@ export function getFinanceOverview(userId: string): FinanceOverview {
     expenses,
     monthlyIncome,
     bankCertificates,
+    carTripIncome,
     fuelRecords,
     maintenanceRecords,
     educationExpenses,
