@@ -88,56 +88,9 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     return StorageAdapter.getItem<StudentProfile[]>('smart_time_students', defaultStudents);
   });
 
-  // Income Sources List
-  const [incomeList, setIncomeList] = useState<MonthlyIncome[]>(() => {
-    const existing = ExpensesRepository.getMonthlyIncome();
-    if (existing && existing.length > 0) return existing;
-    // Default initial income for current month
-    const defaultIncome: MonthlyIncome = {
-      id: `income_${currentYearMonth}`,
-      month: currentYearMonth,
-      salary: 25000,
-      bonuses: 2000,
-      otherIncome: 3000,
-      sources: [
-        { id: 'src_1', source: 'الراتب الأساسي', amount: 25000, date: `${currentYearMonth}-01`, type: 'salary', notes: 'الراتب الشهري الرئيسي', createdAt: new Date().toISOString() },
-        { id: 'src_2', source: 'دخل عمل حر (Freelance)', amount: 5000, date: `${currentYearMonth}-05`, type: 'extra', notes: 'تطوير تطبيق ويب', createdAt: new Date().toISOString() },
-      ],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    ExpensesRepository.saveMonthlyIncome([defaultIncome]);
-    return [defaultIncome];
-  });
-
-  // Bank Certificates
-  const [certificates, setCertificates] = useState<BankCertificate[]>(() => {
-    const existing = ExpensesRepository.getBankCertificates();
-    if (existing && existing.length > 0) return existing;
-    // Default initial certificate as requested in prompt (240,000 at 18% = 43,200 annual, 3,600 monthly)
-    const defaultCert: BankCertificate = {
-      id: 'cert_sample_1',
-      bankName: 'البنك الأهلي المصري',
-      certificateNumber: 'CERT-884920',
-      duration: '1 سنة',
-      amount: 240000,
-      annualRate: 18,
-      annualProfit: 43200,
-      periodicProfit: 3600,
-      monthlyEquivalentProfit: 3600,
-      returnType: 'simple',
-      issueDate: `${currentYearMonth}-01`,
-      maturityDate: `${new Date().getFullYear() + 1}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`,
-      profitDate: `${currentYearMonth}-01`,
-      profitAmount: 3600,
-      profitFrequency: 'monthly',
-      notes: 'شهادة العائد البلاتيني الشهري 18%',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    ExpensesRepository.saveBankCertificates([defaultCert]);
-    return [defaultCert];
-  });
+  // Income and certificates are loaded from canonical SQLite; browser storage remains a migration fallback.
+  const [incomeList, setIncomeList] = useState<MonthlyIncome[]>(() => ExpensesRepository.getMonthlyIncome());
+  const [certificates, setCertificates] = useState<BankCertificate[]>(() => ExpensesRepository.getBankCertificates());
 
   // --- 3. PERSISTENCE WRAPPERS ---
   const handleSaveAssociations = (list: AssociationRecord[]) => {
