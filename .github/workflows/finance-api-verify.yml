@@ -38,5 +38,6 @@ jobs:
       - run: npm install --ignore-scripts --no-audit --no-fund
       - run: npm run verify:phase5-final
       - run: npm run verify:finance-record-mutations
+      - run: npm run test:finance-canonical
       - run: npm run lint
       - run: npm run build
