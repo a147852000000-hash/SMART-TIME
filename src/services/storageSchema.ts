@@ -19,7 +19,6 @@ import type {
   NoteFolder,
   NoteTag,
   RecentTrip,
-  SecureRecord,
   Student,
   UserProfile,
   Vehicle,
@@ -83,7 +82,6 @@ export type StorageSchemaValueMap = {
   [STORAGE_KEYS.EDUCATION_EXPENSES]: EducationExpense[];
   [STORAGE_KEYS.FAVORITE_PLACES]: FavoritePlace[];
   [STORAGE_KEYS.RECENT_TRIPS]: RecentTrip[];
-  [STORAGE_KEYS.SECURE_RECORDS]: SecureRecord[];
   [STORAGE_KEYS.CHAT_ROOMS]: ChatRoom[];
   [STORAGE_KEYS.CHAT_MESSAGES]: ChatMessage[];
   [STORAGE_KEYS.MEDIA_FOLDERS]: MediaFolder[];
@@ -248,11 +246,6 @@ const schema = {
   [STORAGE_KEYS.RECENT_TRIPS]: {
     key: STORAGE_KEYS.RECENT_TRIPS,
     description: 'Recent trips collection.',
-    validate: isObjectArray,
-  },
-  [STORAGE_KEYS.SECURE_RECORDS]: {
-    key: STORAGE_KEYS.SECURE_RECORDS,
-    description: 'Secure vault records collection.',
     validate: isObjectArray,
   },
   [STORAGE_KEYS.CHAT_ROOMS]: {
