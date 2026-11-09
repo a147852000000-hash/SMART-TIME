@@ -13,6 +13,8 @@ import { askSmartAiCore } from "./backend/ai/smartAiCore.js";
 import { isLocalSmartAiConfigured } from "./backend/ai/localInference.js";
 import { createHttpVoiceDnaProvider, DisabledVoiceDnaProvider } from "./backend/voice/voiceDnaProvider.js";
 import { sendPasswordResetEmail as sendPasswordResetEmailWithProvider } from "./backend/auth/passwordResetEmail.js";
+import { createCanonicalExpense, updateCanonicalExpense, deleteCanonicalExpense, ensureFinanceMutationSchema, migrateLegacyExpensesToCanonical, reconcileAiTransactionsToCanonical, type CanonicalExpenseInput } from "./backend/ai/finance/financeRepository.js";
+import { getFinanceOverview } from "./backend/ai/finance/financeProjection.js";
 
 dotenv.config();
 
@@ -1747,6 +1749,98 @@ app.get("/api/live/sports", async (req, res) => {
     res.json({ source: "api-football", configured: true, fetchedAt: new Date().toISOString(), matches: data.response || [] });
   } catch (error) {
     res.status(502).json({ source: "api-football", configured: true, matches: [], error: (error as Error)?.message });
+  }
+});
+
+// ----------------------------------------------------
+// Canonical Finance API — all records are scoped to the authenticated user.
+// ----------------------------------------------------
+function financeUser(req: express.Request, res: express.Response): string | null {
+  const user = authUser(req);
+  if (!user?.id) {
+    res.status(401).json({ error: "يجب تسجيل الدخول للوصول إلى البيانات المالية." });
+    return null;
+  }
+  return String(user.id);
+}
+
+app.get("/api/finance/overview", (req, res) => {
+  const userId = financeUser(req, res);
+  if (!userId) return;
+  try {
+    ensureFinanceMutationSchema();
+    return res.json(getFinanceOverview(userId));
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || "تعذر تحميل البيانات المالية." });
+  }
+});
+
+app.post("/api/finance/expenses", (req, res) => {
+  const userId = financeUser(req, res);
+  if (!userId) return;
+  try {
+    ensureFinanceMutationSchema();
+    const input = req.body as CanonicalExpenseInput;
+    const result = createCanonicalExpense(userId, input);
+    const record = getFinanceOverview(userId).expenses.find((item: any) => String(item.id) === result.id);
+    if (!record) return res.status(500).json({ error: "تعذر التحقق من حفظ المصروف." });
+    return res.status(201).json({ source: "smart-time-finance-sqlite", record });
+  } catch (error: any) {
+    return res.status(400).json({ error: error?.message || "تعذر إضافة المصروف." });
+  }
+});
+
+app.patch("/api/finance/expenses/:id", (req, res) => {
+  const userId = financeUser(req, res);
+  if (!userId) return;
+  try {
+    ensureFinanceMutationSchema();
+    const record = updateCanonicalExpense(userId, req.params.id, req.body || {});
+    return res.json({ source: "smart-time-finance-sqlite", record });
+  } catch (error: any) {
+    const message = String(error?.message || "");
+    const status = message.includes("not found") ? 404 : 400;
+    return res.status(status).json({ error: message || "تعذر تعديل المصروف." });
+  }
+});
+
+app.delete("/api/finance/expenses/:id", (req, res) => {
+  const userId = financeUser(req, res);
+  if (!userId) return;
+  try {
+    ensureFinanceMutationSchema();
+    deleteCanonicalExpense(userId, req.params.id);
+    return res.json({ source: "smart-time-finance-sqlite", deleted: true, id: req.params.id });
+  } catch (error: any) {
+    const message = String(error?.message || "");
+    const status = message.includes("not found") ? 404 : 400;
+    return res.status(status).json({ error: message || "تعذر حذف المصروف." });
+  }
+});
+
+app.post("/api/finance/migrate", (req, res) => {
+  const userId = financeUser(req, res);
+  if (!userId) return;
+  try {
+    ensureFinanceMutationSchema();
+    const expenses = Array.isArray(req.body?.expenses) ? req.body.expenses as CanonicalExpenseInput[] : [];
+    const legacy = migrateLegacyExpensesToCanonical(userId, expenses);
+    const ai = req.body?.reconcileAiTransactions === true
+      ? reconcileAiTransactionsToCanonical(userId)
+      : null;
+    const conflicts = legacy.conflicts + (ai?.conflicts || 0);
+    return res.json({
+      source: "smart-time-finance-sqlite",
+      legacy,
+      ai,
+      inserted: legacy.inserted + (ai?.inserted || 0),
+      skipped: legacy.skipped + (ai?.skipped || 0),
+      conflicts,
+      verified: legacy.verified + (ai?.verified || 0),
+      verificationPassed: legacy.verificationPassed && (ai?.verificationPassed ?? true),
+    });
+  } catch (error: any) {
+    return res.status(400).json({ error: error?.message || "تعذر ترحيل البيانات المالية." });
   }
 });
 
