@@ -457,10 +457,13 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
           netIncome={netIncome}
           houseTotal={homeAndMedicalTotal}
           workTotal={personalTotal}
+          workExpensesTotal={workTotal}
           vehicleTotal={vehicleTotal}
           educationTotal={educationTotal}
           associationsList={associationsList}
           incomeList={incomeList}
+          carTripIncomeList={carTripIncomeList}
+          accidentList={accidentList}
         />
       )}
 
