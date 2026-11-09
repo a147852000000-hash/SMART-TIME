@@ -111,6 +111,9 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
   const handleSaveIncome = (list: MonthlyIncome[]) => {
     setIncomeList(list);
     ExpensesRepository.saveMonthlyIncome(list);
+    saveCanonicalMonthlyIncome(list as unknown as Array<Record<string, unknown>>).catch((error) => {
+      setCanonicalFinanceError(error instanceof Error ? error.message : 'تعذر حفظ بيانات الدخل على الخادم.');
+    });
   };
 
   const handleSaveCertificates = (list: BankCertificate[]) => {
