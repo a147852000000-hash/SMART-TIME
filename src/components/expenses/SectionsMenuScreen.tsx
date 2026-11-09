@@ -9,6 +9,7 @@ import {
   DollarSign,
   BarChart3,
   Layers,
+  Briefcase,
   Wallet,
   Move,
   ArrowUp,
