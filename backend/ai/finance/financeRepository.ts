@@ -398,7 +398,7 @@ export function replaceCanonicalCarTripIncome(userId: string, items: CanonicalCa
     for (const row of items) {
       const idValue = text(row.id, 200), amount = Number(row.amount);
       const date = text(row.date, 20);
-      if (!idValue || !Number.isFinite(amount) || amount <= 0 || !/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) {
+      if (!idValue || !Number.isFinite(amount) || amount <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         throw new Error("Invalid car trip income record");
       }
       const createdAt = text(row.createdAt, 100) || timestamp;
