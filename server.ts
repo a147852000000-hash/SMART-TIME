@@ -109,10 +109,6 @@ const PROGRAM_OWNER_ACTIVATION_KEY = String(process.env.PROGRAM_OWNER_ACTIVATION
 // تكلفة كل بحث/مقارنة رحلة بالجنيه المصري (يمكن تعديلها بمتغير بيئة TRIP_SEARCH_COST_EGP)
 const parsedTripCost = Number(process.env.TRIP_SEARCH_COST_EGP || 5);
 const TRIP_SEARCH_COST_EGP = Number.isFinite(parsedTripCost) && parsedTripCost >= 0 ? Math.round(parsedTripCost * 100) / 100 : 5;
-const TRIP_WELCOME_FREE_SEARCHES = 3;
-const TRIP_GIFT_HASH_SALT = String(process.env.TRIP_GIFT_HASH_SALT || 'smart-time-trip-gift-v1');
-function clientIp(req: express.Request): string { const ip=String(req.ip||req.socket.remoteAddress||'').trim().toLowerCase(); return ip.replace(/^::ffff:/,''); }
-function giftSignalHash(value:string): string { return crypto.createHash('sha256').update(`${TRIP_GIFT_HASH_SALT}:${value}`).digest('hex'); }
 const OWNER_WALLET_NUMBER = String(process.env.OWNER_WALLET_NUMBER || '01126621962').trim();
 const OWNER_INSTAPAY_ADDRESS = String(process.env.OWNER_INSTAPAY_ADDRESS || '01126621962').trim();
 const parsedTopupMin = Number(process.env.WALLET_TOPUP_MIN_EGP || 5);
@@ -266,8 +262,8 @@ app.get('/api/trial/session', (req,res) => {
       const email = 'trial@smart-time.local';
       const username = 'smart_time_trial';
       db.prepare(
-        "INSERT INTO users (id,email,username,password_hash,display_name,created_at,phone,phone_verified,activation_status,trip_free_searches,wallet_balance) VALUES (?,?,?,?,?,?,?,?,?,?,?)"
-      ).run(TRIAL_USER_ID, email, username, hashPassword(crypto.randomBytes(24).toString('hex')), 'SMART TIME', now, null, 0, 'active', TRIP_WELCOME_FREE_SEARCHES, 0);
+        "INSERT INTO users (id,email,username,password_hash,display_name,created_at,phone,phone_verified,activation_status,wallet_balance) VALUES (?,?,?,?,?,?,?,?,?,?)"
+      ).run(TRIAL_USER_ID, email, username, hashPassword(crypto.randomBytes(24).toString('hex')), 'SMART TIME', now, null, 0, 'active', 0);
       row = db.prepare('SELECT * FROM users WHERE id=?').get(TRIAL_USER_ID) as any;
     }
     const token = createSession(TRIAL_USER_ID);
@@ -294,7 +290,7 @@ app.post('/api/auth/register', async (req,res)=>{
     if(db.prepare('SELECT id FROM users WHERE username=?').get(username))return res.status(409).json({error:'اسم المستخدم مستخدم بالفعل.'});
     if(phone && db.prepare('SELECT id FROM users WHERE phone=?').get(phone))return res.status(409).json({error:'رقم الهاتف مرتبط بحساب آخر.'});
     const id=`usr_${crypto.randomUUID()}`, now=new Date().toISOString();
-    db.prepare("INSERT INTO users (id,email,username,password_hash,display_name,created_at,phone,phone_verified,activation_status,trip_free_searches) VALUES (?,?,?,?,?,?,?,?,?,0)").run(id,email,username,hashPassword(password),name,now,phone||null,0,'active');
+    db.prepare("INSERT INTO users (id,email,username,password_hash,display_name,created_at,phone,phone_verified,activation_status) VALUES (?,?,?,?,?,?,?,?,?)").run(id,email,username,hashPassword(password),name,now,phone||null,0,'active');
     // IMPORTANT: the account (with its email) is already committed to the users table above.
     // A failure to send the phone-verification SMS must never delete that row again — losing the
     // SMS provider must not mean losing the registration. We keep the account and let the user
@@ -327,25 +323,11 @@ app.post('/api/auth/register/verify-phone',async(req,res)=>{
     if(!row)return res.status(400).json({error:'رقم الهاتف غير مرتبط بهذا الحساب.'});
     const check=await checkPhoneOtp(phone,code);
     if(!check.ok)return res.status(check.status).json({error:check.error});
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      const priorClaim=db.prepare('SELECT id FROM trip_gift_claims WHERE user_id<>? AND phone_hash=? LIMIT 1').get(user.id,giftSignalHash(phone)) as any;
-      const giftEligible=!priorClaim;
-      db.prepare('UPDATE users SET phone_verified=1,trip_free_searches=?,trip_gift_claimed_at=? WHERE id=?').run(giftEligible?TRIP_WELCOME_FREE_SEARCHES:0,giftEligible?new Date().toISOString():null,user.id);
-      if(giftEligible) db.prepare('INSERT INTO trip_gift_claims (id,user_id,device_hash,ip_hash,phone_hash,created_at) VALUES (?,?,?,?,?,?)').run(`gift_${crypto.randomUUID()}`,user.id,req.body.deviceId?giftSignalHash(String(req.body.deviceId)):null,giftSignalHash(clientIp(req)),giftSignalHash(phone),new Date().toISOString());
-      db.prepare('DELETE FROM phone_otps WHERE phone=?').run(phone); db.exec('COMMIT');
-      const refreshed=db.prepare('SELECT id,email,username,display_name as name,phone,phone_verified as phoneVerified,activation_status FROM users WHERE id=?').get(user.id) as any;
-      res.json({ok:true,user:publicUser(refreshed),giftEligible,freeSearches:giftEligible?TRIP_WELCOME_FREE_SEARCHES:0,message:giftEligible?'تم تأكيد رقم الهاتف 🎉 وحصلت على 3 أبحاث مجانية هدية ترحيبية.':'تم تأكيد رقم الهاتف، لكن الهدية سبق استخدامها بهذا الرقم.'});
-    } catch(e){db.exec('ROLLBACK'); throw e;}
+    db.prepare('UPDATE users SET phone_verified=1 WHERE id=?').run(user.id);
+    db.prepare('DELETE FROM phone_otps WHERE phone=?').run(phone);
+    const refreshed=db.prepare('SELECT id,email,username,display_name as name,phone,phone_verified as phoneVerified,activation_status FROM users WHERE id=?').get(user.id) as any;
+    res.json({ok:true,user:publicUser(refreshed),message:'تم تأكيد رقم الهاتف بنجاح.'});
   }catch(e:any){res.status(500).json({error:e.message||'تعذر تأكيد رقم الهاتف'});}
-});
-
-app.post('/api/auth/trips/request-phone-otp',async(req,res)=>{
-  try{ const user=authUser(req); if(!user)return res.status(401).json({error:'يجب تسجيل الدخول أولاً'}); const phone=normalizePhone(req.body.phone); if(phone.length<8)return res.status(400).json({error:'رقم الهاتف غير صحيح'}); const taken=db.prepare('SELECT id FROM users WHERE phone=? AND id<>?').get(phone,user.id) as any; if(taken)return res.status(409).json({error:'رقم الهاتف مرتبط بحساب آخر.'}); try{ const otpResult=await requestPhoneOtp(phone); res.json({ok:true,devCode:otpResult.devCode,expiresAt:otpResult.expires}); }catch(e:any){ return res.status(503).json({error:e.message||'تعذر إرسال SMS'}); } }catch(e:any){res.status(500).json({error:e.message||'تعذر إرسال رمز التحقق'});}
-});
-
-app.post('/api/auth/trips/verify-phone',async(req,res)=>{
-  try{ const user=authUser(req); if(!user)return res.status(401).json({error:'يجب تسجيل الدخول أولاً'}); const phone=normalizePhone(req.body.phone),code=String(req.body.code||'').trim(); const row=db.prepare('SELECT * FROM users WHERE id=?').get(user.id) as any; if(!row)return res.status(404).json({error:'الحساب غير موجود'}); if(row.phone_verified)return res.json({ok:true,user:publicUser({...row,phoneVerified:true}),freeSearches:Number(row.trip_free_searches||0),alreadyVerified:true}); const check=await checkPhoneOtp(phone,code); if(!check.ok)return res.status(check.status).json({error:check.error}); const taken=db.prepare('SELECT id FROM users WHERE phone=? AND id<>?').get(phone,user.id) as any; if(taken)return res.status(409).json({error:'رقم الهاتف مرتبط بحساب آخر.'}); db.exec('BEGIN IMMEDIATE'); try{ const priorClaim=db.prepare('SELECT id FROM trip_gift_claims WHERE user_id<>? AND phone_hash=? LIMIT 1').get(user.id,giftSignalHash(phone)) as any; const giftEligible=!priorClaim; db.prepare('UPDATE users SET phone=?,phone_verified=1,trip_free_searches=?,trip_gift_claimed_at=? WHERE id=?').run(phone,giftEligible?TRIP_WELCOME_FREE_SEARCHES:0,giftEligible?new Date().toISOString():null,user.id); if(giftEligible)db.prepare('INSERT INTO trip_gift_claims (id,user_id,device_hash,ip_hash,phone_hash,created_at) VALUES (?,?,?,?,?,?)').run(`gift_${crypto.randomUUID()}`,user.id,req.body.deviceId?giftSignalHash(String(req.body.deviceId)):null,giftSignalHash(clientIp(req)),giftSignalHash(phone),new Date().toISOString()); db.prepare('DELETE FROM phone_otps WHERE phone=?').run(phone); db.exec('COMMIT'); const refreshed=db.prepare('SELECT id,email,username,display_name as name,phone,phone_verified as phoneVerified,activation_status FROM users WHERE id=?').get(user.id) as any; res.json({ok:true,user:publicUser(refreshed),giftEligible,freeSearches:giftEligible?3:0,message:giftEligible?'تم تأكيد رقم الهاتف 🎉 حصلت على 3 أبحاث مجانية هدية ترحيبية.':'تم تأكيد الهاتف، لكن الهدية سبق استخدامها بهذا الرقم.'}); }catch(e){db.exec('ROLLBACK');throw e;} }catch(e:any){res.status(500).json({error:e.message||'تعذر تأكيد رقم الهاتف'});}
 });
 
 app.post('/api/auth/login',(req,res)=>{try{const identifier=String(req.body.identifier||req.body.email||'').trim(),normalizedEmail=identifier.toLowerCase(),normalizedUsername=normalizeUsername(identifier),password=String(req.body.password||'');let row:any=null;if(identifier.includes('@')) row=db.prepare('SELECT * FROM users WHERE email=?').get(normalizedEmail) as any;else row=db.prepare('SELECT * FROM users WHERE username=?').get(normalizedUsername) as any;if(!row||!verifyPassword(password,row.password_hash))return res.status(401).json({error:'بيانات الدخول غير صحيحة. تأكد من البريد أو اسم المستخدم وكلمة المرور.'});const user={...row,name:row.display_name,phoneVerified:row.phone_verified};res.json({token:createSession(row.id),user:publicUser(user)});}catch(e:any){res.status(500).json({error:e.message||'تعذر تسجيل الدخول'});}});

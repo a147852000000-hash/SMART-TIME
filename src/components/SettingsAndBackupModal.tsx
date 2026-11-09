@@ -248,7 +248,6 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
   const [birthDate, setBirthDate] = useState(userProfile.birthDate || '1995-09-15');
   const [zodiacSign, setZodiacSign] = useState(userProfile.zodiacSign || 'برج العذراء');
   const [currency, setCurrency] = useState<CurrencyType>(userProfile.currency || 'EGP');
-  const [pin, setPin] = useState(userProfile.pin || '1234');
   const [relPref, setRelPref] = useState<ReligiousPreference>(userProfile.religiousPreference || 'islam');
 
   const [notificationSound, setNotificationSound] = useState<NotificationSoundSettings>(() => NotificationSoundService.getSettings());
@@ -522,8 +521,6 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
       gender,
       occupation,
       currency,
-      pin,
-      pinCode: pin,
       religiousPreference: relPref,
       birthDate,
       zodiacSign: calculatedZodiac.nameAr,
@@ -2014,18 +2011,6 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
-                      {isAr ? 'رمز PIN للخزنة' : 'Vault PIN Code'}
-                    </label>
-                    <input
-                      type="password"
-                      maxLength={6}
-                      value={pin}
-                      onChange={(e) => setPin(e.target.value)}
-                      className="w-full p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-center tracking-widest font-bold"
-                    />
-                  </div>
                 </div>
               </div>
             </div>

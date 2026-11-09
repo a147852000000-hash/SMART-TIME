@@ -17,7 +17,6 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { Language, VehicleAccidentRecord } from '../types';
-import { VaultRepository } from '../services';
 
 export interface ReportItem {
   id: string;
@@ -68,7 +67,6 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
   const [selectedPeriod, setSelectedPeriod] = useState<'day' | 'week' | 'month' | 'all'>(initialPeriod);
   const [selectedSection, setSelectedSection] = useState<'all' | 'house' | 'work' | 'vehicle' | 'education' | 'students'>(initialSection);
   const [selectedStudentId, setSelectedStudentId] = useState<string>(initialStudentId || students[0]?.id || '');
-  const [savedVaultNotification, setSavedVaultNotification] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -278,45 +276,6 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
     window.print();
   };
 
-  // Save report summary to vault
-  const handleSaveToVault = () => {
-    const reportTitle =
-      selectedSection === 'students' && currentStudent
-        ? `${isAr ? 'تقرير مصروفات الطالب' : 'Student Expense Report'} - ${currentStudent.name} (${
-            selectedPeriod === 'day'
-              ? isAr ? 'يومي' : 'Daily'
-              : selectedPeriod === 'week'
-              ? isAr ? 'أسبوعي' : 'Weekly'
-              : selectedPeriod === 'month'
-              ? isAr ? 'شهري' : 'Monthly'
-              : isAr ? 'شامل' : 'All Time'
-          }) - ${totalReportAmount.toLocaleString()} ${currency}`
-        : `${isAr ? 'تقرير مالي' : 'Financial Report'} - ${
-            selectedPeriod === 'day'
-              ? isAr ? 'يومي' : 'Daily'
-              : selectedPeriod === 'week'
-              ? isAr ? 'أسبوعي' : 'Weekly'
-              : selectedPeriod === 'month'
-              ? isAr ? 'شهري' : 'Monthly'
-              : isAr ? 'شامل' : 'All'
-          } (${totalReportAmount.toLocaleString()} ${currency})`;
-
-    VaultRepository.addRecord({
-      id: `vault_rep_${Date.now()}`,
-      title: `📄 ${reportTitle}`,
-      category: 'document',
-      value: `${isAr ? 'إجمالي المبالغ:' : 'Total:'} ${totalReportAmount.toLocaleString()} ${currency} • ${isAr ? 'عدد البنود:' : 'Items:'} ${allItems.length}`,
-      notes: `${isAr ? 'تاريخ الإصدار:' : 'Date:'} ${todayStr}\n${isAr ? 'القسم المختار:' : 'Section:'} ${
-        selectedSection === 'students' && currentStudent ? `${isAr ? 'طالب:' : 'Student:'} ${currentStudent.name}` : selectedSection
-      }`,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-
-    setSavedVaultNotification(true);
-    setTimeout(() => setSavedVaultNotification(false), 3000);
-  };
-
   const currentStudent = students.find((s) => s.id === selectedStudentId);
 
   return (
@@ -345,15 +304,6 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
 
           {/* Quick Action Buttons */}
           <div className="flex items-center gap-2 self-end md:self-auto">
-            <button
-              onClick={handleSaveToVault}
-              className="p-2 sm:px-3 sm:py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-accent-500 text-xs font-bold flex items-center gap-1.5 transition-all border border-slate-700"
-              title={isAr ? 'حفظ نسخة بالخزنة الرقمية' : 'Save copy in vault'}
-            >
-              <ShieldCheck className="w-4 h-4" />
-              <span className="hidden sm:inline">{isAr ? 'إيداع بالخزنة' : 'Vault'}</span>
-            </button>
-
             <button
               onClick={handleExportCSV}
               className="p-2 sm:px-3 sm:py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all border border-slate-700"
@@ -439,14 +389,6 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
             )}
           </div>
         </div>
-
-        {/* Vault notification toast */}
-        {savedVaultNotification && (
-          <div className="bg-emerald-600/90 text-white text-xs py-2 px-4 flex items-center justify-center gap-2 font-bold animate-fade-in">
-            <CheckCircle2 className="w-4 h-4" />
-            <span>{isAr ? 'تم إيداع نسخة من هذا التقرير بأمان داخل الخزنة الرقمية!' : 'Report deposited in secure vault!'}</span>
-          </div>
-        )}
 
         {/* Printable Report Document Body */}
         <div id="printable-report-area" className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 bg-[#141414]">
