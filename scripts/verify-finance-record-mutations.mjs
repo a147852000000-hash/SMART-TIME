@@ -8,17 +8,15 @@ const clientRepository = read("src/repositories/financeRepository.ts");
 const service = read("src/services/financeService.ts");
 
 const checks = [
-  ["canonical fuel table has liters and unit price", /CREATE TABLE IF NOT EXISTS finance_fuel_records[\\s\\S]*?liters REAL NOT NULL[\\s\\S]*?price_per_liter REAL NOT NULL[\\s\\S]*?total_cost REAL NOT NULL/.test(schema)],
-  ["canonical maintenance table has system_type and cost", /CREATE TABLE IF NOT EXISTS finance_maintenance_records[\\s\\S]*?system_type TEXT NOT NULL[\\s\\S]*?cost REAL NOT NULL/.test(schema)],
-  ["canonical education table has student_id and amount", /CREATE TABLE IF NOT EXISTS finance_education_expenses[\\s\\S]*?student_id TEXT NOT NULL[\\s\\S]*?amount REAL NOT NULL/.test(schema)],
-  ["specialized record kinds are allow-listed", /type CanonicalFinanceRecordKind = "fuel" \\| "maintenance" \\| "education"/.test(repository)],
-  ["specialized reads are scoped by user", /SELECT \\* FROM \\u0024\\{config\\.table\\} WHERE id=\\? AND user_id=\\?/.test(repository)],
-  ["specialized updates are scoped by user", /UPDATE \\u0024\\{config\\.table\\} SET \\u0024\\{assignments\\.join/.test(repository) && /WHERE id=\\? AND user_id=\\?/.test(repository)],
-  ["specialized deletes are scoped by user", /DELETE FROM \\u0024\\{config\\.table\\} WHERE id=\\? AND user_id=\\?/.test(repository)],
-  ["fuel amount updates recalculate unit price", /amount \\/ liters/.test(repository) && /price_per_liter=\\?/.test(repository)],
-  ["specialized API routes require authenticated user", /app\\.patch\\("\\/api\\/finance\\/records\\/:kind\\/:id"[\\s\\S]*?financeUser\\(req, res\\)/.test(server) && /app\\.delete\\("\\/api\\/finance\\/records\\/:kind\\/:id"[\\s\\S]*?financeUser\\(req, res\\)/.test(server)],
-  ["frontend dispatches specialized IDs by source prefix", /\\^\\(fuel\\|maintenance\\|education\\):/.test(clientRepository)],
-  ["frontend service exposes specialized mutation endpoints", /\\/api\\/finance\\/records\\/\\$\\{kind\\}/.test(service)],
+  ["fuel schema has liters, unit price, and total cost", ["CREATE TABLE IF NOT EXISTS finance_fuel_records", "liters REAL NOT NULL", "price_per_liter REAL NOT NULL", "total_cost REAL NOT NULL"].every((value) => schema.includes(value))],
+  ["maintenance schema has system type and cost", ["CREATE TABLE IF NOT EXISTS finance_maintenance_records", "system_type TEXT NOT NULL", "cost REAL NOT NULL"].every((value) => schema.includes(value))],
+  ["education schema has student and amount", ["CREATE TABLE IF NOT EXISTS finance_education_expenses", "student_id TEXT NOT NULL", "amount REAL NOT NULL"].every((value) => schema.includes(value))],
+  ["specialized record kinds are allow-listed", repository.includes('type CanonicalFinanceRecordKind = "fuel" | "maintenance" | "education"')],
+  ["specialized reads, updates, and deletes are user-scoped", ["SELECT * FROM ${config.table} WHERE id=? AND user_id=?", "UPDATE ${config.table} SET ${assignments.join", "DELETE FROM ${config.table} WHERE id=? AND user_id=?"].every((value) => repository.includes(value))],
+  ["fuel amount updates recalculate unit price", repository.includes("price_per_liter=?") && repository.includes("values.push(amount, amount / liters)")],
+  ["specialized API routes authenticate the user", server.includes('app.patch("/api/finance/records/:kind/:id"') && server.includes('app.delete("/api/finance/records/:kind/:id"') && server.includes("financeUser(req, res)")],
+  ["frontend dispatches prefixed specialized IDs", clientRepository.includes("/^(fuel|maintenance|education):(.*)$/")],
+  ["frontend service calls specialized mutation endpoints", service.includes("/api/finance/records/${kind}/")],
 ];
 
 const failed = checks.filter(([, passed]) => !passed);
