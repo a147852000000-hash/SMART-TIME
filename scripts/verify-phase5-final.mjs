@@ -4,7 +4,7 @@ const steps = [
   ["verify:phase5-finance-migration", ["scripts/verify-phase5-finance-migration.mjs"]],
   ["verify:phase5-ai-canonical", ["scripts/verify-phase5-ai-canonical.mjs"]],
   ["verify:phase5-no-duplicate-writes", ["scripts/verify-phase5-no-duplicate-writes.mjs"]],
-  ["build", ["-c", "npm run build"]],
+  ["build", ["run", "build"]],
 ];
 
 function run(label, command, args) {
