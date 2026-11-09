@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS users (
   activation_status TEXT NOT NULL DEFAULT 'pending',
   role TEXT NOT NULL DEFAULT 'user',
   activated_by TEXT,
-  activated_at TEXT,
+  activated_at TEXT
 );
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
