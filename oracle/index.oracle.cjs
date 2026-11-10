@@ -181,6 +181,12 @@ const roleTickets = new Map();
 setInterval(() => { const now = Date.now(); for (const [ticket,item] of roleTickets) if (item.expiresAt <= now) roleTickets.delete(ticket); }, 60 * 1000).unref();
 
 app.get("/health", (req,res) => res.json({ ok: true }));
+app.get("/api/health", (req,res) => res.json({ ok: true, app: "SMART TIME", version: "oracle-candidate" }));
+app.post("/api/auth/check", (req,res) => {
+  const email = normEmail((req.body || {}).email);
+  if (!validEmail(email)) return res.status(400).json({ ok: false, registered: null, accountExists: null });
+  return res.json({ ok: true, registered: null, accountExists: null });
+});
 app.post("/check-email", (req,res) => {
   const email = normEmail((req.body || {}).email);
   if (!validEmail(email)) return res.status(400).json({ ok: false, registered: null, accountExists: null });
