@@ -75,7 +75,9 @@ export async function startTrialSession(): Promise<AuthSession> {
   // The Cloudflare preview currently proxies APIs to the legacy Oracle service,
   // which does not expose /api/trial/session. In preview only, allow a local
   // read/demo session instead of pretending this is a server-authenticated user.
-  if (res.status === 404) {
+  const isCloudflarePreview = typeof window !== 'undefined'
+    && window.location.hostname === 'preview-cloudflare-smart-time-smart-time.a147852000000.workers.dev';
+  if (res.status === 404 && isCloudflarePreview) {
     const guestId = `preview_guest_${typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Date.now().toString(36)}`;
     const session: AuthSession = {
       token: `local-guest:${guestId}`,
