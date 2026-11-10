@@ -181,6 +181,7 @@ export default function App() {
     } catch (error) {
       console.error('Trial session error:', error);
       setAuthenticated(false);
+      throw error;
     }
   }, []);
 
