@@ -131,11 +131,11 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
         {showRoleChoice ? (
           <div className="space-y-5">
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center">
-              <div className="text-lg font-semibold text-black">Choose sign-in type</div>
-              <p className="mt-1 text-sm text-gray-600">Choose how to enter for this session.</p>
+              <div className="text-lg font-semibold text-black">اختَر نوع الدخول</div>
+              <p className="mt-1 text-sm text-gray-600">يمكنك الدخول بصلاحيات المالك أو كمستخدم عادي لهذه الجلسة.</p>
             </div>
-            <button type="button" disabled={busy} onClick={() => chooseRole('owner')} className="w-full rounded-xl bg-black p-3.5 font-medium text-[#C5A059] transition hover:bg-gray-900 disabled:opacity-50">Continue as Owner</button>
-            <button type="button" disabled={busy} onClick={() => chooseRole('user')} className="w-full rounded-xl border border-gray-300 bg-white p-3.5 font-medium text-black transition hover:bg-gray-50 disabled:opacity-50">Continue as User</button>
+            <button type="button" disabled={busy} onClick={() => chooseRole('owner')} className="w-full rounded-xl bg-black p-3.5 font-medium text-[#C5A059] transition hover:bg-gray-900 disabled:opacity-50">الدخول كمالك</button>
+            <button type="button" disabled={busy} onClick={() => chooseRole('user')} className="w-full rounded-xl border border-gray-300 bg-white p-3.5 font-medium text-black transition hover:bg-gray-50 disabled:opacity-50">الدخول كمستخدم عادي</button>
             {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
           </div>
         ) : (
