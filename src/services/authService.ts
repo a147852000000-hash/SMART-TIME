@@ -61,8 +61,21 @@ function applyUserToProfile(user: AuthUser): UserProfile {
 
 export async function startTrialSession(): Promise<AuthSession> {
   const res = await fetch(apiUrl('/api/trial/session'));
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.token) throw new Error(data.error || 'تعذر بدء النسخة التجريبية');
+  const raw = await res.text();
+  let data: any = {};
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    data = {};
+  }
+  if (!res.ok || !data.token) {
+    const message = typeof data.error === 'string' && data.error.trim()
+      ? data.error
+      : res.ok
+        ? 'وصل رد من الخادم لكن لم يتم إنشاء جلسة الزائر.'
+        : `فشل الاتصال بخدمة جلسة الزائر (HTTP ${res.status}).`;
+    throw new Error(message);
+  }
   const session: AuthSession = { token: data.token, user: data.user };
   saveSession(session);
   applyUserToProfile(session.user);
