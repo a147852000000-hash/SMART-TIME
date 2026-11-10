@@ -284,6 +284,62 @@ app.delete("/api/admin/users/:id",authRequired,ownerOnly,(req,res)=>{
   return res.json({ok:true});
 });
 
+
+// Per-user preferences are kept separate from account credentials and keyed by the
+// authenticated Oracle user id. Never accept a user id from the request body.
+const USER_SETTINGS_FILE = process.env.USER_SETTINGS_FILE || path.join(PROJECT_ROOT, "user-settings.json");
+function loadUserSettings() {
+  const value = readJson(USER_SETTINGS_FILE, {});
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid user-settings.json");
+  return value;
+}
+app.get("/api/user/settings", authRequired, (req, res) => {
+  try {
+    const all = loadUserSettings();
+    return res.json({ ok: true, settings: all[req.auth.user.id] || {} });
+  } catch {
+    return res.status(500).json({ ok: false, error: "تعذر تحميل إعدادات المستخدم." });
+  }
+});
+app.post("/api/user/settings", authRequired, (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : null;
+    if (!body || Buffer.byteLength(JSON.stringify(body), "utf8") > 64 * 1024) {
+      return res.status(400).json({ ok: false, error: "إعدادات غير صالحة أو أكبر من الحد المسموح." });
+    }
+    const all = loadUserSettings();
+    const previous = all[req.auth.user.id] && typeof all[req.auth.user.id] === "object" ? all[req.auth.user.id] : {};
+    all[req.auth.user.id] = { ...previous, ...body, updatedAt: new Date().toISOString() };
+    writeJsonAtomic(USER_SETTINGS_FILE, all);
+    return res.json({ ok: true, settings: all[req.auth.user.id] });
+  } catch {
+    return res.status(500).json({ ok: false, error: "تعذر حفظ إعدادات المستخدم." });
+  }
+});
+
+// Compatibility aliases for the existing owner administration screen.
+// Owner remains the only principal allowed to promote/demote admins.
+app.get("/api/owner/admins", authRequired, ownerOnly, (req, res) => {
+  const view = String(req.query.view || "users");
+  const users = loadUsers().filter(user => normEmail(user.email) !== OWNER_EMAIL).map(user => publicUser(user));
+  if (view === "admins") return res.json({ ok: true, admins: users.filter(user => user.role === "admin") });
+  return res.json({ ok: true, users: users.filter(user => user.role !== "admin") });
+});
+app.patch("/api/owner/admins/:id", authRequired, ownerOnly, (req, res) => {
+  const id = String(req.params.id || ""), action = String((req.body || {}).action || "");
+  if (!["assign", "remove"].includes(action)) return res.status(400).json({ ok: false, error: "إجراء غير صالح." });
+  const users = loadUsers(), user = users.find(item => item.id === id);
+  if (!user) return res.status(404).json({ ok: false, error: "الحساب غير موجود." });
+  if (normEmail(user.email) === OWNER_EMAIL || user.role === "owner") return res.status(403).json({ ok: false, error: "لا يمكن تغيير صلاحيات المالك." });
+  user.role = action === "assign" ? "admin" : "user";
+  user.authVersion = (user.authVersion || 0) + 1;
+  saveUsers(users);
+  const sessions = loadSessions();
+  for (const [key, session] of Object.entries(sessions)) if (session.userId === user.id) delete sessions[key];
+  saveSessions(sessions);
+  return res.json({ ok: true, user: publicUser(user) });
+});
+
 /*
  * React static hosting: same origin as /api, no second server.
  * API paths never fall through to index.html, so missing APIs remain explicit 404s.
