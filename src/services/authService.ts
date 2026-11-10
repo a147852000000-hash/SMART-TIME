@@ -91,8 +91,6 @@ export async function loginWithPhone(phone: string, code: string, turnstileToken
   saveSession(session); applyUserToProfile(session.user); return session;
 }
 
-const API_BASE = 'https://smart-time-ai.duckdns.org';
-
 export async function forgotPassword(email: string) {
   const normalizedEmail = email.trim();
   if (!normalizedEmail) throw new Error('أدخل بريدك الإلكتروني.');
@@ -194,7 +192,7 @@ export async function register(email: string, name: string, password: string) {
     .slice(0, 30);
   const username = usernameBase.length >= 3 ? usernameBase : `usr_${usernameBase}`;
 
-  const response = await fetch(`${API_BASE}/api/auth/register`, {
+  const response = await fetch(apiUrl('/api/auth/register'), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email: normalizedEmail, name: name.trim(), password, username }),
