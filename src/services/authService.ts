@@ -36,7 +36,10 @@ export function getStoredSession(): AuthSession | null {
 export function clearSession() { localStorage.removeItem(SESSION_KEY); }
 export function authHeaders() {
   const session = getStoredSession();
-  return session?.token ? { Authorization: `Bearer ${session.token}` } : {};
+  // Preview guests are local-only sessions; never send their marker as a backend bearer token.
+  return session?.token && session.user?.role !== 'guest'
+    ? { Authorization: `Bearer ${session.token}` }
+    : {};
 }
 
 async function request(path: string, body: Record<string, unknown>) {
@@ -68,6 +71,26 @@ export async function startTrialSession(): Promise<AuthSession> {
   } catch {
     data = {};
   }
+
+  // The Cloudflare preview currently proxies APIs to the legacy Oracle service,
+  // which does not expose /api/trial/session. In preview only, allow a local
+  // read/demo session instead of pretending this is a server-authenticated user.
+  if (res.status === 404) {
+    const guestId = `preview_guest_${typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Date.now().toString(36)}`;
+    const session: AuthSession = {
+      token: `local-guest:${guestId}`,
+      user: {
+        id: guestId,
+        email: 'guest@preview.smart-time.local',
+        name: 'زائر SMART TIME',
+        role: 'guest',
+      },
+    };
+    saveSession(session);
+    applyUserToProfile(session.user);
+    return session;
+  }
+
   if (!res.ok || !data.token) {
     const message = typeof data.error === 'string' && data.error.trim()
       ? data.error
@@ -170,6 +193,10 @@ export async function verifyTripsPhone(phone: string, code: string, turnstileTok
 export async function restoreSession(): Promise<AuthSession | null> {
   const stored = getStoredSession();
   if (!stored?.token) return null;
+  if (stored.user?.role === 'guest' && stored.token.startsWith('local-guest:')) {
+    applyUserToProfile(stored.user);
+    return stored;
+  }
   try {
     const res = await api('/api/auth/me', { headers: authHeaders() });
     const data = await res.json();
@@ -190,7 +217,10 @@ export async function verifyChatOtp(phone: string, code: string): Promise<AuthSe
 }
 
 export async function logout() {
-  try { await api('/api/auth/logout', { method: 'POST', headers: authHeaders() }); } catch {}
+  const session = getStoredSession();
+  if (session?.user?.role !== 'guest') {
+    try { await api('/api/auth/logout', { method: 'POST', headers: authHeaders() }); } catch {}
+  }
   clearSession();
 }
 
