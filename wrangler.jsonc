@@ -4,7 +4,12 @@
   "compatibility_date": "2026-11-09",
   "assets": {
     "directory": "./dist/client",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/api/*"
+    ]
   },
-  "previews": {}
+  "previews": {},
+  "main": "./cloudflare/worker.ts"
 }
