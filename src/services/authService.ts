@@ -91,7 +91,16 @@ export async function loginWithIdentifier(identifier: string, password: string, 
 
 
 export async function selectLoginRole(roleChoiceTicket: string, role: 'owner' | 'user'): Promise<AuthSession> {
-  const data = await request('/api/auth/select-role', { roleChoiceTicket, role });
+  if (!roleChoiceTicket) throw new Error('انتهت صلاحية اختيار نوع الدخول. سجّل الدخول مرة أخرى.');
+  // The role-choice ticket is the temporary bearer credential. Do not use a stale
+  // previously saved session here; the server accepts this ticket only on select-role.
+  const res = await fetch(apiUrl('/api/auth/select-role'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${roleChoiceTicket}` },
+    body: JSON.stringify({ role }),
+  });
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok || !data.token || !data.user) throw new Error(data.message || data.error || 'تعذر اختيار نوع الدخول.');
   const session: AuthSession = { token: data.token, user: data.user };
   saveSession(session); applyUserToProfile(session.user); return session;
 }
