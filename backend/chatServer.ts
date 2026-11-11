@@ -106,12 +106,12 @@ export function getAuthUser(req: express.Request) {
   if (ORACLE_AUTH_BRIDGE_ENABLED) {
     const authHeader = String(req.headers.authorization || '');
     const match = authHeader.match(/^Bearer\s+(.+)$/i);
+    try { syncOraclePublicProfiles(); }
+    catch (syncError) { console.error('Oracle public profile sync unavailable:', (syncError as Error)?.message || syncError); }
     if (!match) return null;
     try {
       const auth = oracleAuthBridge.authenticateToken(match[1]);
       if (!auth) return null;
-      try { syncOraclePublicProfiles(); }
-      catch (syncError) { console.error('Oracle public profile sync unavailable:', (syncError as Error)?.message || syncError); }
       return auth.user;
     } catch (error) {
       console.error('Oracle chat auth bridge unavailable:', (error as Error)?.message || error);
@@ -303,7 +303,6 @@ export const chatRouter = express.Router();
 chatRouter.get('/users', (req, res) => {
   try {
     const user = getAuthUser(req);
-    if (ORACLE_AUTH_BRIDGE_ENABLED) syncOraclePublicProfiles();
     const users = db.prepare(`
       SELECT id, display_name as name, email, avatar, phone
       FROM app_user_profiles
