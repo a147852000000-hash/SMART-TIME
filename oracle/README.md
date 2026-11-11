@@ -8,7 +8,8 @@ This directory contains a **candidate**, not a production replacement.
 - Returns JSON 404 for unknown `/api/*` paths rather than returning the React HTML shell.
 - Does not start `server.ts`, SQLite, or a second authentication process.
 - `auth-bridge.cjs` is a read-only adapter for validating the existing JSON session tokens; it does not issue sessions, create users, or write auth files.
-- `auth-bridge.cjs` exposes a safe, read-only public profile projection for app features; it omits passwords, auth versions, and session material.
+- `auth-bridge.cjs` exposes a safe, read-only public profile projection for app features; it omits passwords, auth versions, and session material, and excludes accounts that are not active.
+- Chat profile synchronization prunes cached profiles that were deleted or deactivated in Oracle, preventing stale accounts from remaining discoverable.
 - `backend/database.ts` creates a credential-free `app_user_profiles` cache. Chat and Voice DNA profile lookups use that cache, refreshed from the Oracle authority; SQLite `users`/`sessions` are not used for chat identity when bridge mode is enabled.
 - `auth-bridge.test.cjs` contains eight focused tests covering valid sessions, expiry, auth-version invalidation, suspended users, malformed tokens, the single-owner invariant, read-only behavior, and safe public profile projection.
 
