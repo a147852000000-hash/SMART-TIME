@@ -8,7 +8,9 @@ This directory contains a **candidate**, not a production replacement.
 - Returns JSON 404 for unknown `/api/*` paths rather than returning the React HTML shell.
 - Does not start `server.ts`, SQLite, or a second authentication process.
 - `auth-bridge.cjs` is a read-only adapter for validating the existing JSON session tokens; it does not issue sessions, create users, or write auth files.
-- `auth-bridge.test.cjs` covers valid sessions, expiry, auth-version invalidation, suspended users, malformed tokens, and the single-owner invariant.
+- `auth-bridge.cjs` exposes a safe, read-only public profile projection for app features; it omits passwords, auth versions, and session material.
+- `backend/database.ts` creates a credential-free `app_user_profiles` cache. Chat and Voice DNA profile lookups use that cache, refreshed from the Oracle authority; SQLite `users`/`sessions` are not used for chat identity when bridge mode is enabled.
+- `auth-bridge.test.cjs` contains eight focused tests covering valid sessions, expiry, auth-version invalidation, suspended users, malformed tokens, the single-owner invariant, read-only behavior, and safe public profile projection.
 
 ## Build
 From the repository root:
@@ -35,7 +37,7 @@ Run `npm run test:oracle-auth-bridge` from the repository root. Set `SMART_TIME_
 - Its legacy `/api/auth/*` credential/session lifecycle routes are blocked (HTTP 410), except read-only `GET /api/auth/me`; the Oracle candidate remains the sole login/register/reset/logout authority.
 - `backend/chatServer.ts` also validates chat identity through the same bridge.
 
-This is still **not a complete app integration**. Several domain handlers query SQLite `users` for profile, phone, activation, or wallet fields, and the chat API lists users from SQLite. Those are domain/profile dependencies, not an alternative login authority, but they need a deliberate profile/data migration or adapter before the chat and account-dependent features can work correctly. Do not enable this mode in production yet.
+This is still **not a complete app integration**. The chat account-directory and message/member lookups now use the credential-free profile cache, but other domain handlers still depend on SQLite user fields for phone verification, wallet balances, and other account-linked behavior. Phone-profile writes have not yet been migrated to the Oracle account store or a separately approved profile API. Do not enable this mode in production yet.
 
 ## Not yet complete
 This first integration step only connects same-origin static hosting with the existing auth routes. It does **not** yet connect the complete finance, AI, chat, trips, voice, settings, or other API surface to Oracle. The legacy domain server also contains wallet-related code; do not mount or re-enable it. The agreed removals (Secure Vault, Welcome Gift, Wallet, and Vodafone Cash as an expense payment method) remain excluded from the Oracle candidate.
