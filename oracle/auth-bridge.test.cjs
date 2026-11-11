@@ -87,3 +87,26 @@ test("respects owner view-as-user session context", t => {
   assert.equal(auth.viewAsUser, true);
   assert.equal(auth.role, "user");
 });
+
+
+test("lists safe public profiles without exposing credentials or session data", t => {
+  const { bridge, usersFile, sessionsFile } = fixture(t);
+  const usersBefore = fs.readFileSync(usersFile, "utf8");
+  const sessionsBefore = fs.readFileSync(sessionsFile, "utf8");
+  const profiles = bridge.listPublicUsers();
+  assert.equal(profiles.length, 2);
+  assert.deepEqual(
+    Object.keys(profiles[0]).sort(),
+    ["activation_status", "created_at", "email", "id", "name", "phone", "phoneVerified", "role", "username"].sort()
+  );
+  assert.equal(profiles[0].role, "owner");
+  assert.equal(profiles[1].role, "user");
+  for (const profile of profiles) {
+    assert.equal("password" in profile, false);
+    assert.equal("password_hash" in profile, false);
+    assert.equal("authVersion" in profile, false);
+    assert.equal("sessionKey" in profile, false);
+  }
+  assert.equal(fs.readFileSync(usersFile, "utf8"), usersBefore);
+  assert.equal(fs.readFileSync(sessionsFile, "utf8"), sessionsBefore);
+});
