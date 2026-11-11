@@ -1,4 +1,5 @@
 import { db } from "../../database.js";
+import { ensureFinanceMutationSchema } from "./financeRepository.js";
 
 export interface FinanceOverview {
   source: "smart-time-finance-sqlite";
@@ -12,8 +13,9 @@ export interface FinanceOverview {
 }
 
 export function getFinanceOverview(userId: string): FinanceOverview {
+  ensureFinanceMutationSchema();
   const expenses = db.prepare(`
-    SELECT id, title, amount, currency, category, date,
+    SELECT id, expense_type as type, title, amount, currency, category, date,
            payment_method as paymentMethod, receipt_url as receiptUrl,
            notes, created_at as createdAt, updated_at as updatedAt
     FROM finance_expenses
