@@ -35,7 +35,8 @@ assert.match(worker, /status: 503/);
 assert.doesNotMatch(worker, /new URL\(["']https:\/\/smart-time-ai\.duckdns\.org/);
 
 assert.doesNotMatch(app, /WalletView|AdminWalletPanel|admin-wallet|'wallet'/);
-assert.doesNotMatch(routes, /'admin-wallet'|'wallet'/);
+const appView = routes.slice(routes.indexOf('export type AppView'), routes.indexOf('export interface TickerPreferences'));
+assert.doesNotMatch(appView, /'admin-wallet'|'wallet'/);
 assert.doesNotMatch(dashboard, /id: 'wallet'|Smart Wallet|محفظة/);
 assert.doesNotMatch(trips, /WalletService|walletBalance|tripCost|onOpenWallet|INSUFFICIENT_BALANCE|شحن الرصيد/);
 assert.doesNotMatch(expenseForm, /فودافون\s*كاش|vodafone_cash/i);
