@@ -125,6 +125,34 @@ const ORACLE_AUTH_BRIDGE_ENABLED = String(process.env.SMART_TIME_ORACLE_AUTH_BRI
 const oracleAuthBridge = ORACLE_AUTH_BRIDGE_ENABLED
   ? authBridgeModule.createAuthBridge()
   : null;
+
+function syncOraclePublicProfiles() {
+  if (!ORACLE_AUTH_BRIDGE_ENABLED || !oracleAuthBridge) return;
+  const profiles = oracleAuthBridge.listPublicUsers();
+  const upsert = db.prepare(`
+    INSERT INTO app_user_profiles
+      (id, email, username, display_name, avatar, phone, phone_verified, role, activation_status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      email=excluded.email, username=excluded.username, display_name=excluded.display_name,
+      avatar=excluded.avatar, phone=excluded.phone, phone_verified=excluded.phone_verified,
+      role=excluded.role, activation_status=excluded.activation_status, created_at=excluded.created_at
+  `);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const profile of profiles) {
+      upsert.run(
+        profile.id, profile.email, profile.username || null, profile.name || null,
+        profile.avatar || null, profile.phone || null, profile.phoneVerified ? 1 : 0,
+        profile.role || "user", profile.activation_status || "active", profile.created_at || null
+      );
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+}
 function authUser(req: express.Request) {
   if (ORACLE_AUTH_BRIDGE_ENABLED) {
     const header = String(req.headers.authorization || '');
@@ -132,7 +160,10 @@ function authUser(req: express.Request) {
     if (!match) return null;
     try {
       const auth = oracleAuthBridge.authenticateToken(match[1]);
-      return auth ? { ...auth.user, phoneVerified: auth.user.phoneVerified, activation_status: auth.user.activation_status, role: auth.role } : null;
+      if (!auth) return null;
+      try { syncOraclePublicProfiles(); }
+      catch (syncError) { console.error('Oracle public profile sync unavailable:', (syncError as Error)?.message || syncError); }
+      return { ...auth.user, phoneVerified: auth.user.phoneVerified, activation_status: auth.user.activation_status, role: auth.role };
     } catch (error) {
       console.error('Oracle auth bridge unavailable:', (error as Error)?.message || error);
       return null;
@@ -572,7 +603,7 @@ app.post("/api/voice-dna/shares", async (req, res) => {
     if (!profile) return res.status(404).json({ error: "Voice DNA profile not found." });
     if (!recipientIdentifier) return res.status(400).json({ error: "Recipient username or email is required." });
 
-    const recipient = db.prepare("SELECT id FROM users WHERE lower(username)=? OR lower(email)=?").get(recipientIdentifier, recipientIdentifier) as any;
+    const recipient = db.prepare("SELECT id FROM app_user_profiles WHERE lower(username)=? OR lower(email)=?").get(recipientIdentifier, recipientIdentifier) as any;
     if (!recipient) return res.status(404).json({ error: "المستخدم المستلم غير موجود." });
     if (recipient.id === user.id) return res.status(400).json({ error: "لا يمكن مشاركة الصوت مع نفس الحساب." });
 
@@ -601,7 +632,7 @@ app.get("/api/voice-dna/shares", async (req, res) => {
       s.accepted_at as acceptedAt, s.revoked_at as revokedAt
       FROM voice_dna_shares s
       JOIN voice_dna_profiles p ON p.id=s.profile_id
-      JOIN users u ON u.id=s.recipient_user_id
+      JOIN app_user_profiles u ON u.id=s.recipient_user_id
       WHERE s.owner_user_id=?
       ORDER BY s.created_at DESC`).all(user.id);
 
@@ -610,7 +641,7 @@ app.get("/api/voice-dna/shares", async (req, res) => {
       s.accepted_at as acceptedAt, s.revoked_at as revokedAt
       FROM voice_dna_shares s
       JOIN voice_dna_profiles p ON p.id=s.profile_id
-      JOIN users u ON u.id=s.owner_user_id
+      JOIN app_user_profiles u ON u.id=s.owner_user_id
       WHERE s.recipient_user_id=?
       ORDER BY s.created_at DESC`).all(user.id);
 
