@@ -48,6 +48,26 @@ function createAuthBridge(options = {}) {
     return users;
   }
 
+  // Safe profile projection for app features that need to resolve another account.
+  // Credentials, authVersion, and session data are deliberately never returned.
+  function listPublicUsers() {
+    return readUsers().map(user => {
+      const isOwner = String(user.email || "").trim().toLowerCase() === ownerEmail;
+      return {
+        id: String(user.id || ""),
+        email: String(user.email || ""),
+        username: String(user.username || ""),
+        name: String(user.name || ""),
+        phone: user.phone ? String(user.phone) : undefined,
+        phoneVerified: !!user.phone_verified,
+        avatar: user.avatar ? String(user.avatar) : undefined,
+        role: isOwner ? "owner" : (user.role === "admin" ? "admin" : "user"),
+        activation_status: String(user.activation_status || ""),
+        created_at: String(user.created_at || user.createdAt || ""),
+      };
+    }).filter(user => user.id && user.email);
+  }
+
   function authenticateToken(token) {
     const rawToken = String(token || "").trim();
     if (rawToken.length < 32 || rawToken.length > 512) return null;
@@ -101,7 +121,7 @@ function createAuthBridge(options = {}) {
     return next();
   }
 
-  return Object.freeze({ authenticateToken, middleware });
+  return Object.freeze({ authenticateToken, listPublicUsers, middleware });
 }
 
 module.exports = { createAuthBridge };
