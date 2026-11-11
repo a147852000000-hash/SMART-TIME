@@ -75,6 +75,20 @@ CREATE TABLE IF NOT EXISTS users (
   activated_by TEXT,
   activated_at TEXT
 );
+CREATE TABLE IF NOT EXISTS app_user_profiles (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  username TEXT,
+  display_name TEXT,
+  avatar TEXT,
+  phone TEXT,
+  phone_verified INTEGER NOT NULL DEFAULT 0,
+  role TEXT NOT NULL DEFAULT 'user',
+  activation_status TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_app_user_profiles_email ON app_user_profiles(email);
+CREATE INDEX IF NOT EXISTS idx_app_user_profiles_username ON app_user_profiles(username);
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
