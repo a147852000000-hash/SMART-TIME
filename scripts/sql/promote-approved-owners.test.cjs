@@ -11,10 +11,7 @@ const rawSql = fs.readFileSync(sqlPath, 'utf8');
 // node:sqlite so the safety preconditions can be regression-tested in CI.
 const sql = rawSql.split(/\r?\n/).filter(line => !/^\s*\.(bail|headers|mode|print)\b/i.test(line)).join('\n');
 
-const approved = [
-  'eng.mamdouh2009@gmail.com',
-  'mamdouh.oracle.2026@gmail.com',
-];
+const approved = ['eng.mamdouh2009@gmail.com'];
 
 function setup(rows) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'smart-time-owner-promotion-'));
@@ -26,13 +23,13 @@ function setup(rows) {
   return { dir, db };
 }
 
-test('owner promotion requires both approved accounts, updates exactly two rows, and does not auto-commit', () => {
+test('owner promotion updates only the single approved account and does not auto-commit', () => {
   const fixture = setup(approved.map(email => ({ email, role: 'user' })));
   try {
     fixture.db.exec(sql);
-    assert.equal(fixture.db.prepare('SELECT COUNT(*) AS n FROM users WHERE role = ?').get('owner').n, 2);
+    assert.equal(fixture.db.prepare('SELECT COUNT(*) AS n FROM users WHERE role = ?').get('owner').n, 1);
     fixture.db.exec('ROLLBACK');
-    assert.equal(fixture.db.prepare('SELECT COUNT(*) AS n FROM users WHERE role = ?').get('user').n, 2, 'prepared promotion remains reversible until manually committed');
+    assert.equal(fixture.db.prepare('SELECT COUNT(*) AS n FROM users WHERE role = ?').get('user').n, 1, 'prepared promotion remains reversible until manually committed');
   } finally {
     fixture.db.close();
     fs.rmSync(fixture.dir, { recursive: true, force: true });
@@ -40,22 +37,22 @@ test('owner promotion requires both approved accounts, updates exactly two rows,
 });
 
 test('owner promotion rolls back when an approved account is missing', () => {
-  const fixture = setup([{ email: approved[0], role: 'user' }]);
+  const fixture = setup([{ email: 'unapproved@example.test', role: 'user' }]);
   try {
-    assert.throws(() => fixture.db.exec(sql), /exactly two approved accounts and exactly two role changes are required/);
-    assert.equal(fixture.db.prepare('SELECT role FROM users WHERE email=?').get(approved[0]).role, 'user');
+    assert.throws(() => fixture.db.exec(sql), /exactly one approved owner account and exactly one role change are required/);
+    assert.equal(fixture.db.prepare('SELECT role FROM users WHERE email=?').get('unapproved@example.test').role, 'user');
   } finally {
     fixture.db.close();
     fs.rmSync(fixture.dir, { recursive: true, force: true });
   }
 });
 
-test('owner promotion rolls back unless exactly two rows change', () => {
-  const fixture = setup([{ email: approved[0], role: 'owner' }, { email: approved[1], role: 'user' }]);
+test('owner promotion rolls back when the approved account is already an owner', () => {
+  const fixture = setup([{ email: approved[0], role: 'owner' }, { email: 'unapproved@example.test', role: 'user' }]);
   try {
-    assert.throws(() => fixture.db.exec(sql), /exactly two approved accounts and exactly two role changes are required/);
+    assert.throws(() => fixture.db.exec(sql), /exactly one approved owner account and exactly one role change are required/);
     assert.equal(fixture.db.prepare('SELECT role FROM users WHERE email=?').get(approved[0]).role, 'owner');
-    assert.equal(fixture.db.prepare('SELECT role FROM users WHERE email=?').get(approved[1]).role, 'user');
+    assert.equal(fixture.db.prepare('SELECT role FROM users WHERE email=?').get('unapproved@example.test').role, 'user');
   } finally {
     fixture.db.close();
     fs.rmSync(fixture.dir, { recursive: true, force: true });
