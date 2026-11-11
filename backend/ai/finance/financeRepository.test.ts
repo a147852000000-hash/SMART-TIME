@@ -6,8 +6,9 @@ import path from "node:path";
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "smart-time-finance-migration-"));
 process.env.SMART_TIME_DB_PATH = path.join(tempDir, "finance-test.sqlite");
 
+let db: any;
 try {
-  const { db } = await import("../../database.js");
+  ({ db } = await import("../../database.js"));
   const { getFinanceOverview } = await import("./financeProjection.js");
   const { migrateLegacyExpensesToCanonical } = await import("./financeRepository.js");
 
@@ -48,8 +49,8 @@ try {
   assert.equal(withId.inserted, 1);
   assert.equal(withId.records[0].targetId, "legacy-source-42");
 
-  db.close();
   process.stdout.write("Finance migration tests passed.\n");
 } finally {
+  try { db?.close(); } catch {}
   fs.rmSync(tempDir, { recursive: true, force: true });
 }
