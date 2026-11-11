@@ -7,7 +7,7 @@ import net from 'node:net';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { startSmtpTestServer } from './smtpTestServer.js';
 import type { SmtpTestServer } from './smtpTestServer.js';
-import { parseSingleOwnerEmail } from './ownerConfig.js';
+import { assertSingleOwnerRecord, parseSingleOwnerEmail } from './ownerConfig.js';
 
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'smart-time-auth-security-'));
 const dbPath = path.join(tempDir, 'auth-test.sqlite');
@@ -39,6 +39,10 @@ assert.equal(parseSingleOwnerEmail(ownerEmail), ownerEmail);
 assert.throws(() => parseSingleOwnerEmail(''), /exactly one valid owner email/);
 assert.throws(() => parseSingleOwnerEmail(`${ownerEmail},${secondOwnerEmail}`), /exactly one valid owner email/);
 assert.throws(() => parseSingleOwnerEmail('not-an-email'), /exactly one valid owner email/);
+assert.doesNotThrow(() => assertSingleOwnerRecord(ownerEmail, [ownerEmail]));
+assert.throws(() => assertSingleOwnerRecord(ownerEmail, []), /exactly one Owner record/);
+assert.throws(() => assertSingleOwnerRecord(ownerEmail, [ownerEmail, secondOwnerEmail]), /exactly one Owner record/);
+assert.throws(() => assertSingleOwnerRecord(ownerEmail, [secondOwnerEmail]), /exactly one Owner record/);
 process.env.SMART_TIME_DB_PATH = dbPath;
 process.env.JWT_SECRET = secret;
 process.env.PASSWORD_RESET_HMAC_SECRET = secret;
@@ -99,7 +103,7 @@ try {
   const reusableTestHash = passwordHash(password);
   const createdAt = () => new Date().toISOString();
   insertUser.run('test-owner', ownerEmail, 'testowner', reusableTestHash, 'Test Owner', createdAt(), 'owner', 'active');
-  insertUser.run('test-owner-2', secondOwnerEmail, 'testowner2', reusableTestHash, 'Second Test Owner', createdAt(), 'owner', 'active');
+  insertUser.run('test-owner-2', secondOwnerEmail, 'testowner2', reusableTestHash, 'Second Test User', createdAt(), 'user', 'active');
   insertUser.run('test-admin', adminEmail, 'testadmin', reusableTestHash, 'Test Admin', createdAt(), 'admin', 'active');
   insertUser.run('test-user', userEmail, 'testuser', reusableTestHash, 'Test User', createdAt(), 'user', 'active');
   insertUser.run('test-user-2', 'other@example.test', 'otheruser', reusableTestHash, 'Other User', createdAt(), 'user', 'active');
@@ -185,11 +189,6 @@ try {
   assert.equal(me.status, 200);
 
   const ownerHeaders = { authorization: `Bearer ${ownerSession.body.token}` };
-  const unapprovedOwnerLogin = await post('/api/auth/login', { identifier: secondOwnerEmail, password });
-  assert.equal(unapprovedOwnerLogin.status, 200, 'an unconfigured DB Owner may sign in as a regular user');
-  assert.equal(unapprovedOwnerLogin.body.requiresRoleChoice, undefined, 'an unconfigured DB Owner must not receive Owner role selection');
-  const unapprovedOwnerHeaders = { authorization: 'Bearer ' + String(unapprovedOwnerLogin.body.token || '') };
-  assert.equal((await request('/api/auth/owner/accounts', { headers: unapprovedOwnerHeaders })).status, 403, 'an unconfigured DB Owner cannot access owner routes');
   const firstPage = await request('/api/auth/owner/accounts?limit=3&offset=0', { headers: ownerHeaders });
   assert.equal(firstPage.status, 200, 'approved Owner can list accounts');
   assert.equal(firstPage.body.limit, 3);
@@ -244,8 +243,6 @@ try {
   assert.equal((await request('/api/auth/owner/accounts/' + 'x'.repeat(201), { method: 'DELETE', headers: ownerHeaders })).status, 400, 'deletion rejects account ids longer than 200 characters');
   const selfDelete = await request('/api/auth/owner/accounts/test-owner', { method: 'DELETE', headers: ownerHeaders });
   assert.equal(selfDelete.status, 400, 'Owner cannot delete their own account');
-  const protectedOwnerDelete = await request('/api/auth/owner/accounts/test-owner-2', { method: 'DELETE', headers: ownerHeaders });
-  assert.equal(protectedOwnerDelete.status, 409, 'Owner cannot delete another Owner account');
 
   const noSessionActivation = await post('/api/auth/owner/activate', { ownerEmail, activationKey: secret, userEmail: activationEmail });
   assert.equal(noSessionActivation.status, 403, 'activation without a session is forbidden');
@@ -265,12 +262,12 @@ try {
   const selfAppointment = await post('/api/auth/owner/admin-role', { email: ownerEmail, action: 'appoint' }, ownerSession.body.token);
   assert.equal(selfAppointment.status, 400, 'owner cannot self-appoint');
   assert.equal(selfAppointment.body.code, 'SELF_APPOINTMENT_FORBIDDEN');
-  const protectedOwnerRole = await post('/api/auth/owner/admin-role', { email: secondOwnerEmail, action: 'revoke' }, ownerSession.body.token);
-  assert.equal(protectedOwnerRole.status, 409, 'another Owner role is protected');
-  assert.equal(protectedOwnerRole.body.code, 'OWNER_ROLE_PROTECTED');
-  const appointOwnerRole = await post('/api/auth/owner/admin-role', { email: secondOwnerEmail, action: 'appoint' }, ownerSession.body.token);
-  assert.equal(appointOwnerRole.status, 409, 'an account whose DB role is owner cannot be appointed Admin');
-  assert.equal(appointOwnerRole.body.code, 'OWNER_ROLE_PROTECTED');
+  const appointedSecondAccount = await post('/api/auth/owner/admin-role', { email: secondOwnerEmail, action: 'appoint' }, ownerSession.body.token);
+  assert.equal(appointedSecondAccount.status, 200, 'Owner can appoint an ordinary account as Admin');
+  assert.equal(db.prepare('SELECT role FROM users WHERE id=?').get('test-owner-2').role, 'admin');
+  const revokedSecondAccount = await post('/api/auth/owner/admin-role', { email: secondOwnerEmail, action: 'revoke' }, ownerSession.body.token);
+  assert.equal(revokedSecondAccount.status, 200, 'Owner can revoke the appointed Admin');
+  assert.equal(db.prepare('SELECT role FROM users WHERE id=?').get('test-owner-2').role, 'user');
   const missingAdminTarget = await post('/api/auth/owner/admin-role', { email: 'missing-admin@example.test', action: 'appoint' }, ownerSession.body.token);
   assert.equal(missingAdminTarget.status, 404, 'unknown target account is not found');
   assert.equal(missingAdminTarget.body.code, 'ACCOUNT_NOT_FOUND');
