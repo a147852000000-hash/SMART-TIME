@@ -7,6 +7,7 @@ import net from 'node:net';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { startSmtpTestServer } from './smtpTestServer.js';
 import type { SmtpTestServer } from './smtpTestServer.js';
+import { parseSingleOwnerEmail } from './ownerConfig.js';
 
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'smart-time-auth-security-'));
 const dbPath = path.join(tempDir, 'auth-test.sqlite');
@@ -34,11 +35,15 @@ const userEmail = 'user@example.test';
 const deleteEmail = 'delete-me@example.test';
 const activationEmail = 'activate-me@example.test';
 const failedDeleteEmail = 'failed-delete@example.test';
+assert.equal(parseSingleOwnerEmail(ownerEmail), ownerEmail);
+assert.throws(() => parseSingleOwnerEmail(''), /exactly one valid owner email/);
+assert.throws(() => parseSingleOwnerEmail(`${ownerEmail},${secondOwnerEmail}`), /exactly one valid owner email/);
+assert.throws(() => parseSingleOwnerEmail('not-an-email'), /exactly one valid owner email/);
 process.env.SMART_TIME_DB_PATH = dbPath;
 process.env.JWT_SECRET = secret;
 process.env.PASSWORD_RESET_HMAC_SECRET = secret;
 process.env.PROGRAM_OWNER_ACTIVATION_KEY = secret;
-process.env.OWNER_EMAILS = [ownerEmail, secondOwnerEmail].join(',');
+process.env.OWNER_EMAILS = ownerEmail;
 process.env.TURNSTILE_ENFORCE = 'false';
 
 let child: ChildProcess | undefined;
@@ -115,7 +120,7 @@ try {
     PORT: String(port),
     SMART_TIME_DB_PATH: dbPath,
     JWT_SECRET: secret,
-    OWNER_EMAILS: [ownerEmail, secondOwnerEmail].join(','),
+    OWNER_EMAILS: ownerEmail,
     ALLOWED_ORIGINS: 'https://app.example.test',
     TURNSTILE_ENFORCE: 'false',
     SMTP_HOST: '127.0.0.1',
