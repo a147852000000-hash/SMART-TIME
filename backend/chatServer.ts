@@ -68,6 +68,36 @@ const oracleAuthBridge = ORACLE_AUTH_BRIDGE_ENABLED
   ? authBridgeModule.createAuthBridge()
   : null;
 
+function syncOraclePublicProfiles() {
+  if (!ORACLE_AUTH_BRIDGE_ENABLED || !oracleAuthBridge) return;
+  const profiles = oracleAuthBridge.listPublicUsers();
+  const upsert = db.prepare(`
+    INSERT INTO app_user_profiles
+      (id, email, username, display_name, avatar, phone, phone_verified, role, activation_status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      email=excluded.email,
+      username=excluded.username,
+      display_name=excluded.display_name,
+      avatar=excluded.avatar,
+      phone=excluded.phone,
+      phone_verified=excluded.phone_verified,
+      role=excluded.role,
+      activation_status=excluded.activation_status,
+      created_at=excluded.created_at
+  `);
+  const sync = db.transaction((rows: any[]) => {
+    for (const profile of rows) {
+      upsert.run(
+        profile.id, profile.email, profile.username || null, profile.name || null,
+        profile.avatar || null, profile.phone || null, profile.phoneVerified ? 1 : 0,
+        profile.role || "user", profile.activation_status || "active", profile.created_at || null
+      );
+    }
+  });
+  sync(profiles);
+}
+
 export function getAuthUser(req: express.Request) {
   if (ORACLE_AUTH_BRIDGE_ENABLED) {
     const authHeader = String(req.headers.authorization || '');
@@ -75,7 +105,10 @@ export function getAuthUser(req: express.Request) {
     if (!match) return null;
     try {
       const auth = oracleAuthBridge.authenticateToken(match[1]);
-      return auth ? auth.user : null;
+      if (!auth) return null;
+      try { syncOraclePublicProfiles(); }
+      catch (syncError) { console.error('Oracle public profile sync unavailable:', (syncError as Error)?.message || syncError); }
+      return auth.user;
     } catch (error) {
       console.error('Oracle chat auth bridge unavailable:', (error as Error)?.message || error);
       return null;
@@ -268,7 +301,7 @@ chatRouter.get('/users', (req, res) => {
     const user = getAuthUser(req);
     const users = db.prepare(`
       SELECT id, display_name as name, email, avatar, phone
-      FROM users
+      FROM app_user_profiles
       ORDER BY created_at DESC
       LIMIT 100
     `).all() as any[];
@@ -346,7 +379,7 @@ chatRouter.get('/rooms', (req, res) => {
         const otherMember = db.prepare(`
           SELECT u.id, u.display_name as name, u.avatar
           FROM conversation_members cm
-          JOIN users u ON u.id = cm.user_id
+          JOIN app_user_profiles u ON u.id = cm.user_id
           WHERE cm.conversation_id = ? AND cm.user_id != ?
         `).get(r.id, userId) as any;
 
@@ -508,7 +541,7 @@ chatRouter.get('/rooms/:roomId', (req, res) => {
     const members = db.prepare(`
       SELECT cm.user_id as id, u.display_name as name, u.email, u.avatar, u.phone, cm.role, cm.joined_at as joinedAt, cm.muted, cm.banned
       FROM conversation_members cm
-      JOIN users u ON u.id = cm.user_id
+      JOIN app_user_profiles u ON u.id = cm.user_id
       WHERE cm.conversation_id = ?
       ORDER BY
         CASE cm.role
@@ -727,7 +760,7 @@ chatRouter.get('/rooms/:roomId/messages', (req, res) => {
         u.display_name as sender_real_name,
         u.avatar as sender_real_avatar
       FROM messages m
-      LEFT JOIN users u ON u.id = m.sender_id
+      LEFT JOIN app_user_profiles u ON u.id = m.sender_id
       WHERE m.conversation_id = ?
     `;
     const params: any[] = [userId, roomId];
@@ -1047,7 +1080,7 @@ chatRouter.get('/saved-messages', (req, res) => {
       FROM saved_messages sm
       JOIN messages m ON m.id = sm.message_id
       JOIN conversations c ON c.id = m.conversation_id
-      LEFT JOIN users u ON u.id = m.sender_id
+      LEFT JOIN app_user_profiles u ON u.id = m.sender_id
       WHERE sm.user_id = ?
       ORDER BY sm.saved_at DESC
     `).all(user.id) as any[];
@@ -1131,7 +1164,7 @@ chatRouter.post('/rooms/:roomId/members', (req, res) => {
       VALUES (?, ?, ?, ?)
     `).run(roomId, targetUserId, role, now);
 
-    const targetUser = db.prepare('SELECT id, display_name as name, avatar, email FROM users WHERE id = ?').get(targetUserId) as any;
+    const targetUser = db.prepare('SELECT id, display_name as name, avatar, email FROM app_user_profiles WHERE id = ?').get(targetUserId) as any;
 
     broadcastToRoom(roomId, {
       type: 'member_added',
@@ -1222,7 +1255,7 @@ chatRouter.get('/search', (req, res) => {
       SELECT m.*, c.title as room_title, c.type as room_type, u.display_name as sender_real_name, u.avatar as sender_real_avatar
       FROM messages m
       JOIN conversations c ON c.id = m.conversation_id
-      LEFT JOIN users u ON u.id = m.sender_id
+      LEFT JOIN app_user_profiles u ON u.id = m.sender_id
       LEFT JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = ?
       WHERE (c.type = 'public' OR cm.user_id = ? OR c.creator_id = ?)
         AND m.is_deleted = 0
