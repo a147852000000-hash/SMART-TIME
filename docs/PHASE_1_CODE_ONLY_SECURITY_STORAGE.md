@@ -16,6 +16,7 @@ The final production frontend origin has not yet been confirmed. Configure it in
 
 - `OWNER_EMAILS` must contain exactly one valid email address; startup fails closed when it is empty, invalid, or contains multiple addresses.
 - Owner authorization requires DB role `owner` and an exact match to that single configured email.
+- Startup also fails closed unless SQLite contains exactly one row with DB role `owner`, and that row's email matches the configured address.
 - Admin authorization is based on DB role `admin`; it does not require membership in `OWNER_EMAILS`.
 - The owner-only `POST /api/auth/owner/admin-role` accepts `{ "email": "...", "action": "appoint" | "revoke" }`.
 - Only an existing account can be appointed. Self-appointment/change is rejected. An owner cannot be demoted by this endpoint.
