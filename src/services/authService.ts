@@ -92,7 +92,7 @@ export async function loginWithIdentifier(identifier: string, password: string, 
 
 export async function selectLoginRole(roleChoiceTicket: string, role: 'owner' | 'user'): Promise<AuthSession> {
   if (!roleChoiceTicket) throw new Error('انتهت صلاحية اختيار نوع الدخول. سجّل الدخول مرة أخرى.');
-  // The role-choice ticket is the temporary bearer credential. Do not use a stale
+  // The role-choice ticket is a temporary one-time credential. Do not use a stale
   // previously saved session here; the server accepts this ticket only on select-role.
   const res = await fetch(apiUrl('/api/auth/select-role'), {
     method: 'POST',
