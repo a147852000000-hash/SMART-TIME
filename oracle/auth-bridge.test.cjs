@@ -66,3 +66,24 @@ test("fails closed when owner cardinality is not exactly one", t => {
   fs.writeFileSync(usersFile, JSON.stringify([{ id: "user-2", email: "user@example.test", role: "user", activation_status: "active", authVersion: 0 }]));
   assert.throws(() => bridge.authenticateToken(token), /exactly one configured owner/);
 });
+
+
+test("validates sessions without changing auth files", t => {
+  const { bridge, token, usersFile, sessionsFile } = fixture(t);
+  const usersBefore = fs.readFileSync(usersFile, "utf8");
+  const sessionsBefore = fs.readFileSync(sessionsFile, "utf8");
+  assert.equal(bridge.authenticateToken(token).user.id, "owner-1");
+  assert.equal(fs.readFileSync(usersFile, "utf8"), usersBefore);
+  assert.equal(fs.readFileSync(sessionsFile, "utf8"), sessionsBefore);
+});
+
+test("respects owner view-as-user session context", t => {
+  const { bridge, token, sessionsFile, sessionKey } = fixture(t);
+  const sessions = JSON.parse(fs.readFileSync(sessionsFile, "utf8"));
+  sessions[sessionKey].viewAs = "user";
+  fs.writeFileSync(sessionsFile, JSON.stringify(sessions));
+  const auth = bridge.authenticateToken(token);
+  assert.equal(auth.isOwner, true);
+  assert.equal(auth.viewAsUser, true);
+  assert.equal(auth.role, "user");
+});
