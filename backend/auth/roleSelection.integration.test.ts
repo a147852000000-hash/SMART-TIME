@@ -171,6 +171,11 @@ try {
   assert.equal(me.status, 200);
 
   const ownerHeaders = { authorization: `Bearer ${ownerSession.body.token}` };
+  const unapprovedOwnerLogin = await post('/api/auth/login', { identifier: secondOwnerEmail, password });
+  assert.equal(unapprovedOwnerLogin.status, 200, 'an unconfigured DB Owner may still sign in as a regular user');
+  assert.equal(unapprovedOwnerLogin.body.requiresRoleChoice, undefined, 'an unconfigured DB Owner must not receive Owner role selection');
+  const unapprovedOwnerHeaders = { authorization: 'Bearer ' + String(unapprovedOwnerLogin.body.token || '') };
+  assert.equal((await request('/api/auth/owner/accounts', { headers: unapprovedOwnerHeaders })).status, 403, 'an unconfigured DB Owner cannot access owner routes');
   const firstPage = await request('/api/auth/owner/accounts?limit=3&offset=0', { headers: ownerHeaders });
   assert.equal(firstPage.status, 200, 'approved Owner can list accounts');
   assert.equal(firstPage.body.limit, 3);
