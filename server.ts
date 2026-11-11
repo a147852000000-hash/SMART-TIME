@@ -104,17 +104,7 @@ const TRIAL_USER_ID = 'smart-time-trial-user';
 const AUTH_SESSION_DAYS = 30;
 const PASSWORD_RESET_MINUTES = 15;
 const PROGRAM_OWNER_EMAIL = 'eng.mamdouh2009@gmail.com';
-const PROGRAM_OWNER_ACTIVATION_KEY = String(process.env.PROGRAM_OWNER_ACTIVATION_KEY || '');
-// تكلفة كل بحث/مقارنة رحلة بالجنيه المصري (يمكن تعديلها بمتغير بيئة TRIP_SEARCH_COST_EGP)
-const parsedTripCost = Number(process.env.TRIP_SEARCH_COST_EGP || 5);
-const TRIP_SEARCH_COST_EGP = Number.isFinite(parsedTripCost) && parsedTripCost >= 0 ? Math.round(parsedTripCost * 100) / 100 : 5;
-const OWNER_WALLET_NUMBER = String(process.env.OWNER_WALLET_NUMBER || '01126621962').trim();
-const OWNER_INSTAPAY_ADDRESS = String(process.env.OWNER_INSTAPAY_ADDRESS || '01126621962').trim();
-const parsedTopupMin = Number(process.env.WALLET_TOPUP_MIN_EGP || 5);
-const parsedTopupMax = Number(process.env.WALLET_TOPUP_MAX_EGP || 10000);
-const WALLET_TOPUP_MIN_EGP = Number.isFinite(parsedTopupMin) && parsedTopupMin > 0 ? parsedTopupMin : 5;
-const WALLET_TOPUP_MAX_EGP = Number.isFinite(parsedTopupMax) && parsedTopupMax >= WALLET_TOPUP_MIN_EGP ? parsedTopupMax : 10000;
-const ALLOWED_TOPUP_METHODS = new Set(['vodafone_cash', 'instapay', 'etisalat_cash', 'other']);
+// The sole owner identity is reserved; public registration can never claim it.
 const MAX_REVIEW_NOTE_LENGTH = 300;
 function hashPassword(password: string) { const salt = crypto.randomBytes(16).toString('hex'); return `${salt}:${crypto.scryptSync(password, salt, 64).toString('hex')}`; }
 function verifyPassword(password: string, stored: string) { const [salt, expected] = String(stored||'').split(':'); if (!salt||!expected) return false; const actual=crypto.scryptSync(password,salt,64).toString('hex'); return crypto.timingSafeEqual(Buffer.from(actual,'hex'),Buffer.from(expected,'hex')); }
@@ -263,8 +253,8 @@ app.get('/api/trial/session', (req,res) => {
       const email = 'trial@smart-time.local';
       const username = 'smart_time_trial';
       db.prepare(
-        "INSERT INTO users (id,email,username,password_hash,display_name,created_at,phone,phone_verified,activation_status,wallet_balance) VALUES (?,?,?,?,?,?,?,?,?,?)"
-      ).run(TRIAL_USER_ID, email, username, hashPassword(crypto.randomBytes(24).toString('hex')), 'SMART TIME', now, null, 0, 'active', 0);
+        "INSERT INTO users (id,email,username,password_hash,display_name,created_at,phone,phone_verified,activation_status) VALUES (?,?,?,?,?,?,?,?,?)"
+      ).run(TRIAL_USER_ID, email, username, hashPassword(crypto.randomBytes(24).toString('hex')), 'SMART TIME', now, null, 0, 'active');
       row = db.prepare('SELECT * FROM users WHERE id=?').get(TRIAL_USER_ID) as any;
     }
     const token = createSession(TRIAL_USER_ID);
@@ -286,6 +276,7 @@ app.post('/api/auth/register', async (req,res)=>{
     if(name.length<2)return res.status(400).json({error:'الاسم مطلوب'});
     if(!/^[a-z0-9_.-]{3,30}$/.test(username))return res.status(400).json({error:'اسم المستخدم يجب أن يكون من 3 إلى 30 حرفًا، باستخدام حروف إنجليزية أو أرقام أو _ أو - أو .'});
     if(!/^\S+@\S+\.\S+$/.test(email))return res.status(400).json({error:'البريد الإلكتروني غير صحيح'});
+    if(email===PROGRAM_OWNER_EMAIL)return res.status(403).json({error:'هذا البريد محجوز لحساب مالك البرنامج ولا يمكن إنشاؤه من التسجيل العام.',code:'OWNER_EMAIL_RESERVED'});
     if(password.length<8)return res.status(400).json({error:'كلمة المرور يجب أن تكون 8 أحرف على الأقل'});
     if(db.prepare('SELECT id FROM users WHERE email=?').get(email))return res.status(409).json({error:'البريد الإلكتروني مستخدم بالفعل'});
     if(db.prepare('SELECT id FROM users WHERE username=?').get(username))return res.status(409).json({error:'اسم المستخدم مستخدم بالفعل.'});
@@ -336,7 +327,18 @@ app.post('/api/auth/select-role',(req,res)=>{try{const bodyTicket=String(req.bod
 app.get('/api/auth/me',(req,res)=>{const user=authUser(req);if(!user||user.session_role==='role_choice')return res.status(401).json({error:'جلسة الدخول منتهية'});res.json({user:publicUser(user)});});
 app.get('/api/owner/admins',(req,res)=>{const actor=authUser(req);if(!actor||sessionAccountRole(actor)!=='owner')return res.status(403).json({error:'هذا القسم مخصص للمالك فقط.'});const view=String(req.query.view||'users');if(view==='admins'){const admins=db.prepare("SELECT id,email,username,display_name as name,role,activation_status FROM users WHERE role='admin' ORDER BY created_at DESC").all();return res.json({admins});}const users=db.prepare("SELECT id,email,username,display_name as name,role,activation_status FROM users WHERE lower(email)<>? AND role IN ('user','owner') ORDER BY created_at DESC").all(PROGRAM_OWNER_EMAIL);return res.json({users});});
 app.patch('/api/owner/admins/:id',(req,res)=>{const actor=authUser(req);if(!actor||sessionAccountRole(actor)!=='owner')return res.status(403).json({error:'هذا الإجراء مخصص للمالك فقط.'});const targetId=String(req.params.id||'').trim();const action=String(req.body.action||'');if(!targetId||targetId===actor.id)return res.status(400).json({error:'لا يمكن تغيير صلاحية حساب المالك.'});const target=db.prepare('SELECT id,email,role FROM users WHERE id=?').get(targetId) as any;if(!target)return res.status(404).json({error:'الحساب غير موجود.'});if(resolvedAccountRole(target)==='owner')return res.status(403).json({error:'لا يمكن تغيير صلاحيات المالك.'});if(action==='assign'){db.prepare("UPDATE users SET role='admin' WHERE id=?").run(targetId);return res.json({ok:true,role:'admin'});}if(action==='remove'){if(target.role!=='admin')return res.status(409).json({error:'الحساب ليس Admin حاليًا.'});db.prepare("UPDATE users SET role='user' WHERE id=?").run(targetId);return res.json({ok:true,role:'user'});}return res.status(400).json({error:'الإجراء غير معروف.'});});
-app.post('/api/auth/owner/activate',(req,res)=>{try{const ownerEmail=String(req.body.ownerEmail||'').trim().toLowerCase(),key=String(req.body.activationKey||'').trim(),userEmail=String(req.body.userEmail||'').trim().toLowerCase();if(ownerEmail!==PROGRAM_OWNER_EMAIL)return res.status(403).json({error:'هذا الإجراء مخصص لصاحب البرنامج.'});if(!PROGRAM_OWNER_ACTIVATION_KEY||key!==PROGRAM_OWNER_ACTIVATION_KEY)return res.status(403).json({error:'مفتاح تفعيل المالك غير صحيح أو غير مُكوّن.'});const user=db.prepare('SELECT id FROM users WHERE email=?').get(userEmail) as any;if(!user)return res.status(404).json({error:'الحساب غير موجود.'});db.prepare("UPDATE users SET activation_status='active',activated_by=?,activated_at=? WHERE id=?").run(ownerEmail,new Date().toISOString(),user.id);res.json({ok:true,message:'تم اعتماد الحساب بنجاح.'});}catch(e:any){res.status(500).json({error:e.message||'تعذر اعتماد الحساب'});}});
+app.post('/api/auth/owner/activate',(req,res)=>{
+  try{
+    const actor=authUser(req);
+    if(!actor || sessionAccountRole(actor)!=='owner')return res.status(403).json({error:'هذا الإجراء مخصص لجلسة المالك فقط.'});
+    const userEmail=String(req.body.userEmail||'').trim().toLowerCase();
+    if(!userEmail || userEmail===PROGRAM_OWNER_EMAIL)return res.status(400).json({error:'البريد الإلكتروني المستهدف غير صالح.'});
+    const user=db.prepare('SELECT id FROM users WHERE email=?').get(userEmail) as any;
+    if(!user)return res.status(404).json({error:'الحساب غير موجود.'});
+    db.prepare("UPDATE users SET activation_status='active',activated_by=?,activated_at=? WHERE id=?").run(String(actor.email||PROGRAM_OWNER_EMAIL).toLowerCase(),new Date().toISOString(),user.id);
+    res.json({ok:true,message:'تم اعتماد الحساب بنجاح.'});
+  }catch(e:any){res.status(500).json({error:e.message||'تعذر اعتماد الحساب'});}
+});
 app.post('/api/auth/phone-login/request-otp',async(req,res)=>{try{const phone=normalizePhone(req.body.phone);if(phone.length<8)return res.status(400).json({error:'رقم الهاتف غير صحيح'});const row=db.prepare('SELECT id FROM users WHERE phone=? AND phone_verified=1').get(phone) as any;if(!row)return res.status(404).json({error:'هذا الرقم غير مرتبط بحساب موثق.'});try{const otpResult=await requestPhoneOtp(phone);res.json({ok:true,expiresAt:otpResult.expires,devCode:otpResult.devCode,smsProvider:otpResult.provider});}catch(err:any){return res.status(503).json({error:err.message||'تعذر إرسال SMS'});}}catch(e:any){res.status(500).json({error:e.message||'تعذر إرسال رمز SMS'});}});
 app.post('/api/auth/phone-login',async(req,res)=>{try{const phone=normalizePhone(req.body.phone),code=String(req.body.code||'').trim();const check=await checkPhoneOtp(phone,code);if(!check.ok)return res.status(check.status).json({error:check.error});const row=db.prepare('SELECT * FROM users WHERE phone=? AND phone_verified=1').get(phone) as any;if(!row)return res.status(404).json({error:'هذا الرقم غير مرتبط بحساب موثق.'});db.prepare('DELETE FROM phone_otps WHERE phone=?').run(phone);res.json({token:createSession(row.id),user:publicUser({...row,name:row.display_name,phoneVerified:row.phone_verified})});}catch(e:any){res.status(500).json({error:e.message||'تعذر تسجيل الدخول بالهاتف'});}});
 app.post('/api/auth/forgot-password',async(req,res)=>{try{const email=String(req.body.email||'').trim().toLowerCase();const row=db.prepare('SELECT id FROM users WHERE email=?').get(email) as any;if(!row)return res.json({ok:true,emailSent:false,message:'إذا كان البريد مسجلاً فستصلك تعليمات الاستعادة.'});const code=String(crypto.randomInt(100000,1000000)),expires=new Date(Date.now()+PASSWORD_RESET_MINUTES*60000).toISOString();db.prepare(`INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at`).run(email,otpHash(code),expires,0,new Date().toISOString());try{const info=await sendPasswordResetEmail(email,code);res.json({ok:true,emailSent:true,provider:info.provider});}catch(mailErr:any){db.prepare('DELETE FROM password_resets WHERE email=?').run(email);res.status(503).json({error:mailErr.message||'تعذر إرسال رسالة إعادة تعيين كلمة المرور.'});}}catch(e:any){res.status(500).json({error:e.message||'تعذر بدء استعادة كلمة المرور'});}});
@@ -1100,21 +1102,9 @@ async function resolveTripMetrics(fromLat: number, fromLng: number, toLat: numbe
 
 const handleTripCompare = async (req: express.Request, res: express.Response) => {
   try {
-    // التحقق من تسجيل الدخول والرصيد قبل تنفيذ أي بحث (كل بحث يكلف TRIP_SEARCH_COST_EGP)
+    // Trip comparison is authenticated and does not depend on a wallet.
     const user = authUser(req);
-    if (!user) {
-      return res.status(401).json({ error: 'يجب تسجيل الدخول لاستخدام خدمة مقارنة الرحلات' });
-    }
-    const userRow = db.prepare('SELECT wallet_balance FROM users WHERE id = ?').get(user.id) as any;
-    const currentBalance = userRow?.wallet_balance || 0;
-    if (currentBalance < TRIP_SEARCH_COST_EGP) {
-      return res.status(402).json({
-        error: `رصيدك الحالي (${currentBalance.toFixed(2)} ج.م) غير كافٍ. تكلفة البحث ${TRIP_SEARCH_COST_EGP} ج.م، من فضلك اشحن رصيدك أولاً.`,
-        code: 'INSUFFICIENT_BALANCE',
-        balance: currentBalance,
-        required: TRIP_SEARCH_COST_EGP,
-      });
-    }
+    if (!user) return res.status(401).json({ error: 'يجب تسجيل الدخول لاستخدام خدمة مقارنة الرحلات' });
 
     const { from, to, pickup, destination, rideTypeFilter, rideType } = req.body;
     const filter = rideTypeFilter || (rideType ? String(rideType).toLowerCase() : 'all');
@@ -1203,35 +1193,15 @@ const handleTripCompare = async (req: express.Request, res: express.Response) =>
       options: providers,
     };
 
-    // الخصم والحفظ يتمان في معاملة واحدة حتى لا يحدث خصم مزدوج أو رصيد سالب
-    let newBalance = currentBalance;
+    // Persist estimates atomically without charging or consulting a wallet.
     try {
       db.exec('BEGIN IMMEDIATE');
-      const debit = db.prepare(
-        'UPDATE users SET wallet_balance = ROUND(wallet_balance - ?, 2) WHERE id = ? AND wallet_balance >= ?'
-      ).run(TRIP_SEARCH_COST_EGP, user.id, TRIP_SEARCH_COST_EGP) as any;
-      if (!debit.changes) {
-        const latest = db.prepare('SELECT wallet_balance FROM users WHERE id = ?').get(user.id) as any;
-        db.exec('ROLLBACK');
-        return res.status(402).json({
-          error: `رصيدك الحالي (${Number(latest?.wallet_balance || 0).toFixed(2)} ج.م) غير كافٍ. تكلفة البحث ${TRIP_SEARCH_COST_EGP} ج.م، من فضلك اشحن رصيدك أولاً.`,
-          code: 'INSUFFICIENT_BALANCE',
-          balance: Number(latest?.wallet_balance || 0),
-          required: TRIP_SEARCH_COST_EGP,
-        });
-      }
-      const balanceRow = db.prepare('SELECT wallet_balance FROM users WHERE id = ?').get(user.id) as any;
-      newBalance = Number(balanceRow?.wallet_balance || 0);
-
       db.prepare("INSERT INTO ride_requests(id,pickup_json,destination_json,created_at) VALUES(?,?,?,?)")
         .run(requestId, JSON.stringify(pickup || from || {}), JSON.stringify(destination || to || {}), new Date().toISOString());
       for (const option of providers) {
         db.prepare("INSERT INTO ride_quotes(id,request_id,provider,amount,currency,eta_minutes,duration_minutes,status,raw_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)")
           .run(crypto.randomUUID(), requestId, option.providerId, option.fare, option.currency, option.etaMinutes, option.durationMinutes, 'ESTIMATED', JSON.stringify(option), new Date().toISOString());
       }
-      db.prepare(
-        `INSERT INTO wallet_transactions (id, user_id, amount, type, reference, balance_after, created_at) VALUES (?, ?, ?, 'trip_search', ?, ?, ?)`
-      ).run(`wtx_${crypto.randomUUID()}`, user.id, -TRIP_SEARCH_COST_EGP, requestId, newBalance, new Date().toISOString());
       db.exec('COMMIT');
     } catch (txError) {
       try { db.exec('ROLLBACK'); } catch {}
@@ -1254,8 +1224,6 @@ const handleTripCompare = async (req: express.Request, res: express.Response) =>
       quoteStatus: 'ESTIMATED',
       warning: 'جميع الأسعار تقديرية واجتهادية من SMART TIME وليست أسعارًا رسمية من شركات النقل.',
       timestamp: new Date().toISOString(),
-      walletBalance: newBalance,
-      tripCost: TRIP_SEARCH_COST_EGP,
     });
   } catch (e: any) {
     console.error('Trip compare failed:', e);
