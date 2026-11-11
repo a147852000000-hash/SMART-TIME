@@ -39,7 +39,7 @@ test('owner promotion updates only the single approved account and does not auto
 test('owner promotion rolls back when an approved account is missing', () => {
   const fixture = setup([{ email: 'unapproved@example.test', role: 'user' }]);
   try {
-    assert.throws(() => fixture.db.exec(sql), /exactly one approved owner account and exactly one role change are required/);
+    assert.throws(() => fixture.db.exec(sql), /exactly one approved account, no pre-existing Owner rows, and exactly one role change are required/);
     assert.equal(fixture.db.prepare('SELECT role FROM users WHERE email=?').get('unapproved@example.test').role, 'user');
   } finally {
     fixture.db.close();
@@ -50,9 +50,21 @@ test('owner promotion rolls back when an approved account is missing', () => {
 test('owner promotion rolls back when the approved account is already an owner', () => {
   const fixture = setup([{ email: approved[0], role: 'owner' }, { email: 'unapproved@example.test', role: 'user' }]);
   try {
-    assert.throws(() => fixture.db.exec(sql), /exactly one approved owner account and exactly one role change are required/);
+    assert.throws(() => fixture.db.exec(sql), /exactly one approved account, no pre-existing Owner rows, and exactly one role change are required/);
     assert.equal(fixture.db.prepare('SELECT role FROM users WHERE email=?').get(approved[0]).role, 'owner');
     assert.equal(fixture.db.prepare('SELECT role FROM users WHERE email=?').get('unapproved@example.test').role, 'user');
+  } finally {
+    fixture.db.close();
+    fs.rmSync(fixture.dir, { recursive: true, force: true });
+  }
+});
+
+test('owner promotion refuses to run while any unapproved Owner row exists', () => {
+  const fixture = setup([{ email: approved[0], role: 'user' }, { email: 'unapproved-owner@example.test', role: 'owner' }]);
+  try {
+    assert.throws(() => fixture.db.exec(sql), /no pre-existing Owner rows/);
+    assert.equal(fixture.db.prepare('SELECT role FROM users WHERE email=?').get(approved[0]).role, 'user');
+    assert.equal(fixture.db.prepare('SELECT role FROM users WHERE email=?').get('unapproved-owner@example.test').role, 'owner');
   } finally {
     fixture.db.close();
     fs.rmSync(fixture.dir, { recursive: true, force: true });
