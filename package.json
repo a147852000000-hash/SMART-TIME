@@ -38,7 +38,8 @@
     "test:password-reset-email": "tsx backend/auth/passwordResetEmail.test.ts",
     "build:oracle-web": "vite build",
     "start:oracle-candidate": "node oracle/index.oracle.cjs",
-    "test:oracle-auth-bridge": "node --test oracle/auth-bridge.test.cjs"
+    "test:oracle-auth-bridge": "node --test oracle/auth-bridge.test.cjs",
+    "test:oracle-phone-otp": "node --test oracle/phone-otp.test.cjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
