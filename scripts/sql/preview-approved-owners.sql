@@ -14,10 +14,13 @@ ORDER BY lower(trim(email));
 SELECT
   COUNT(*) AS matching_rows,
   COUNT(DISTINCT lower(trim(email))) AS distinct_approved_emails,
+  (SELECT COUNT(*) FROM users WHERE lower(trim(role))='owner') AS existing_owner_rows,
   CASE
-    WHEN COUNT(*) = 1 AND COUNT(DISTINCT lower(trim(email))) = 1
+    WHEN COUNT(*) = 1
+      AND COUNT(DISTINCT lower(trim(email))) = 1
+      AND (SELECT COUNT(*) FROM users WHERE lower(trim(role))='owner') = 0
       THEN 'READY FOR MANUAL REVIEW'
-    ELSE 'STOP: expected exactly one approved owner account'
+    ELSE 'STOP: require one approved account and zero pre-existing Owner rows'
   END AS review_status
 FROM users
 WHERE lower(trim(email)) IN (
