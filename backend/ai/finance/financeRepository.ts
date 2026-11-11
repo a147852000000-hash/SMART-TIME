@@ -257,13 +257,9 @@ export function migrateLegacyExpensesToCanonical(userId: string, items: Array<Ca
         records.push({ sourceId, targetId: String(duplicate.id), status: "skipped", reason: "content-equivalent canonical record already exists" });
         continue;
       }
-      createCanonicalExpense(uid, normalized);
-      if (!readExpense(uid, sourceId)) {
-        const targetId = sourceId || id("legacy");
-        if (!readExpense(uid, targetId)) throw new Error(`Legacy migration verification failed: ${sourceId}`);
-      }
-      const targetId = sourceId;
-      if (!readExpense(uid, targetId)) throw new Error(`Legacy migration verification failed: ${sourceId}`);
+      const targetId = sourceId || id("legacy");
+      createCanonicalExpense(uid, { ...normalized, id: targetId });
+      if (!readExpense(uid, targetId)) throw new Error(`Legacy migration verification failed: ${sourceId || targetId}`);
       inserted++;
       verified++;
       records.push({ sourceId, targetId, status: "inserted", reason: "migrated from legacy finance data" });
