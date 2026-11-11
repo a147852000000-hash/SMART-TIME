@@ -14,6 +14,7 @@ import { isLocalSmartAiConfigured } from "./backend/ai/localInference.js";
 import { createHttpVoiceDnaProvider, DisabledVoiceDnaProvider } from "./backend/voice/voiceDnaProvider.js";
 import { sendPasswordResetEmail as sendPasswordResetEmailWithProvider } from "./backend/auth/passwordResetEmail.js";
 import { verifyTurnstileToken } from "./backend/security/turnstile.js";
+import { parseSingleOwnerEmail } from "./backend/auth/ownerConfig.js";
 
 dotenv.config();
 
@@ -141,8 +142,6 @@ const PROGRAM_OWNER_ACTIVATION_KEY = String(process.env.PROGRAM_OWNER_ACTIVATION
 // تكلفة كل بحث/مقارنة رحلة بالجنيه المصري (يمكن تعديلها بمتغير بيئة TRIP_SEARCH_COST_EGP)
 const parsedTripCost = Number(process.env.TRIP_SEARCH_COST_EGP || 5);
 const TRIP_SEARCH_COST_EGP = Number.isFinite(parsedTripCost) && parsedTripCost >= 0 ? Math.round(parsedTripCost * 100) / 100 : 5;
-const TRIP_WELCOME_FREE_SEARCHES = 3;
-const TRIP_GIFT_HASH_SALT = String(process.env.TRIP_GIFT_HASH_SALT || 'smart-time-trip-gift-v1');
 function clientIp(req: express.Request): string { const ip=String(req.ip||req.socket.remoteAddress||'').trim().toLowerCase(); return ip.replace(/^::ffff:/,''); }
 const TURNSTILE_ENFORCE = String(process.env.TURNSTILE_ENFORCE || "false").trim().toLowerCase() === "true";
 async function requireAuthTurnstile(req: express.Request, res: express.Response): Promise<boolean> {
@@ -160,7 +159,6 @@ async function requireAuthTurnstile(req: express.Request, res: express.Response)
   }
   return true;
 }
-function giftSignalHash(value:string): string { return crypto.createHash('sha256').update(`${TRIP_GIFT_HASH_SALT}:${value}`).digest('hex'); }
 const parsedTopupMin = Number(process.env.WALLET_TOPUP_MIN_EGP || 5);
 const parsedTopupMax = Number(process.env.WALLET_TOPUP_MAX_EGP || 10000);
 const WALLET_TOPUP_MIN_EGP = Number.isFinite(parsedTopupMin) && parsedTopupMin > 0 ? parsedTopupMin : 5;
@@ -194,7 +192,9 @@ function verifyJwt(token: string): any | null {
     return payload.exp && Number(payload.exp) > Math.floor(Date.now() / 1000) ? payload : null;
   } catch { return null; }
 }
-const OWNER_EMAILS = new Set(String(process.env.OWNER_EMAILS || '').split(',').map(v => v.trim().toLowerCase()).filter(Boolean));
+const OWNER_EMAILS = new Set([parseSingleOwnerEmail(process.env.OWNER_EMAILS)]);
+// Welcome Gift was retired: clear unused legacy reward balances while preserving historical anti-abuse claims.
+db.prepare("UPDATE users SET trip_free_searches=0, trip_gift_claimed_at=NULL WHERE COALESCE(trip_free_searches,0)<>0 OR trip_gift_claimed_at IS NOT NULL").run();
 const VALID_APP_ROLES = new Set(['owner', 'admin', 'user']);
 type RequiredSqliteColumn = {
   name: string;
@@ -479,7 +479,7 @@ app.get('/api/trial/session', (req,res) => {
       const username = 'smart_time_trial';
       db.prepare(
         "INSERT INTO users (id,email,username,password_hash,display_name,created_at,phone,phone_verified,activation_status,trip_free_searches,wallet_balance) VALUES (?,?,?,?,?,?,?,?,?,?,?)"
-      ).run(TRIAL_USER_ID, email, username, hashPassword(crypto.randomBytes(24).toString('hex')), 'SMART TIME', now, null, 0, 'active', TRIP_WELCOME_FREE_SEARCHES, 0);
+      ).run(TRIAL_USER_ID, email, username, hashPassword(crypto.randomBytes(24).toString('hex')), 'SMART TIME', now, null, 0, 'active', 0, 0);
       row = db.prepare('SELECT * FROM users WHERE id=?').get(TRIAL_USER_ID) as any;
     }
     const token = createSession(TRIAL_USER_ID);
@@ -495,10 +495,8 @@ app.post('/api/auth/register', async (req,res)=>{
     const name=String(req.body.name||'').trim(), username=normalizeUsername(req.body.username), email=String(req.body.email||'').trim().toLowerCase(), password=String(req.body.password||'');
     // TEMPORARY (testing phase): phone is now optional at signup. Leaving it blank skips phone
     // verification entirely — the account is created and usable immediately across every section.
-    // The Trips section's phone-gift screen still asks for it later, whenever the user chooses to.
     // To make phone required again, restore the `if(phone.length<8) return res.status(400)...` check below.
     const rawPhone=normalizePhone(req.body.phone), phone = rawPhone.length>=8 ? rawPhone : '';
-    const deviceId=String(req.body.deviceId||'').trim().slice(0,200);
     if(name.length<2)return res.status(400).json({error:'الاسم مطلوب'});
     if(!/^[a-z0-9_.-]{3,30}$/.test(username))return res.status(400).json({error:'اسم المستخدم يجب أن يكون من 3 إلى 30 حرفًا، باستخدام حروف إنجليزية أو أرقام أو _ أو - أو .'});
     if(!/^\S+@\S+\.\S+$/.test(email))return res.status(400).json({error:'البريد الإلكتروني غير صحيح'});
@@ -511,13 +509,13 @@ app.post('/api/auth/register', async (req,res)=>{
     // IMPORTANT: the account (with its email) is already committed to the users table above.
     // A failure to send the phone-verification SMS must never delete that row again — losing the
     // SMS provider must not mean losing the registration. We keep the account and let the user
-    // retry verification later (via the Trips phone-gift screen, which re-sends a fresh OTP).
+    // retry verification later from the phone-verification screen.
     let expires = new Date(Date.now()+300000).toISOString();
     let smsSent = false;
     let devCode: string | undefined;
     if (phone) {
       try { const otpResult = await requestPhoneOtp(phone); expires = otpResult.expires; devCode = otpResult.devCode; smsSent = otpResult.provider !== 'development'; }
-      catch(e:any) { /* smsSent stays false; user can retry from the Trips phone-gift screen */ }
+      catch(e:any) { /* smsSent stays false; user can retry from the phone-verification screen */ }
     }
     const user={id,email,username,name,phone:phone||undefined,phoneVerified:false,activationStatus:'active'};
     res.json({
@@ -527,7 +525,7 @@ app.post('/api/auth/register', async (req,res)=>{
       expiresAt:expires,
       devCode,
       smsSent,
-      smsWarning: (!smsSent && process.env.NODE_ENV==='production') ? 'تم إنشاء حسابك وتسجيل بريدك الإلكتروني بنجاح، لكن تعذر إرسال رمز SMS الآن. يمكنك إعادة طلب رمز التحقق لاحقًا من شاشة تفعيل هدية الرحلات.' : undefined,
+      smsWarning: (!smsSent && process.env.NODE_ENV==='production') ? 'تم إنشاء حسابك وتسجيل بريدك الإلكتروني بنجاح، لكن تعذر إرسال رمز SMS الآن. يمكنك إعادة طلب رمز التحقق لاحقًا من شاشة التحقق من الهاتف.' : undefined,
     });
   }catch(e:any){res.status(500).json({error:e.message||'تعذر إنشاء الحساب'});}
 });
@@ -542,13 +540,11 @@ app.post('/api/auth/register/verify-phone',async(req,res)=>{
     if(!check.ok)return res.status(check.status).json({error:check.error});
     db.exec('BEGIN IMMEDIATE');
     try {
-      const priorClaim=db.prepare('SELECT id FROM trip_gift_claims WHERE user_id<>? AND phone_hash=? LIMIT 1').get(user.id,giftSignalHash(phone)) as any;
-      const giftEligible=!priorClaim;
-      db.prepare('UPDATE users SET phone_verified=1,trip_free_searches=?,trip_gift_claimed_at=? WHERE id=?').run(giftEligible?TRIP_WELCOME_FREE_SEARCHES:0,giftEligible?new Date().toISOString():null,user.id);
-      if(giftEligible) db.prepare('INSERT INTO trip_gift_claims (id,user_id,device_hash,ip_hash,phone_hash,created_at) VALUES (?,?,?,?,?,?)').run(`gift_${crypto.randomUUID()}`,user.id,req.body.deviceId?giftSignalHash(String(req.body.deviceId)):null,giftSignalHash(clientIp(req)),giftSignalHash(phone),new Date().toISOString());
-      db.prepare('DELETE FROM phone_otps WHERE phone=?').run(phone); db.exec('COMMIT');
+      db.prepare('UPDATE users SET phone_verified=1 WHERE id=?').run(user.id);
+      db.prepare('DELETE FROM phone_otps WHERE phone=?').run(phone);
+      db.exec('COMMIT');
       const refreshed=db.prepare('SELECT id,email,username,display_name as name,phone,phone_verified as phoneVerified,activation_status FROM users WHERE id=?').get(user.id) as any;
-      res.json({ok:true,user:publicUser(refreshed),giftEligible,freeSearches:giftEligible?TRIP_WELCOME_FREE_SEARCHES:0,message:giftEligible?'تم تأكيد رقم الهاتف 🎉 وحصلت على 3 أبحاث مجانية هدية ترحيبية.':'تم تأكيد رقم الهاتف، لكن الهدية سبق استخدامها بهذا الرقم.'});
+      res.json({ok:true,user:publicUser(refreshed),phoneVerified:true});
     } catch(e){db.exec('ROLLBACK'); throw e;}
   }catch(e:any){res.status(500).json({error:e.message||'تعذر تأكيد رقم الهاتف'});}
 });
@@ -558,7 +554,31 @@ app.post('/api/auth/trips/request-phone-otp',async(req,res)=>{
 });
 
 app.post('/api/auth/trips/verify-phone',async(req,res)=>{
-  try{ const user=authUser(req); if(!user)return res.status(401).json({error:'يجب تسجيل الدخول أولاً'}); const phone=normalizePhone(req.body.phone),code=String(req.body.code||'').trim(); const row=db.prepare('SELECT * FROM users WHERE id=?').get(user.id) as any; if(!row)return res.status(404).json({error:'الحساب غير موجود'}); if(row.phone_verified)return res.json({ok:true,user:publicUser({...row,phoneVerified:true}),freeSearches:Number(row.trip_free_searches||0),alreadyVerified:true}); const check=await checkPhoneOtp(phone,code); if(!check.ok)return res.status(check.status).json({error:check.error}); const taken=db.prepare('SELECT id FROM users WHERE phone=? AND id<>?').get(phone,user.id) as any; if(taken)return res.status(409).json({error:'رقم الهاتف مرتبط بحساب آخر.'}); db.exec('BEGIN IMMEDIATE'); try{ const priorClaim=db.prepare('SELECT id FROM trip_gift_claims WHERE user_id<>? AND phone_hash=? LIMIT 1').get(user.id,giftSignalHash(phone)) as any; const giftEligible=!priorClaim; db.prepare('UPDATE users SET phone=?,phone_verified=1,trip_free_searches=?,trip_gift_claimed_at=? WHERE id=?').run(phone,giftEligible?TRIP_WELCOME_FREE_SEARCHES:0,giftEligible?new Date().toISOString():null,user.id); if(giftEligible)db.prepare('INSERT INTO trip_gift_claims (id,user_id,device_hash,ip_hash,phone_hash,created_at) VALUES (?,?,?,?,?,?)').run(`gift_${crypto.randomUUID()}`,user.id,req.body.deviceId?giftSignalHash(String(req.body.deviceId)):null,giftSignalHash(clientIp(req)),giftSignalHash(phone),new Date().toISOString()); db.prepare('DELETE FROM phone_otps WHERE phone=?').run(phone); db.exec('COMMIT'); const refreshed=db.prepare('SELECT id,email,username,display_name as name,phone,phone_verified as phoneVerified,activation_status FROM users WHERE id=?').get(user.id) as any; res.json({ok:true,user:publicUser(refreshed),giftEligible,freeSearches:giftEligible?3:0,message:giftEligible?'تم تأكيد رقم الهاتف 🎉 حصلت على 3 أبحاث مجانية هدية ترحيبية.':'تم تأكيد الهاتف، لكن الهدية سبق استخدامها بهذا الرقم.'}); }catch(e){db.exec('ROLLBACK');throw e;} }catch(e:any){res.status(500).json({error:e.message||'تعذر تأكيد رقم الهاتف'});}
+  try {
+    const user=authUser(req);
+    if(!user)return res.status(401).json({error:'يجب تسجيل الدخول أولاً'});
+    const phone=normalizePhone(req.body.phone),code=String(req.body.code||'').trim();
+    const row=db.prepare('SELECT * FROM users WHERE id=?').get(user.id) as any;
+    if(!row)return res.status(404).json({error:'الحساب غير موجود'});
+    if(row.phone_verified)return res.json({ok:true,user:publicUser({...row,phoneVerified:true}),alreadyVerified:true});
+    const check=await checkPhoneOtp(phone,code);
+    if(!check.ok)return res.status(check.status).json({error:check.error});
+    const taken=db.prepare('SELECT id FROM users WHERE phone=? AND id<>?').get(phone,user.id) as any;
+    if(taken)return res.status(409).json({error:'رقم الهاتف مرتبط بحساب آخر.'});
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      db.prepare('UPDATE users SET phone=?,phone_verified=1 WHERE id=?').run(phone,user.id);
+      db.prepare('DELETE FROM phone_otps WHERE phone=?').run(phone);
+      db.exec('COMMIT');
+    } catch(e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
+    const refreshed=db.prepare('SELECT id,email,username,display_name as name,phone,phone_verified as phoneVerified,activation_status FROM users WHERE id=?').get(user.id) as any;
+    res.json({ok:true,user:publicUser(refreshed),phoneVerified:true});
+  } catch(e:any) {
+    res.status(500).json({error:e.message||'تعذر تأكيد رقم الهاتف'});
+  }
 });
 
 app.post('/api/auth/login',async(req,res)=>{try{if(!(await requireAuthTurnstile(req,res)))return;const identifier=String(req.body.identifier||req.body.email||'').trim(),normalizedEmail=identifier.toLowerCase(),normalizedUsername=normalizeUsername(identifier),password=String(req.body.password||'');let row:any=null;if(identifier.includes('@')) row=db.prepare('SELECT * FROM users WHERE email=?').get(normalizedEmail) as any;else row=db.prepare('SELECT * FROM users WHERE username=?').get(normalizedUsername) as any;if(!row||!verifyPassword(password,row.password_hash))return res.status(401).json({error:'بيانات الدخول غير صحيحة. تأكد من البريد أو اسم المستخدم وكلمة المرور.'});const dbRole=String(row.role||'user').toLowerCase();if(!VALID_APP_ROLES.has(dbRole))return res.status(403).json({error:'دور الحساب غير صالح.'});if(dbRole==='admin'||(dbRole==='owner'&&OWNER_EMAILS.has(String(row.email).toLowerCase()))){const roleChoiceTicket=issueRoleSelectionTicket({...row,role:dbRole});const claims=verifyJwt(roleChoiceTicket);return res.json({requiresRoleChoice:true,roleChoiceTicket,actualRoleInDB:dbRole,availableRoles:claims?.availableRoles||['user']});}const user={...row,name:row.display_name,phoneVerified:row.phone_verified,selectedRole:'user'};res.json({token:createSession(row.id),user:publicUser(user)});}catch(e:any){res.status(500).json({error:'تعذر تسجيل الدخول'});}});
