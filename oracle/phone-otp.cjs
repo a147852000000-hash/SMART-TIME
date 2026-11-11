@@ -5,9 +5,9 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 
 function normalizePhone(value) {
-  let phone = String(value || "").trim().replace(/[\\s()-]/g, "");
+  let phone = String(value || "").trim().replace(/[\s()-]/g, "");
   if (phone.startsWith("00")) phone = "+" + phone.slice(2);
-  if (!/^\\+?[0-9]{8,15}$/.test(phone)) return "";
+  if (!/^\+?[0-9]{8,15}$/.test(phone)) return "";
   return phone;
 }
 
@@ -47,7 +47,7 @@ function createPhoneOtpService({ file, secret, sendCode, now = Date.now, randomI
 
   function verify(rawPhone, rawCode) {
     const phone = normalizePhone(rawPhone), code = String(rawCode || "").trim();
-    if (!phone || !/^\\d{6}$/.test(code)) return { ok: false, status: 400, message: "رقم الهاتف أو رمز التحقق غير صحيح." };
+    if (!phone || !/^\d{6}$/.test(code)) return { ok: false, status: 400, message: "رقم الهاتف أو رمز التحقق غير صحيح." };
     const records = read(), entry = records[phone], timestamp = now();
     if (!entry || !Number.isFinite(entry.expiresAt) || timestamp > entry.expiresAt) {
       if (entry) { delete records[phone]; write(records); }
