@@ -96,8 +96,10 @@ export async function selectLoginRole(roleChoiceTicket: string, role: 'owner' | 
   // previously saved session here; the server accepts this ticket only on select-role.
   const res = await fetch(apiUrl('/api/auth/select-role'), {
     method: 'POST',
+    // Send the one-time ticket in the body for Oracle compatibility and as a
+    // bearer credential for the SQLite server implementation.
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${roleChoiceTicket}` },
-    body: JSON.stringify({ role }),
+    body: JSON.stringify({ roleChoiceTicket, role }),
   });
   const data: any = await res.json().catch(() => ({}));
   if (!res.ok || !data.token || !data.user) throw new Error(data.message || data.error || 'تعذر اختيار نوع الدخول.');
