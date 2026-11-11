@@ -21,6 +21,5 @@ SELECT
   END AS review_status
 FROM users
 WHERE lower(trim(email)) IN (
-  'eng.mamdouh2009@gmail.com',
-  'mamdouh.oracle.2026@gmail.com'
+  'eng.mamdouh2009@gmail.com'
 );
