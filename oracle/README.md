@@ -30,9 +30,14 @@ When installed under `/home/ubuntu/smart-time-ai/oracle/`, its project root reso
 
 ## Auth bridge validation
 
-Run `npm run test:oracle-auth-bridge` from the repository root. The bridge is only a seam for future domain-route integration; the current `server.ts` and `backend/chatServer.ts` still query SQLite `users`/`sessions` directly. They have **not** been switched to this bridge, and the app API is therefore not integrated yet.
+Run `npm run test:oracle-auth-bridge` from the repository root. Set `SMART_TIME_ORACLE_AUTH_BRIDGE=true` only when intentionally running the domain server in bridge mode. In that mode:
+- `server.ts` validates bearer tokens through the existing Oracle JSON session store.
+- Its legacy `/api/auth/*` credential/session lifecycle routes are blocked (HTTP 410), except read-only `GET /api/auth/me`; the Oracle candidate remains the sole login/register/reset/logout authority.
+- `backend/chatServer.ts` also validates chat identity through the same bridge.
+
+This is still **not a complete app integration**. Several domain handlers query SQLite `users` for profile, phone, activation, or wallet fields, and the chat API lists users from SQLite. Those are domain/profile dependencies, not an alternative login authority, but they need a deliberate profile/data migration or adapter before the chat and account-dependent features can work correctly. Do not enable this mode in production yet.
 
 ## Not yet complete
-This first integration step only connects same-origin static hosting with the existing auth routes. It does **not** implement the app's remaining finance, AI, chat, trips, voice, settings, or other API endpoints. Those must be ported or adapted to the existing auth middleware before calling the app fully functional.
+This first integration step only connects same-origin static hosting with the existing auth routes. It does **not** yet connect the complete finance, AI, chat, trips, voice, settings, or other API surface to Oracle. The legacy domain server also contains wallet-related code; do not mount or re-enable it. The agreed removals (Secure Vault, Welcome Gift, Wallet, and Vodafone Cash as an expense payment method) remain excluded from the Oracle candidate.
 
 Do not copy this candidate over the live entry point, restart PM2, or change production routing until the missing API work is complete, tested, backed up, and explicitly approved.
