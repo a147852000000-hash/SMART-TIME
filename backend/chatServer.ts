@@ -88,6 +88,14 @@ function syncOraclePublicProfiles() {
   `);
   db.exec("BEGIN IMMEDIATE");
   try {
+    // Remove profiles that were deleted or deactivated in Oracle so they cannot
+    // remain discoverable in chat after the authoritative account is gone.
+    if (profiles.length) {
+      const placeholders = profiles.map(() => "?").join(", ");
+      db.prepare(`DELETE FROM app_user_profiles WHERE id NOT IN (${placeholders})`).run(...profiles.map(profile => profile.id));
+    } else {
+      db.exec("DELETE FROM app_user_profiles");
+    }
     for (const profile of profiles) {
       upsert.run(
         profile.id, profile.email, profile.username || null, profile.name || null,
