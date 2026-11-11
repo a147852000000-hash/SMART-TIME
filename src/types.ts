@@ -19,8 +19,6 @@ export type AppView =
   | 'chat'
   | 'media'
   | 'sports'
-  | 'wallet'
-  | 'admin-wallet'
   | 'settings'
   | 'food';
 

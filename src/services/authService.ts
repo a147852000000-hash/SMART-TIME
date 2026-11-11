@@ -61,8 +61,21 @@ function applyUserToProfile(user: AuthUser): UserProfile {
 
 export async function startTrialSession(): Promise<AuthSession> {
   const res = await fetch(apiUrl('/api/trial/session'));
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.token) throw new Error(data.error || 'تعذر بدء النسخة التجريبية');
+  const raw = await res.text();
+  let data: any = {};
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    data = {};
+  }
+  if (!res.ok || !data.token) {
+    const message = typeof data.error === 'string' && data.error.trim()
+      ? data.error
+      : res.ok
+        ? 'وصل رد من الخادم لكن لم يتم إنشاء جلسة الزائر.'
+        : `فشل الاتصال بخدمة جلسة الزائر (HTTP ${res.status}).`;
+    throw new Error(message);
+  }
   const session: AuthSession = { token: data.token, user: data.user };
   saveSession(session);
   applyUserToProfile(session.user);
@@ -78,7 +91,18 @@ export async function loginWithIdentifier(identifier: string, password: string, 
 
 
 export async function selectLoginRole(roleChoiceTicket: string, role: 'owner' | 'user'): Promise<AuthSession> {
-  const data = await request('/api/auth/select-role', { roleChoiceTicket, role });
+  if (!roleChoiceTicket) throw new Error('انتهت صلاحية اختيار نوع الدخول. سجّل الدخول مرة أخرى.');
+  // The role-choice ticket is a temporary one-time credential. Do not use a stale
+  // previously saved session here; the server accepts this ticket only on select-role.
+  const res = await fetch(apiUrl('/api/auth/select-role'), {
+    method: 'POST',
+    // Send the one-time ticket in the body for Oracle compatibility and as a
+    // bearer credential for the SQLite server implementation.
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${roleChoiceTicket}` },
+    body: JSON.stringify({ roleChoiceTicket, role }),
+  });
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok || !data.token || !data.user) throw new Error(data.message || data.error || 'تعذر اختيار نوع الدخول.');
   const session: AuthSession = { token: data.token, user: data.user };
   saveSession(session); applyUserToProfile(session.user); return session;
 }

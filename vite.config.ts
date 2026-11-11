@@ -6,6 +6,8 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
+    // Keep browser assets separate from the bundled Express server output in dist/server.cjs.
+    build: { outDir: 'dist/client' },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

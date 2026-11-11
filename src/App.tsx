@@ -49,8 +49,6 @@ import { DashboardView } from './components/DashboardView';
 import { NotesAndAccountingView } from './components/NotesAndAccountingView';
 import { ExpensesView } from './components/ExpensesView';
 import { TripsView } from './components/TripsView';
-import WalletView from './components/WalletView';
-import AdminWalletPanel from './components/AdminWalletPanel';
 import { VehiclesView } from './components/VehiclesView';
 import { EducationView } from './components/EducationView';
 import { ReligiousView } from './components/ReligiousView';
@@ -181,6 +179,7 @@ export default function App() {
     } catch (error) {
       console.error('Trial session error:', error);
       setAuthenticated(false);
+      throw error;
     }
   }, []);
 
@@ -404,7 +403,7 @@ export default function App() {
     return (
       <AuthView
         onAuthenticated={() => { void handleAuthenticated(); }}
-        onGuest={() => { void handleGuest(); }}
+        onGuest={handleGuest}
       />
     );
   }
@@ -523,15 +522,8 @@ export default function App() {
               favoritePlaces={favoritePlaces}
               recentTrips={recentTrips}
               onOpenVoiceSearch={() => setIsVoiceOpen(true)}
-              onOpenWallet={() => handleNavigateSafe('wallet' as AppView)}
             />
           )}
-
-          {currentView === 'wallet' && (
-            <WalletView onOpenAdmin={() => handleNavigateSafe('admin-wallet' as AppView)} />
-          )}
-
-          {currentView === 'admin-wallet' && <AdminWalletPanel />}
 
           {currentView === 'vehicles' && (
             <VehiclesView

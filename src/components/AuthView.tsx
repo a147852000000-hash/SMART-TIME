@@ -4,7 +4,7 @@ import { forgotPassword, loginWithIdentifier, registerWithEmail, resetPassword, 
 
 interface Props {
   onAuthenticated: () => void;
-  onGuest: () => void;
+  onGuest: () => void | Promise<void>;
   loginNotice?: string;
 }
 
@@ -19,6 +19,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
   const [code, setCode] = useState('');
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [guestBusy, setGuestBusy] = useState(false);
   const [error, setError] = useState('');
   const [resetSent, setResetSent] = useState(false);
   const [roleChoiceTicket, setRoleChoiceTicket] = useState('');
@@ -26,6 +27,18 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
   const [emailExistsInRailway, setEmailExistsInRailway] = useState(false);
 
   const clearError = () => setError('');
+  const handleGuest = async () => {
+    if (guestBusy || busy) return;
+    setGuestBusy(true);
+    clearError();
+    try {
+      await onGuest();
+    } catch (err: any) {
+      setError(err?.message || 'تعذر بدء جلسة الزائر. حاول مرة أخرى.');
+    } finally {
+      setGuestBusy(false);
+    }
+  };
   const switchMode = (next: Mode) => { setMode(next); clearError(); setCode(''); setResetSent(false); };
 
   const submit = async (e: React.FormEvent) => {
@@ -118,11 +131,11 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
         {showRoleChoice ? (
           <div className="space-y-5">
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center">
-              <div className="text-lg font-semibold text-black">Choose sign-in type</div>
-              <p className="mt-1 text-sm text-gray-600">Choose how to enter for this session.</p>
+              <div className="text-lg font-semibold text-black">اختَر نوع الدخول</div>
+              <p className="mt-1 text-sm text-gray-600">يمكنك الدخول بصلاحيات المالك أو كمستخدم عادي لهذه الجلسة.</p>
             </div>
-            <button type="button" disabled={busy} onClick={() => chooseRole('owner')} className="w-full rounded-xl bg-black p-3.5 font-medium text-[#C5A059] transition hover:bg-gray-900 disabled:opacity-50">Continue as Owner</button>
-            <button type="button" disabled={busy} onClick={() => chooseRole('user')} className="w-full rounded-xl border border-gray-300 bg-white p-3.5 font-medium text-black transition hover:bg-gray-50 disabled:opacity-50">Continue as User</button>
+            <button type="button" disabled={busy} onClick={() => chooseRole('owner')} className="w-full rounded-xl bg-black p-3.5 font-medium text-[#C5A059] transition hover:bg-gray-900 disabled:opacity-50">الدخول كمالك</button>
+            <button type="button" disabled={busy} onClick={() => chooseRole('user')} className="w-full rounded-xl border border-gray-300 bg-white p-3.5 font-medium text-black transition hover:bg-gray-50 disabled:opacity-50">الدخول كمستخدم عادي</button>
             {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
           </div>
         ) : (
@@ -205,9 +218,9 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
 
                 {/* Guest directly after Google - no second divider */}
                 <div className="pt-1 sm:pt-3">
-                  <button type="button" onClick={onGuest} className="flex min-h-[38px] sm:min-h-[68px] w-full items-center justify-center gap-3 rounded-[14px] border border-[#D4AF37]/50 bg-white px-3 text-[12px] sm:text-[18px] text-gray-900 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#C5A059]/40">
+                  <button type="button" onClick={() => { void handleGuest(); }} disabled={guestBusy || busy} aria-busy={guestBusy} className="flex min-h-[38px] sm:min-h-[68px] w-full items-center justify-center gap-3 rounded-[14px] border border-[#D4AF37]/50 bg-white px-3 text-[12px] sm:text-[18px] text-gray-900 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#C5A059]/40 disabled:cursor-wait disabled:opacity-60">
                     <UserRound className="h-5 w-5 shrink-0 text-[#C5A059]"/>
-                    <span>الدخول كزائر — Continue as Guest</span>
+                    <span>{guestBusy ? "جارٍ الدخول كزائر…" : "الدخول كزائر — Continue as Guest"}</span>
                   </button>
                 </div>
               </>
@@ -219,9 +232,9 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
             {/* Guest for register/forgot modes */}
             {mode !== 'login' && (
               <div className="pt-3">
-                <button type="button" onClick={onGuest} className="flex min-h-[60px] sm:min-h-[68px] w-full items-center justify-center gap-3 rounded-[14px] border border-[#D4AF37]/50 bg-white px-3 text-[15px] sm:text-[18px] text-gray-900 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#C5A059]/40">
+                <button type="button" onClick={() => { void handleGuest(); }} className="flex min-h-[60px] sm:min-h-[68px] w-full items-center justify-center gap-3 rounded-[14px] border border-[#D4AF37]/50 bg-white px-3 text-[15px] sm:text-[18px] text-gray-900 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#C5A059]/40">
                   <UserRound className="h-5 w-5 shrink-0 text-[#C5A059]"/>
-                  <span>الدخول كزائر — Continue as Guest</span>
+                  <span>{guestBusy ? "جارٍ الدخول كزائر…" : "الدخول كزائر — Continue as Guest"}</span>
                 </button>
               </div>
             )}

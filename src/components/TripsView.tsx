@@ -31,7 +31,6 @@ import { VoiceTripModal } from './trips/VoiceTripModal';
 import { TripLocation, LocationPickerMode } from './trips/types';
 import { apiUrl } from '../services/apiConfig';
 import { authHeaders } from '../services/authService';
-import { WalletService } from '../services/walletService';
 import { TripsRepository } from '../services/repositories/tripsRepository';
 
 interface TripsViewProps {
@@ -40,7 +39,6 @@ interface TripsViewProps {
   favoritePlaces: FavoritePlace[];
   recentTrips: RecentTrip[];
   onOpenVoiceSearch: () => void;
-  onOpenWallet?: () => void;
 }
 
 type SavedPlaceKey = 'home' | 'work';
@@ -65,7 +63,6 @@ export const TripsView: React.FC<TripsViewProps> = ({
   favoritePlaces,
   recentTrips,
   onOpenVoiceSearch,
-  onOpenWallet,
 }) => {
   const t = translations[language];
   const isRtl = language === 'ar';
@@ -87,10 +84,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
   const [selectedRideType, setSelectedRideType] = useState<RideType>('Comfort');
   const [isComparing, setIsComparing] = useState(false);
   const [comparisonData, setComparisonData] = useState<TransportComparisonResult | null>(null);
-  const [walletError, setWalletError] = useState('');
-  const [walletChecked, setWalletChecked] = useState(false);
-  const [walletBalance, setWalletBalance] = useState(0);
-  const [tripCost, setTripCost] = useState(5);
+  const [comparisonError, setComparisonError] = useState('');
   const [myTripsOpen, setMyTripsOpen] = useState(false);
   const [storedTrips, setStoredTrips] = useState<RecentTrip[]>(() => (recentTrips || []).slice(0, 10));
   const mapSectionRef = useRef<HTMLDivElement | null>(null);
@@ -105,22 +99,6 @@ export const TripsView: React.FC<TripsViewProps> = ({
       /* keep defaults */
     }
 
-    let cancelled = false;
-    WalletService.getMyWallet()
-      .then((w) => {
-        if (cancelled) return;
-        setWalletBalance(w.balance);
-        setTripCost(w.tripCost);
-        setWalletChecked(true);
-      })
-      .catch((e: any) => {
-        if (cancelled) return;
-        setWalletChecked(true);
-        console.warn('Wallet unavailable in trial mode:', e?.message || e);
-      });
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   const openPicker = (mode: LocationPickerMode) => {
@@ -144,7 +122,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
   const removeStop = (index: number) => {
     setStops((prev) => prev.filter((_, i) => i !== index));
     setComparisonData(null);
-    setWalletError('');
+    setComparisonError('');
   };
 
   const swapTripPoints = () => {
@@ -152,7 +130,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
     setDropoffLocation(pickupLocation);
     setStops((prev) => [...prev].reverse());
     setComparisonData(null);
-    setWalletError('');
+    setComparisonError('');
   };
 
   const handleLocationPicked = (loc: TripLocation) => {
@@ -187,7 +165,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
       }
     }
     setComparisonData(null);
-    setWalletError('');
+    setComparisonError('');
   };
 
   const handleAddStopRequest = (loc: TripLocation) => {
@@ -201,7 +179,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
     setDropoffLocation(d);
     setStops([]);
     setComparisonData(null);
-    setWalletError('');
+    setComparisonError('');
   };
 
   // Automatic comparison linking whenever points, stops, or ride type change
@@ -325,7 +303,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
     });
     setStops([]);
     setComparisonData(null);
-    setWalletError('');
+    setComparisonError('');
     setMyTripsOpen(false);
     window.setTimeout(() => mapSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30);
   };
@@ -333,7 +311,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
   const handleRunComparison = async () => {
     if (!pickupLocation.address.trim() || !dropoffLocation.address.trim()) return;
     setIsComparing(true);
-    setWalletError('');
+    setComparisonError('');
     try {
       const res = await fetch(apiUrl('/api/transport/compare'), {
         method: 'POST',
@@ -366,22 +344,16 @@ export const TripsView: React.FC<TripsViewProps> = ({
       });
       const data = await res.json();
       if (!res.ok) {
-        if (data.code === 'INSUFFICIENT_BALANCE') {
-          setWalletError(data.error || 'الرصيد غير كافٍ');
-          if (typeof data.balance === 'number') setWalletBalance(data.balance);
-        } else {
-          setWalletError(data.error || 'تعذر جلب الأسعار الآن');
-        }
+        setComparisonError(data.error || 'تعذر جلب الأسعار الآن');
         return;
       }
       if (data.success && data.result) {
         setComparisonData(data.result);
         saveSearchedTrip(data.result);
-        if (typeof data.walletBalance === 'number') setWalletBalance(data.walletBalance);
       }
     } catch (e) {
       console.error('Transport comparison failed:', e);
-      setWalletError('تعذر الاتصال بخدمة الأسعار');
+      setComparisonError('تعذر الاتصال بخدمة الأسعار');
     } finally {
       setIsComparing(false);
     }
@@ -414,10 +386,6 @@ export const TripsView: React.FC<TripsViewProps> = ({
     { name: 'كابتن مصر', logo: '/provider-logos/captain-egypt.svg' },
     { name: 'Smart Line', logo: '/provider-logos/smart-line.svg' },
   ];
-
-  if (!walletChecked) {
-    return <div className="flex items-center justify-center py-24 text-slate-400 text-sm">جاري تجهيز قسم الرحلات...</div>;
-  }
 
   const currentPickerLocation =
     pickerMode === 'pickup'
@@ -488,7 +456,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
                   name: loc.name || (isRtl ? 'نقطة الانطلاق' : 'Pickup Location'),
                 });
                 setComparisonData(null);
-                setWalletError('');
+                setComparisonError('');
               }}
               onSetDropoff={(loc) => {
                 setDropoffLocation({
@@ -496,7 +464,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
                   name: loc.name || (isRtl ? 'نقطة النزول' : 'Destination'),
                 });
                 setComparisonData(null);
-                setWalletError('');
+                setComparisonError('');
               }}
               onSetStop={(loc) => {
                 setStops((prev) => [
@@ -504,7 +472,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
                   { ...loc, name: loc.name || (isRtl ? `نقطة توقف ${prev.length + 1}` : `Stop ${prev.length + 1}`) },
                 ]);
                 setComparisonData(null);
-                setWalletError('');
+                setComparisonError('');
               }}
               onEditStop={openEditStop}
               onRemoveStop={removeStop}
@@ -514,7 +482,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
                   name: loc.name || (isRtl ? 'موقعي الحالي' : 'My Current Location'),
                 });
                 setComparisonData(null);
-                setWalletError('');
+                setComparisonError('');
               }}
               onOpenGoogleMaps={openGoogleMaps}
               onRouteCalculated={() => {
@@ -734,7 +702,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
                     onClick={() => {
                       setSelectedRideType(tab.id);
                       setComparisonData(null);
-                      setWalletError('');
+                      setComparisonError('');
                     }}
                   >
                     {tab.icon}
@@ -776,16 +744,15 @@ export const TripsView: React.FC<TripsViewProps> = ({
                     className="smart-compare-button"
                   >
                     {isComparing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Car className="w-4 h-4" />}
-                    {isComparing ? 'جاري تحديث الأسعار...' : `عرض الأسعار · ${Number(tripCost || 0).toFixed(2)} ${currency}`}
+                    {isComparing ? 'جاري تحديث الأسعار...' : 'عرض الأسعار'}
                   </button>
                 </div>
               </div>
             </section>
 
-            {walletError && (
+            {comparisonError && (
               <div className="smart-trip-alert">
-                {walletError}
-                {onOpenWallet && <button onClick={onOpenWallet}>شحن الرصيد</button>}
+                {comparisonError}
               </div>
             )}
 
