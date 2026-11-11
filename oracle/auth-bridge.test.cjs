@@ -89,6 +89,15 @@ test("respects owner view-as-user session context", t => {
 });
 
 
+test("excludes inactive accounts from the public profile directory", t => {
+  const { bridge, usersFile } = fixture(t);
+  const users = JSON.parse(fs.readFileSync(usersFile, "utf8"));
+  users[1].activation_status = "suspended";
+  fs.writeFileSync(usersFile, JSON.stringify(users));
+  const profiles = bridge.listPublicUsers();
+  assert.deepEqual(profiles.map(profile => profile.id), ["owner-1"]);
+});
+
 test("lists safe public profiles without exposing credentials or session data", t => {
   const { bridge, usersFile, sessionsFile } = fixture(t);
   const usersBefore = fs.readFileSync(usersFile, "utf8");
