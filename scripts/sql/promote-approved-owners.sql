@@ -34,13 +34,12 @@ WHERE lower(trim(email)) IN (
 UPDATE users
 SET role = 'owner'
 WHERE lower(trim(email)) IN (
-  'eng.mamdouh2009@gmail.com',
-  'mamdouh.oracle.2026@gmail.com'
+  'eng.mamdouh2009@gmail.com'
 )
 AND role <> 'owner';
 
 -- changes() refers to the UPDATE immediately above. Anything other than exactly 1
--- changed rows raises ROLLBACK; already-owner rows therefore fail closed.
+-- changed row raises ROLLBACK; already-owner rows therefore fail closed.
 INSERT INTO _smart_time_owner_promotion_guard(ok)
 VALUES (CASE WHEN changes() = 1 THEN 1 ELSE 0 END);
 
@@ -50,8 +49,7 @@ DROP TABLE _smart_time_owner_promotion_guard;
 SELECT id, lower(trim(email)) AS approved_email, role
 FROM users
 WHERE lower(trim(email)) IN (
-  'eng.mamdouh2009@gmail.com',
-  'mamdouh.oracle.2026@gmail.com'
+  'eng.mamdouh2009@gmail.com'
 )
 ORDER BY lower(trim(email));
 
