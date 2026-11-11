@@ -517,7 +517,7 @@ app.post('/api/auth/register', async (req,res)=>{
     let devCode: string | undefined;
     if (phone) {
       try { const otpResult = await requestPhoneOtp(phone); expires = otpResult.expires; devCode = otpResult.devCode; smsSent = otpResult.provider !== 'development'; }
-      catch(e:any) { /* smsSent stays false; user can retry from the Trips phone-gift screen */ }
+      catch(e:any) { /* smsSent stays false; user can retry from the phone-verification screen */ }
     }
     const user={id,email,username,name,phone:phone||undefined,phoneVerified:false,activationStatus:'active'};
     res.json({
