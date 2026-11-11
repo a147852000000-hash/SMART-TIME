@@ -30,15 +30,22 @@ function createAuthBridge(options = {}) {
   }
 
   function readUsers() {
-    const users = readObject(usersFile, "users.json");
-    const values = Object.values(users);
-    const owners = values.filter(user =>
+    let users;
+    try {
+      users = JSON.parse(fs.readFileSync(usersFile, "utf8"));
+    } catch (error) {
+      const wrapped = new Error("Auth bridge cannot read users.json");
+      wrapped.cause = error;
+      throw wrapped;
+    }
+    if (!Array.isArray(users)) throw new Error("Auth bridge found invalid users.json");
+    const owners = users.filter(user =>
       user && String(user.email || "").trim().toLowerCase() === ownerEmail
     );
     if (!ownerEmail || owners.length !== 1) {
       throw new Error("Auth bridge requires exactly one configured owner account");
     }
-    return values;
+    return users;
   }
 
   function authenticateToken(token) {
