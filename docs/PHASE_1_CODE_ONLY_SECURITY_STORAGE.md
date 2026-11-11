@@ -14,8 +14,8 @@ The final production frontend origin has not yet been confirmed. Configure it in
 
 ## Owner/admin policy
 
-- `OWNER_EMAILS` defaults to empty; no implicit owner exists.
-- Owner authorization requires DB role `owner` and an exact email in `OWNER_EMAILS`.
+- `OWNER_EMAILS` must contain exactly one valid email address; startup fails closed when it is empty, invalid, or contains multiple addresses.
+- Owner authorization requires DB role `owner` and an exact match to that single configured email.
 - Admin authorization is based on DB role `admin`; it does not require membership in `OWNER_EMAILS`.
 - The owner-only `POST /api/auth/owner/admin-role` accepts `{ "email": "...", "action": "appoint" | "revoke" }`.
 - Only an existing account can be appointed. Self-appointment/change is rejected. An owner cannot be demoted by this endpoint.
@@ -33,7 +33,7 @@ The server database module honors `SMART_TIME_DB_PATH`; the intended Oracle path
 
 ## Owner promotion SQL
 
-`scripts/sql/preview-approved-owners.sql` is a read-only report for the two approved owner accounts. `scripts/sql/promote-approved-owners.sql` fails closed unless exactly two approved accounts exist and exactly two rows change; a failed guard executes SQLite `RAISE(ROLLBACK)`. A successful execution deliberately leaves the transaction open with no automatic `COMMIT`: inspect the rows, then commit manually only after approval, or rollback. Keep owner promotion separate from normal deployment and rollback procedures.
+`scripts/sql/preview-approved-owners.sql` is a read-only report for the single approved owner account. `scripts/sql/promote-approved-owners.sql` fails closed unless the single approved owner account exists and exactly one row changes; a failed guard executes SQLite `RAISE(ROLLBACK)`. A successful execution deliberately leaves the transaction open with no automatic `COMMIT`: inspect the rows, then commit manually only after approval, or rollback. Keep owner promotion separate from normal deployment and rollback procedures.
 
 ## Daily backup and restore verification
 
