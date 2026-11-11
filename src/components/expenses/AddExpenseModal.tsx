@@ -253,7 +253,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
               <option value="نقدي (كاش)">{isAr ? 'نقدي (كاش)' : 'Cash'}</option>
               <option value="بطاقة فيزا / ماستركارد">{isAr ? 'بطاقة بنكية / فيزا / ماستركارد' : 'Credit / Debit Card'}</option>
               <option value="تحويل بنكي / انستاباي">{isAr ? 'تحويل بنكي / InstaPay' : 'Bank Transfer / InstaPay'}</option>
-              <option value="محفظة إلكترونية (فودافون كاش / وغيرها)">{isAr ? 'محفظة إلكترونية (فودافون كاش / وغيرها)' : 'E-Wallet'}</option>
+              <option value="محفظة إلكترونية أخرى">{isAr ? 'محفظة إلكترونية أخرى' : 'Other e-wallet'}</option>
               <option value="شيك / آجل">{isAr ? 'شيك / آجل' : 'Cheque / Deferred'}</option>
             </select>
           </div>
