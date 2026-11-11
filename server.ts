@@ -14,7 +14,7 @@ import { isLocalSmartAiConfigured } from "./backend/ai/localInference.js";
 import { createHttpVoiceDnaProvider, DisabledVoiceDnaProvider } from "./backend/voice/voiceDnaProvider.js";
 import { sendPasswordResetEmail as sendPasswordResetEmailWithProvider } from "./backend/auth/passwordResetEmail.js";
 import { verifyTurnstileToken } from "./backend/security/turnstile.js";
-import { parseSingleOwnerEmail } from "./backend/auth/ownerConfig.js";
+import { assertSingleOwnerRecord, parseSingleOwnerEmail } from "./backend/auth/ownerConfig.js";
 
 dotenv.config();
 
@@ -192,7 +192,10 @@ function verifyJwt(token: string): any | null {
     return payload.exp && Number(payload.exp) > Math.floor(Date.now() / 1000) ? payload : null;
   } catch { return null; }
 }
-const OWNER_EMAILS = new Set([parseSingleOwnerEmail(process.env.OWNER_EMAILS)]);
+const configuredOwnerEmail = parseSingleOwnerEmail(process.env.OWNER_EMAILS);
+const databaseOwnerEmails = (db.prepare("SELECT lower(trim(email)) AS email FROM users WHERE lower(trim(role))='owner'").all() as Array<{ email: string }>).map(row => row.email);
+assertSingleOwnerRecord(configuredOwnerEmail, databaseOwnerEmails);
+const OWNER_EMAILS = new Set([configuredOwnerEmail]);
 // Welcome Gift was retired: clear unused legacy reward balances while preserving historical anti-abuse claims.
 db.prepare("UPDATE users SET trip_free_searches=0, trip_gift_claimed_at=NULL WHERE COALESCE(trip_free_searches,0)<>0 OR trip_gift_claimed_at IS NOT NULL").run();
 const VALID_APP_ROLES = new Set(['owner', 'admin', 'user']);
