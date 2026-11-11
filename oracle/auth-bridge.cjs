@@ -65,7 +65,7 @@ function createAuthBridge(options = {}) {
         activation_status: String(user.activation_status || ""),
         created_at: String(user.created_at || user.createdAt || ""),
       };
-    }).filter(user => user.id && user.email);
+    }).filter(user => user.id && user.email && user.activation_status === "active");
   }
 
   function authenticateToken(token) {
