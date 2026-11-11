@@ -1,4 +1,4 @@
-const EMAIL_PATTERN = /^[^\s@]+@[^s@]+\.[^s@]+$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function parseSingleOwnerEmail(value: unknown): string {
   const configured = String(value ?? "")
