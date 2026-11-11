@@ -5,10 +5,12 @@ on:
     branches:
       - main
       - fix/owner-role-reset-settings
+      - fix/owner-admin-account-management
   push:
     branches:
       - feat/oracle-json-sqlite-unification
       - fix/owner-admin-account-management
+      - fix/owner-admin-single-owner-no-gift-finance
 
 jobs:
   legacy-migration:
