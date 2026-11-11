@@ -18,7 +18,7 @@ function fixture(t) {
   const user = { id: "owner-1", email: ownerEmail, name: "Owner", role: "owner", activation_status: "active", authVersion: 2 };
   const sessionKey = crypto.createHash("sha256").update(token).digest("hex");
   const session = { userId: user.id, viewAs: "owner", authVersion: 2, createdAt: 1000, expiresAt: 5000 };
-  fs.writeFileSync(usersFile, JSON.stringify({ owner: user, member: { id: "user-2", email: "user@example.test", role: "user", activation_status: "active", authVersion: 0 } }));
+  fs.writeFileSync(usersFile, JSON.stringify([user, { id: "user-2", email: "user@example.test", role: "user", activation_status: "active", authVersion: 0 }]));
   fs.writeFileSync(sessionsFile, JSON.stringify({ [sessionKey]: session }));
   const bridge = createAuthBridge({ usersFile, sessionsFile, ownerEmail, now: () => 2000 });
   return { bridge, token, usersFile, sessionsFile, sessionKey };
@@ -47,7 +47,7 @@ test("rejects an expired session", t => {
 test("rejects a session after authVersion changes", t => {
   const { bridge, token, usersFile } = fixture(t);
   const users = JSON.parse(fs.readFileSync(usersFile, "utf8"));
-  users.owner.authVersion = 3;
+  users[0].authVersion = 3;
   fs.writeFileSync(usersFile, JSON.stringify(users));
   assert.equal(bridge.authenticateToken(token), null);
 });
@@ -55,7 +55,7 @@ test("rejects a session after authVersion changes", t => {
 test("rejects inactive accounts and malformed tokens", t => {
   const { bridge, token, usersFile } = fixture(t);
   const users = JSON.parse(fs.readFileSync(usersFile, "utf8"));
-  users.owner.activation_status = "suspended";
+  users[0].activation_status = "suspended";
   fs.writeFileSync(usersFile, JSON.stringify(users));
   assert.equal(bridge.authenticateToken(token), null);
   assert.equal(bridge.authenticateToken("short"), null);
@@ -63,6 +63,6 @@ test("rejects inactive accounts and malformed tokens", t => {
 
 test("fails closed when owner cardinality is not exactly one", t => {
   const { bridge, token, usersFile } = fixture(t);
-  fs.writeFileSync(usersFile, JSON.stringify({ member: { id: "user-2", email: "user@example.test", role: "user", activation_status: "active", authVersion: 0 } }));
+  fs.writeFileSync(usersFile, JSON.stringify([{ id: "user-2", email: "user@example.test", role: "user", activation_status: "active", authVersion: 0 }]));
   assert.throws(() => bridge.authenticateToken(token), /exactly one configured owner/);
 });
