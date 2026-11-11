@@ -86,16 +86,20 @@ function syncOraclePublicProfiles() {
       activation_status=excluded.activation_status,
       created_at=excluded.created_at
   `);
-  const sync = db.transaction((rows: any[]) => {
-    for (const profile of rows) {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const profile of profiles) {
       upsert.run(
         profile.id, profile.email, profile.username || null, profile.name || null,
         profile.avatar || null, profile.phone || null, profile.phoneVerified ? 1 : 0,
         profile.role || "user", profile.activation_status || "active", profile.created_at || null
       );
     }
-  });
-  sync(profiles);
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
 }
 
 export function getAuthUser(req: express.Request) {
