@@ -34,7 +34,7 @@ The server database module honors `SMART_TIME_DB_PATH`; the intended Oracle path
 
 ## Owner promotion SQL
 
-`scripts/sql/preview-approved-owners.sql` is a read-only report for the single approved owner account. `scripts/sql/promote-approved-owners.sql` fails closed unless the single approved owner account exists and exactly one row changes; a failed guard executes SQLite `RAISE(ROLLBACK)`. A successful execution deliberately leaves the transaction open with no automatic `COMMIT`: inspect the rows, then commit manually only after approval, or rollback. Keep owner promotion separate from normal deployment and rollback procedures.
+`scripts/sql/preview-approved-owners.sql` is a read-only report for the single approved owner account. `scripts/sql/promote-approved-owners.sql` fails closed unless the single approved owner account exists, no other Owner row already exists, and exactly one row changes; a failed guard executes SQLite `RAISE(ROLLBACK)`. A successful execution deliberately leaves the transaction open with no automatic `COMMIT`: inspect the rows, then commit manually only after approval, or rollback. Keep owner promotion separate from normal deployment and rollback procedures.
 
 ## Daily backup and restore verification
 
