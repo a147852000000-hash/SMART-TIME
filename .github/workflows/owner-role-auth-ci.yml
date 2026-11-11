@@ -4,7 +4,7 @@ on:
   push:
     branches: [fix/owner-role-auth]
   pull_request:
-    branches: [fix/owner-role-auth]
+    branches: [main]
 
 jobs:
   verify:
