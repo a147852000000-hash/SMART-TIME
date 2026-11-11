@@ -13,6 +13,7 @@ import { askSmartAiCore } from "./backend/ai/smartAiCore.js";
 import { isLocalSmartAiConfigured } from "./backend/ai/localInference.js";
 import { createHttpVoiceDnaProvider, DisabledVoiceDnaProvider } from "./backend/voice/voiceDnaProvider.js";
 import { sendPasswordResetEmail as sendPasswordResetEmailWithProvider } from "./backend/auth/passwordResetEmail.js";
+import authBridgeModule from "./oracle/auth-bridge.cjs";
 
 dotenv.config();
 
@@ -122,12 +123,12 @@ function verifyPassword(password: string, stored: string) { const [salt, expecte
 function createSession(userId: string) { const token=crypto.randomBytes(32).toString('hex'); const now=new Date(); const expires=new Date(now.getTime()+AUTH_SESSION_DAYS*86400000).toISOString(); db.prepare('INSERT INTO sessions (id,user_id,expires_at,created_at) VALUES (?,?,?,?)').run(token,userId,expires,now.toISOString()); return token; }
 const ORACLE_AUTH_BRIDGE_ENABLED = String(process.env.SMART_TIME_ORACLE_AUTH_BRIDGE || '').trim().toLowerCase() === 'true';
 const oracleAuthBridge = ORACLE_AUTH_BRIDGE_ENABLED
-  ? require('./oracle/auth-bridge.cjs').createAuthBridge()
+  ? authBridgeModule.createAuthBridge()
   : null;
 function authUser(req: express.Request) {
   if (ORACLE_AUTH_BRIDGE_ENABLED) {
     const header = String(req.headers.authorization || '');
-    const match = header.match(/^Bearer\\s+(.+)$/i);
+    const match = header.match(/^Bearer\s+(.+)$/i);
     if (!match) return null;
     try {
       const auth = oracleAuthBridge.authenticateToken(match[1]);
