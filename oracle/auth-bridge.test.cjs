@@ -33,15 +33,15 @@ test("authenticates a valid token and resolves the single owner role", t => {
 });
 
 test("rejects an expired session", t => {
-  const { bridge, token } = fixture(t);
+  const { bridge, token, usersFile, sessionsFile } = fixture(t);
   const expired = createAuthBridge({
-    usersFile: path.join(path.dirname(require.resolve("./auth-bridge.cjs")), "missing-users.json"),
-    sessionsFile: path.join(path.dirname(require.resolve("./auth-bridge.cjs")), "missing-sessions.json"),
+    usersFile,
+    sessionsFile,
     ownerEmail: "owner@example.test",
     now: () => 9000,
   });
-  assert.equal(bridge.authenticateToken(token), null);
-  assert.throws(() => expired.authenticateToken(token));
+  assert.equal(bridge.authenticateToken(token).user.id, "owner-1");
+  assert.equal(expired.authenticateToken(token), null);
 });
 
 test("rejects a session after authVersion changes", t => {
