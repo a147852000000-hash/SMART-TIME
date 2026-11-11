@@ -50,7 +50,7 @@ node scripts/migrate-legacy-json-to-sqlite.cjs \
 
 If there is no `sessions.json`, omit the `--sessions` argument. Dry-run mode reads JSON and prints only counts; it writes no files. Review the count summary against the source without displaying user details.
 
-The importer hashes plaintext passwords using the same `salt:hash` scrypt format as `server.ts`. Accounts with no legacy password receive an unknown random password and must use email reset. Legacy owner/admin labels are **not** promoted automatically; review them separately to prevent privilege escalation.
+The importer hashes plaintext passwords using the same `salt:hash` scrypt format as `server.ts`. Accounts with no legacy password receive an unknown random password and must use email reset. Legacy owner/admin labels are **not** promoted automatically; review them separately to prevent privilege escalation. The server now refuses to start unless the SQLite database has exactly one `owner` row matching the single `OWNER_EMAILS` value; after migration, promote only that account with the reviewed one-owner SQL before starting staging.
 
 ### Approved owner promotion (separate, manual approval)
 
