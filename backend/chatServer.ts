@@ -61,8 +61,25 @@ export function broadcastAll(payload: any, excludeWs?: WebSocket) {
   }
 }
 
-// Auth Helper
+// Auth Helper. In Oracle bridge mode, SQLite is never consulted for identity/session validation.
+const ORACLE_AUTH_BRIDGE_ENABLED = String(process.env.SMART_TIME_ORACLE_AUTH_BRIDGE || '').trim().toLowerCase() === 'true';
+const oracleAuthBridge = ORACLE_AUTH_BRIDGE_ENABLED
+  ? require('../oracle/auth-bridge.cjs').createAuthBridge()
+  : null;
+
 export function getAuthUser(req: express.Request) {
+  if (ORACLE_AUTH_BRIDGE_ENABLED) {
+    const authHeader = String(req.headers.authorization || '');
+    const match = authHeader.match(/^Bearer\\s+(.+)$/i);
+    if (!match) return null;
+    try {
+      const auth = oracleAuthBridge.authenticateToken(match[1]);
+      return auth ? auth.user : null;
+    } catch (error) {
+      console.error('Oracle chat auth bridge unavailable:', (error as Error)?.message || error);
+      return null;
+    }
+  }
   const authHeader = String(req.headers.authorization || '');
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
   if (!token) return null;
