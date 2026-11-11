@@ -5,10 +5,12 @@ on:
     branches:
       - main
       - fix/owner-role-reset-settings
+      - fix/owner-admin-account-management
   push:
     branches:
       - feat/oracle-json-sqlite-unification
       - fix/owner-admin-account-management
+      - fix/owner-admin-single-owner-no-gift-finance
 
 jobs:
   auth-and-build:
@@ -23,6 +25,7 @@ jobs:
       - run: npm run test:auth-security
       - run: npm run test:startup-storage
       - run: npm run test:owner-promotion-sql
+      - run: npm run test:finance-migration
       - run: npm run test:turnstile
       - run: npm run test:legacy-json-migration
       - run: bash -n scripts/oracle-sqlite-backup.sh scripts/oracle-sqlite-restore-test.sh scripts/oracle-sqlite-backup-retention.sh
