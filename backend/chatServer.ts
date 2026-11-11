@@ -299,6 +299,7 @@ export const chatRouter = express.Router();
 chatRouter.get('/users', (req, res) => {
   try {
     const user = getAuthUser(req);
+    if (ORACLE_AUTH_BRIDGE_ENABLED) syncOraclePublicProfiles();
     const users = db.prepare(`
       SELECT id, display_name as name, email, avatar, phone
       FROM app_user_profiles
