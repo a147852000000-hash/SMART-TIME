@@ -37,7 +37,8 @@
     "verify:phase-a2-stt": "node scripts/verify-phase-a2-stt.mjs",
     "test:password-reset-email": "tsx backend/auth/passwordResetEmail.test.ts",
     "build:oracle-web": "vite build",
-    "start:oracle-candidate": "node oracle/index.oracle.cjs"
+    "start:oracle-candidate": "node oracle/index.oracle.cjs",
+    "test:oracle-auth-bridge": "node --test oracle/auth-bridge.test.cjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
