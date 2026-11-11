@@ -138,7 +138,7 @@ try {
 
   const userLogin = await request(baseUrl, '/api/auth/login', {
     method: 'POST',
-    body: { identifier: 'auth-test-user', password: userPassword, role: 'owner' },
+    body: { identifier: 'auth_test_user', password: userPassword, role: 'owner' },
   });
   assert.equal(userLogin.status, 200);
   assert.equal(userLogin.data.user.role, 'user', 'a client-supplied role must not elevate a regular account');
