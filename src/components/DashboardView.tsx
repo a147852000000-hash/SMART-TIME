@@ -14,7 +14,6 @@ import {
   Car,
   GraduationCap,
   Film,
-  Wallet,
   ArrowUpRight,
   SlidersHorizontal,
   LayoutGrid,
@@ -195,18 +194,6 @@ const ALL_SECTIONS: SectionCard[] = [
     tone: 'media',
     gradient: 'from-rose-500/20 via-pink-500/10 to-transparent',
     darkGradient: 'from-rose-950/40 via-pink-950/20 to-slate-900',
-  },
-  {
-    id: 'wallet',
-    titleAr: 'المحفظة الذكية',
-    titleEn: 'Smart Wallet',
-    subtitleAr: 'إدارة البطاقات، الرصيد والتحويلات',
-    subtitleEn: 'Cards, balance & transactions',
-    icon: Wallet,
-    emoji: '💳',
-    tone: 'wallet',
-    gradient: 'from-yellow-500/20 via-amber-500/10 to-transparent',
-    darkGradient: 'from-yellow-950/40 via-amber-950/20 to-slate-900',
   },
 ];
 
