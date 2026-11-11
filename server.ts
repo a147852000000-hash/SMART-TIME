@@ -103,7 +103,7 @@ const TRIAL_MODE = String(process.env.TRIAL_MODE || 'false').trim().toLowerCase(
 const TRIAL_USER_ID = 'smart-time-trial-user';
 const AUTH_SESSION_DAYS = 30;
 const PASSWORD_RESET_MINUTES = 15;
-const PROGRAM_OWNER_EMAIL = String(process.env.PROGRAM_OWNER_EMAIL || 'eng.mamdouh2009@gmail.com').trim().toLowerCase();
+const PROGRAM_OWNER_EMAIL = 'eng.mamdouh2009@gmail.com';
 const PROGRAM_OWNER_ACTIVATION_KEY = String(process.env.PROGRAM_OWNER_ACTIVATION_KEY || '');
 // تكلفة كل بحث/مقارنة رحلة بالجنيه المصري (يمكن تعديلها بمتغير بيئة TRIP_SEARCH_COST_EGP)
 const parsedTripCost = Number(process.env.TRIP_SEARCH_COST_EGP || 5);
@@ -120,7 +120,7 @@ function hashPassword(password: string) { const salt = crypto.randomBytes(16).to
 function verifyPassword(password: string, stored: string) { const [salt, expected] = String(stored||'').split(':'); if (!salt||!expected) return false; const actual=crypto.scryptSync(password,salt,64).toString('hex'); return crypto.timingSafeEqual(Buffer.from(actual,'hex'),Buffer.from(expected,'hex')); }
 function createSession(userId: string, sessionRole: 'owner'|'admin'|'user'|'role_choice' = 'user', lifetimeDays = AUTH_SESSION_DAYS) { const token=crypto.randomBytes(32).toString('hex'); const now=new Date(); const expires=new Date(now.getTime()+lifetimeDays*86400000).toISOString(); db.prepare('INSERT INTO sessions (id,user_id,expires_at,created_at,session_role) VALUES (?,?,?,?,?)').run(token,userId,expires,now.toISOString(),sessionRole); return token; }
 function authUser(req: express.Request, allowRoleChoice = false, explicitToken = '') { const h=String(req.headers.authorization||''); const token=String(explicitToken|| (h.startsWith('Bearer ')?h.slice(7).trim():'')); if(!token)return null; const row=db.prepare(`SELECT u.id,u.email,u.username,u.display_name as name,u.phone,u.phone_verified as phoneVerified,u.role,u.activation_status,s.id as session_id,s.session_role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=? AND julianday(s.expires_at) > julianday('now')`).get(token) as any || null; if(!row || (!allowRoleChoice && row.session_role==='role_choice'))return null; return row; }
-function resolvedAccountRole(row:any): 'owner'|'admin'|'user' { const email=String(row?.email||'').trim().toLowerCase(); const id=String(row?.id||'').trim(); if (PROGRAM_OWNER_EMAIL && email===PROGRAM_OWNER_EMAIL) return 'owner'; const stored=String(row?.role||'user').trim().toLowerCase(); return stored==='admin' ? 'admin' : 'user'; }
+function resolvedAccountRole(row:any): 'owner'|'admin'|'user' { const email=String(row?.email||'').trim().toLowerCase(); if (email===PROGRAM_OWNER_EMAIL) return 'owner'; const stored=String(row?.role||'user').trim().toLowerCase(); return stored==='admin' ? 'admin' : 'user'; }
 function sessionAccountRole(row:any): 'owner'|'admin'|'user' { if (resolvedAccountRole(row)==='owner') return row?.session_role==='user' ? 'user' : 'owner'; return resolvedAccountRole(row); }
 function publicUser(row:any){return {id:row.id,email:row.email,username:row.username||undefined,name:row.name||row.display_name||'',phone:row.phone||undefined,phoneVerified:!!row.phoneVerified,role:sessionAccountRole(row),activationStatus:row.activation_status||row.activationStatus||'pending'};}
 function normalizePhone(phone:string){return String(phone||'').replace(/[\s()-]/g,'');}
