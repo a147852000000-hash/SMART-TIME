@@ -1,0 +1,22 @@
+name: Owner Role Auth Branch CI
+
+on:
+  push:
+    branches: [fix/owner-role-auth]
+  pull_request:
+    branches: [fix/owner-role-auth]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm run test:auth-security
+      - run: npm run lint
+      - run: npm run build
