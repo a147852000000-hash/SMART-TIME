@@ -120,7 +120,26 @@ const MAX_REVIEW_NOTE_LENGTH = 300;
 function hashPassword(password: string) { const salt = crypto.randomBytes(16).toString('hex'); return `${salt}:${crypto.scryptSync(password, salt, 64).toString('hex')}`; }
 function verifyPassword(password: string, stored: string) { const [salt, expected] = String(stored||'').split(':'); if (!salt||!expected) return false; const actual=crypto.scryptSync(password,salt,64).toString('hex'); return crypto.timingSafeEqual(Buffer.from(actual,'hex'),Buffer.from(expected,'hex')); }
 function createSession(userId: string) { const token=crypto.randomBytes(32).toString('hex'); const now=new Date(); const expires=new Date(now.getTime()+AUTH_SESSION_DAYS*86400000).toISOString(); db.prepare('INSERT INTO sessions (id,user_id,expires_at,created_at) VALUES (?,?,?,?)').run(token,userId,expires,now.toISOString()); return token; }
-function authUser(req: express.Request) { const h=String(req.headers.authorization||''); const token=h.startsWith('Bearer ')?h.slice(7).trim():''; if(!token)return null; return db.prepare(`SELECT u.id,u.email,u.username,u.display_name as name,u.phone,u.phone_verified as phoneVerified,s.id as session_id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=? AND julianday(s.expires_at) > julianday('now')`).get(token) as any || null; }
+const ORACLE_AUTH_BRIDGE_ENABLED = String(process.env.SMART_TIME_ORACLE_AUTH_BRIDGE || '').trim().toLowerCase() === 'true';
+const oracleAuthBridge = ORACLE_AUTH_BRIDGE_ENABLED
+  ? require('./oracle/auth-bridge.cjs').createAuthBridge()
+  : null;
+function authUser(req: express.Request) {
+  if (ORACLE_AUTH_BRIDGE_ENABLED) {
+    const header = String(req.headers.authorization || '');
+    const match = header.match(/^Bearer\\s+(.+)$/i);
+    if (!match) return null;
+    try {
+      const auth = oracleAuthBridge.authenticateToken(match[1]);
+      return auth ? { ...auth.user, phoneVerified: auth.user.phoneVerified, activation_status: auth.user.activation_status, role: auth.role } : null;
+    } catch (error) {
+      console.error('Oracle auth bridge unavailable:', (error as Error)?.message || error);
+      return null;
+    }
+  }
+  const h=String(req.headers.authorization||''); const token=h.startsWith('Bearer ')?h.slice(7).trim():''; if(!token)return null;
+  return db.prepare(`SELECT u.id,u.email,u.username,u.display_name as name,u.phone,u.phone_verified as phoneVerified,s.id as session_id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=? AND julianday(s.expires_at) > julianday('now')`).get(token) as any || null;
+}
 function publicUser(row:any){return {id:row.id,email:row.email,username:row.username||undefined,name:row.name||row.display_name||'',phone:row.phone||undefined,phoneVerified:!!row.phoneVerified,activationStatus:row.activation_status||row.activationStatus||'pending'};}
 function normalizePhone(phone:string){return String(phone||'').replace(/[\s()-]/g,'');}
 function normalizeUsername(username:string){return String(username||'').trim().toLowerCase();}
@@ -252,6 +271,14 @@ async function sendPasswordResetEmail(email:string, code:string){
   return sendPasswordResetEmailWithProvider(email, code, PASSWORD_RESET_MINUTES);
 }
 
+// In Oracle-bridge mode, this server may expose only the read-only /me identity
+// endpoint. All credential/session lifecycle routes remain owned by index.oracle.cjs.
+if (ORACLE_AUTH_BRIDGE_ENABLED) {
+  app.use('/api/auth', (req, res, next) => {
+    if (req.method === 'GET' && req.path === '/me') return next();
+    return res.status(410).json({ error: 'مسارات المصادقة تُدار حصريًا بواسطة خدمة Oracle الحالية.' });
+  });
+}
 
 app.get('/api/trial/session', (req,res) => {
   if (!TRIAL_MODE) return res.status(404).json({ error: 'Trial mode is disabled' });
