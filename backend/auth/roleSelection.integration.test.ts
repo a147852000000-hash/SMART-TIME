@@ -106,6 +106,7 @@ try {
   insertUser.run('test-delete-user', deleteEmail, 'deleteuser', reusableTestHash, 'Delete Test User', createdAt(), 'user', 'active');
   insertUser.run('test-activation-user', activationEmail, 'activateuser', reusableTestHash, 'Activation Test User', createdAt(), 'user', 'pending');
   insertUser.run('test-failed-delete-user', failedDeleteEmail, 'faileddeleteuser', reusableTestHash, 'Failed Delete User', createdAt(), 'user', 'active');
+  db.prepare("UPDATE users SET trip_free_searches=3,trip_gift_claimed_at=? WHERE id='test-user'").run(createdAt());
   db.prepare("UPDATE users SET phone=? WHERE id='test-delete-user'").run('+201000000000');
   for (let i = 0; i < 105; i++) {
     const suffix = String(i).padStart(3, '0');
@@ -139,6 +140,8 @@ try {
   child.stdout?.on('data', chunk => { serverOutput = (serverOutput + String(chunk)).slice(-4000); });
   child.stderr?.on('data', chunk => { serverOutput = (serverOutput + String(chunk)).slice(-4000); });
   await waitForServer();
+  assert.equal(Number(db.prepare("SELECT trip_free_searches FROM users WHERE id='test-user'").get().trip_free_searches), 0, 'legacy welcome-gift balances are cleared at startup');
+  assert.equal(db.prepare("SELECT trip_gift_claimed_at FROM users WHERE id='test-user'").get().trip_gift_claimed_at, null);
 
   const allowedOrigin = await request('/api/health', { headers: { origin: 'https://app.example.test' } });
   assert.equal(allowedOrigin.status, 200, 'exact configured frontend origin must pass CORS');
@@ -148,6 +151,17 @@ try {
   const userLogin = await post('/api/auth/login', { identifier: userEmail, password });
   assert.equal(userLogin.status, 200);
   assert.equal(userLogin.body.user.role, 'user');
+  const verificationPhone = '+201011112222';
+  const verificationCode = '123456';
+  db.prepare('INSERT INTO phone_otps(phone,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?)')
+    .run(verificationPhone, crypto.createHash('sha256').update(verificationCode).digest('hex'), new Date(Date.now() + 5 * 60_000).toISOString(), 0, createdAt());
+  const verifiedPhone = await post('/api/auth/trips/verify-phone', { phone: verificationPhone, code: verificationCode }, userLogin.body.token);
+  assert.equal(verifiedPhone.status, 200, 'phone verification remains available after gift retirement');
+  assert.equal(verifiedPhone.body.phoneVerified, true);
+  assert.equal(verifiedPhone.body.giftEligible, undefined, 'phone verification no longer grants welcome gift eligibility');
+  assert.equal(verifiedPhone.body.freeSearches, undefined, 'phone verification no longer returns free gift searches');
+  assert.equal(Number(db.prepare("SELECT trip_free_searches FROM users WHERE id='test-user'").get().trip_free_searches), 0);
+  assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM trip_gift_claims WHERE user_id='test-user'").get().count), 0, 'new phone verifications do not create gift claims');
   const forgedTicket = signTicket({ purpose: 'role_selection', sub: 'test-user', email: userEmail, actualRoleInDB: 'user', availableRoles: ['user'], iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 300 });
   const escalation = await post('/api/auth/select-role', { roleChoiceTicket: forgedTicket, role: 'owner' });
   assert.equal(escalation.status, 403, 'a normal DB user must not select owner');
