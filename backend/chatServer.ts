@@ -136,14 +136,34 @@ export function getAuthUser(req: express.Request) {
 }
 
 export function getAuthUserFromToken(token: string) {
-  if (!token) return null;
+  const normalizedToken = String(token || '').trim();
+  if (!normalizedToken) return null;
+
+  // WebSocket authentication must use the same Oracle session authority as HTTP.
+  // Never fall back to SQLite sessions when the Oracle bridge is enabled.
+  if (ORACLE_AUTH_BRIDGE_ENABLED && oracleAuthBridge) {
+    try {
+      const auth = oracleAuthBridge.authenticateToken(normalizedToken);
+      if (!auth) return null;
+      try {
+        syncOraclePublicProfiles();
+      } catch (syncError) {
+        console.error('Oracle public profile sync unavailable:', (syncError as Error)?.message || syncError);
+      }
+      return auth.user;
+    } catch (error) {
+      console.error('Oracle WebSocket auth bridge unavailable:', (error as Error)?.message || error);
+      return null;
+    }
+  }
+
   try {
     const user = db.prepare(`
       SELECT u.id, u.email, u.display_name as name, u.avatar, u.phone, u.phone_verified as phoneVerified
       FROM sessions s
       JOIN users u ON u.id = s.user_id
       WHERE s.id = ? AND julianday(s.expires_at) > julianday('now')
-    `).get(token) as any;
+    `).get(normalizedToken) as any;
     return user || null;
   } catch {
     return null;
