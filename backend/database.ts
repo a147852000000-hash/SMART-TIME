@@ -291,49 +291,7 @@ try { db.exec('ALTER TABLE messages ADD COLUMN is_deleted INTEGER NOT NULL DEFAU
 try { db.exec('ALTER TABLE messages ADD COLUMN extra_json TEXT'); } catch {}
 try { db.exec("ALTER TABLE messages ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''"); } catch {}
 
-try { db.exec('ALTER TABLE users ADD COLUMN wallet_balance REAL NOT NULL DEFAULT 0'); } catch {}
-try {
-  db.exec(`CREATE TABLE IF NOT EXISTS wallet_topups (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    amount REAL NOT NULL,
-    method TEXT,
-    note TEXT,
-    status TEXT NOT NULL DEFAULT 'pending',
-    reviewed_by TEXT,
-    reviewed_at TEXT,
-    created_at TEXT NOT NULL
-  )`);
-} catch {}
-try {
-  db.exec(`CREATE TABLE IF NOT EXISTS wallet_transactions (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    amount REAL NOT NULL,
-    type TEXT NOT NULL,
-    reference TEXT,
-    balance_after REAL NOT NULL,
-    created_at TEXT NOT NULL
-  )`);
-} catch {}
-try { db.exec(`CREATE INDEX IF NOT EXISTS idx_wallet_topups_user ON wallet_topups(user_id, status)`); } catch {}
-try { db.exec(`CREATE INDEX IF NOT EXISTS idx_wallet_tx_user ON wallet_transactions(user_id, created_at)`); } catch {}
-try { db.exec('ALTER TABLE wallet_topups ADD COLUMN review_note TEXT'); } catch {}
-try {
-  db.exec(`CREATE TABLE IF NOT EXISTS wallet_admin_actions (
-    id TEXT PRIMARY KEY,
-    topup_id TEXT,
-    user_id TEXT,
-    action TEXT NOT NULL,
-    amount REAL,
-    note TEXT,
-    actor_id TEXT,
-    actor_email TEXT,
-    created_at TEXT NOT NULL
-  )`);
-} catch {}
-try { db.exec(`CREATE INDEX IF NOT EXISTS idx_wallet_admin_actions_created ON wallet_admin_actions(created_at)`); } catch {}
-
+// Legacy wallet columns/tables in existing databases are intentionally preserved without active reads or writes.
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_conv_members_user ON conversation_members(user_id)`); } catch {}
