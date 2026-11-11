@@ -60,7 +60,7 @@ Run the read-only preview first:
 sqlite3 -readonly /path/to/review-copy.db < scripts/sql/preview-approved-owners.sql
 ```
 
-Review that exactly the two approved accounts exist. For an apply attempt, open the intended reviewed database interactively with `sqlite3`, enable `.bail on`, and run `.read scripts/sql/promote-approved-owners.sql`. The apply script requires exactly two matching accounts and exactly two changed rows; otherwise a SQLite trigger rolls the transaction back and the CLI stops. It intentionally leaves a successful transaction uncommitted. Review the displayed rows and enter `COMMIT;` manually only after approval, or enter `ROLLBACK;`. Running the apply script non-interactively will not commit changes. Never use the live production database before the separate production approval gate.
+Review that exactly one approved owner account exists. For an apply attempt, open the intended reviewed database interactively with `sqlite3`, enable `.bail on`, and run `.read scripts/sql/promote-approved-owners.sql`. The apply script requires exactly one matching account and exactly one changed row; otherwise a SQLite trigger rolls the transaction back and the CLI stops. It intentionally leaves a successful transaction uncommitted. Review the displayed rows and enter `COMMIT;` manually only after approval, or enter `ROLLBACK;`. Running the apply script non-interactively will not commit changes. Never use the live production database before the separate production approval gate.
 
 ## 4. Build a separate staging database, never overwrite an existing file
 
@@ -122,7 +122,8 @@ chmod 600 "$DB"
 STAGING_JWT_SECRET="$(openssl rand -hex 48)"
 STAGING_RATE_LIMIT_HASH_SECRET="$(openssl rand -hex 32)"
 STAGING_PASSWORD_RESET_HMAC_SECRET="$(openssl rand -hex 32)"
-NODE_ENV=production HOST=127.0.0.1 PORT=3001 SMART_TIME_DB_PATH="$DB" \
+: "${STAGING_OWNER_EMAIL:?Set the single approved owner email for staging}"
+NODE_ENV=production HOST=127.0.0.1 PORT=3001 SMART_TIME_DB_PATH="$DB" OWNER_EMAILS="$STAGING_OWNER_EMAIL" \
   JWT_SECRET="$STAGING_JWT_SECRET" RATE_LIMIT_HASH_SECRET="$STAGING_RATE_LIMIT_HASH_SECRET" \
   PASSWORD_RESET_HMAC_SECRET="$STAGING_PASSWORD_RESET_HMAC_SECRET" TURNSTILE_ENFORCE=false \
   SMTP_HOST= SMTP_PORT= SMTP_USER= SMTP_PASS= node dist/server.cjs
