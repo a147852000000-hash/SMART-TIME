@@ -297,7 +297,9 @@ async function verifyAndAttachPhone(req,res) {
   const verified=phoneOtpService.verify(phone,code);
   if(!verified.ok)return res.status(verified.status).json({ok:false,error:verified.message});
   user.phone=phone; user.phone_verified=true; saveUsers(users);
-  return res.json({ok:true,user:publicUser(user,req.auth.role),message:"تم تأكيد رقم الهاتف بنجاح."});
+  const payload={ok:true,user:publicUser(user,req.auth.role),message:"تم تأكيد رقم الهاتف بنجاح."};
+  if(req.path==="/chat/verify-otp") Object.assign(payload,issueSession(user));
+  return res.json(payload);
 }
 app.post("/api/auth/chat/verify-otp",authRequired,verifyAndAttachPhone);
 app.post("/api/auth/register/verify-phone",authRequired,verifyAndAttachPhone);
