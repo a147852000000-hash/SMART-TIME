@@ -13,6 +13,7 @@ const nodemailer = require("nodemailer");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { createPhoneOtpService, normalizePhone } = require("./phone-otp.cjs");
 
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
@@ -138,8 +139,51 @@ function rateLimit(max, windowMs) {
 setInterval(() => { const now = Date.now(); for (const [key, value] of rateHits) if (now >= value.resetAt) rateHits.delete(key); }, 10 * 60 * 1000).unref();
 
 const transporter = nodemailer.createTransport({ service: "gmail", auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASS } });
+
+async function sendPhoneCode(phone, code) {
+  const provider = String(process.env.SMS_PROVIDER || "").trim().toLowerCase();
+  const message = `رمز التحقق من SMART TIME هو: ${code}. صالح لمدة 5 دقائق.`;
+  if (provider === "twilio") {
+    const sid = String(process.env.TWILIO_ACCOUNT_SID || "").trim();
+    const token = String(process.env.TWILIO_AUTH_TOKEN || "").trim();
+    const from = String(process.env.TWILIO_FROM || "").trim();
+    if (!sid || !token || !from) throw new Error("إعدادات Twilio غير مكتملة.");
+    const body = new URLSearchParams({ To: phone, From: from, Body: message });
+    const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(sid)}/Messages.json`, {
+      method: "POST",
+      headers: { Authorization: "Basic " + Buffer.from(sid + ":" + token).toString("base64"), "Content-Type": "application/x-www-form-urlencoded" },
+      body
+    });
+    if (!response.ok) throw new Error("تعذر إرسال رسالة التحقق عبر Twilio.");
+    return;
+  }
+  if (provider === "webhook") {
+    const url = String(process.env.SMS_WEBHOOK_URL || "").trim();
+    const secret = String(process.env.SMS_WEBHOOK_SECRET || "").trim();
+    if (!url) throw new Error("رابط SMS Webhook غير مُكوّن.");
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(secret ? { "X-SMS-Secret": secret } : {}) },
+      body: JSON.stringify({ to: phone, message, code })
+    });
+    if (!response.ok) throw new Error("تعذر إرسال رسالة التحقق عبر مزود SMS.");
+    return;
+  }
+  throw new Error("مزود SMS غير مدعوم لمسارات Oracle الحالية. اضبط SMS_PROVIDER على twilio أو webhook.");
+}
+const phoneOtpService = createPhoneOtpService({
+  file: process.env.PHONE_OTP_FILE || path.join(PROJECT_ROOT, "phone-otps.json"),
+  secret: CODE_SECRET,
+  sendCode: sendPhoneCode
+});
 function publicUser(user, effectiveRole) {
-  return { id: user.id, email: user.email, username: user.username || "", name: user.name || "", role: effectiveRole || user.role || "user", activation_status: user.activation_status || "active", created_at: user.created_at || user.createdAt || "" };
+  return {
+    id: user.id, email: user.email, username: user.username || "", name: user.name || "",
+    phone: user.phone || undefined, phoneVerified: !!user.phone_verified,
+    role: effectiveRole || user.role || "user",
+    activation_status: user.activation_status || "active",
+    created_at: user.created_at || user.createdAt || ""
+  };
 }
 function issueSession(user, viewAs) {
   const owner = normEmail(user.email) === OWNER_EMAIL;
@@ -233,6 +277,54 @@ app.post("/api/auth/select-role", rateLimit(10,15*60*1000), (req,res) => {
 });
 app.get("/api/auth/me",authRequired,(req,res)=>res.json({ok:true,user:publicUser(req.auth.user,req.auth.role)}));
 app.post("/api/auth/logout",authRequired,(req,res)=>{const sessions=loadSessions();delete sessions[req.auth.sessionKey];saveSessions(sessions);return res.json({ok:true});});
+
+// Phone verification is account metadata, never a second login/session authority.
+app.post("/api/auth/chat/request-otp",authRequired,rateLimit(5,15*60*1000),async(req,res)=>{
+  const phone=normalizePhone(req.body && req.body.phone);
+  if(!phone)return res.status(400).json({ok:false,error:"رقم الهاتف غير صحيح"});
+  const users=loadUsers(),taken=users.find(user=>user.id!==req.auth.user.id&&normalizePhone(user.phone)===phone);
+  if(taken)return res.status(409).json({ok:false,error:"رقم الهاتف مرتبط بحساب آخر"});
+  try { const result=await phoneOtpService.request(phone); if(!result.ok)return res.status(result.status).json({ok:false,error:result.message}); return res.json({ok:true,expiresAt:result.expiresAt}); }
+  catch(error){return res.status(503).json({ok:false,error:error.message||"تعذر إرسال رمز التحقق"});}
+});
+async function verifyAndAttachPhone(req,res) {
+  const phone=normalizePhone(req.body && req.body.phone), code=String(req.body && req.body.code || "").trim();
+  if(!phone)return res.status(400).json({ok:false,error:"رقم الهاتف غير صحيح"});
+  const users=loadUsers(),user=users.find(item=>item.id===req.auth.user.id);
+  if(!user)return res.status(404).json({ok:false,error:"الحساب غير موجود"});
+  const taken=users.find(item=>item.id!==user.id&&normalizePhone(item.phone)===phone);
+  if(taken)return res.status(409).json({ok:false,error:"رقم الهاتف مرتبط بحساب آخر"});
+  const verified=phoneOtpService.verify(phone,code);
+  if(!verified.ok)return res.status(verified.status).json({ok:false,error:verified.message});
+  user.phone=phone; user.phone_verified=true; saveUsers(users);
+  return res.json({ok:true,user:publicUser(user,req.auth.role),message:"تم تأكيد رقم الهاتف بنجاح."});
+}
+app.post("/api/auth/chat/verify-otp",authRequired,verifyAndAttachPhone);
+app.post("/api/auth/register/verify-phone",authRequired,verifyAndAttachPhone);
+app.post("/api/auth/trips/request-phone-otp",authRequired,rateLimit(5,15*60*1000),async(req,res)=>{
+  const phone=normalizePhone(req.body && req.body.phone);
+  if(!phone)return res.status(400).json({ok:false,error:"رقم الهاتف غير صحيح"});
+  const users=loadUsers(),taken=users.find(user=>user.id!==req.auth.user.id&&normalizePhone(user.phone)===phone);
+  if(taken)return res.status(409).json({ok:false,error:"رقم الهاتف مرتبط بحساب آخر"});
+  try { const result=await phoneOtpService.request(phone); if(!result.ok)return res.status(result.status).json({ok:false,error:result.message}); return res.json({ok:true,expiresAt:result.expiresAt}); }
+  catch(error){return res.status(503).json({ok:false,error:error.message||"تعذر إرسال رمز التحقق"});}
+});
+app.post("/api/auth/trips/verify-phone",authRequired,verifyAndAttachPhone);
+app.post("/api/auth/phone-login/request-otp",rateLimit(5,15*60*1000),async(req,res)=>{
+  const phone=normalizePhone(req.body && req.body.phone);
+  if(!phone)return res.status(400).json({ok:false,error:"رقم الهاتف غير صحيح"});
+  const user=loadUsers().find(item=>normalizePhone(item.phone)===phone&&item.phone_verified===true&&item.activation_status==="active");
+  if(!user)return res.status(404).json({ok:false,error:"هذا الرقم غير مرتبط بحساب موثق."});
+  try { const result=await phoneOtpService.request(phone); if(!result.ok)return res.status(result.status).json({ok:false,error:result.message}); return res.json({ok:true,expiresAt:result.expiresAt}); }
+  catch(error){return res.status(503).json({ok:false,error:error.message||"تعذر إرسال رمز SMS"});}
+});
+app.post("/api/auth/phone-login",rateLimit(10,15*60*1000),(req,res)=>{
+  const phone=normalizePhone(req.body && req.body.phone),verified=phoneOtpService.verify(phone,req.body && req.body.code);
+  if(!verified.ok)return res.status(verified.status).json({ok:false,error:verified.message});
+  const user=loadUsers().find(item=>normalizePhone(item.phone)===phone&&item.phone_verified===true&&item.activation_status==="active");
+  if(!user)return res.status(404).json({ok:false,error:"هذا الرقم غير مرتبط بحساب موثق."});
+  return res.json({ok:true,...issueSession(user)});
+});
 const GENERIC_FORGOT={ok:true,emailSent:true,message:"لو البريد مسجّل هيوصله كود استعادة كلمة المرور. افحص بريدك أو ارجع للتسجيل إذا لم يكن لديك حساب."};
 app.post("/api/auth/forgot-password",rateLimit(5,15*60*1000),async(req,res)=>{
   const email=normEmail((req.body||{}).email);
