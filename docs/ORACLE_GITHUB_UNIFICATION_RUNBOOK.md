@@ -60,7 +60,7 @@ Run the read-only preview first:
 sqlite3 -readonly /path/to/review-copy.db < scripts/sql/preview-approved-owners.sql
 ```
 
-Review that exactly one approved owner account exists. For an apply attempt, open the intended reviewed database interactively with `sqlite3`, enable `.bail on`, and run `.read scripts/sql/promote-approved-owners.sql`. The apply script requires exactly one matching account and exactly one changed row; otherwise a SQLite trigger rolls the transaction back and the CLI stops. It intentionally leaves a successful transaction uncommitted. Review the displayed rows and enter `COMMIT;` manually only after approval, or enter `ROLLBACK;`. Running the apply script non-interactively will not commit changes. Never use the live production database before the separate production approval gate.
+Review that exactly one approved owner account exists. For an apply attempt, open the intended reviewed database interactively with `sqlite3`, enable `.bail on`, and run `.read scripts/sql/promote-approved-owners.sql`. The apply script requires exactly one matching account, zero pre-existing Owner rows, and exactly one changed row; otherwise a SQLite trigger rolls the transaction back and the CLI stops. It intentionally leaves a successful transaction uncommitted. Review the displayed rows and enter `COMMIT;` manually only after approval, or enter `ROLLBACK;`. Running the apply script non-interactively will not commit changes. Never use the live production database before the separate production approval gate.
 
 ## 4. Build a separate staging database, never overwrite an existing file
 
