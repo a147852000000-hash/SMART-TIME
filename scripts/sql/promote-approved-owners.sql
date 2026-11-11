@@ -18,12 +18,15 @@ CREATE TEMP TRIGGER _smart_time_owner_promotion_guard_assert
 BEFORE INSERT ON _smart_time_owner_promotion_guard
 WHEN NEW.ok <> 1
 BEGIN
-  SELECT RAISE(ROLLBACK, 'Owner promotion aborted: exactly one approved owner account and exactly one role change are required.');
+  SELECT RAISE(ROLLBACK, 'Owner promotion aborted: exactly one approved account, no pre-existing Owner rows, and exactly one role change are required.');
 END;
 
 INSERT INTO _smart_time_owner_promotion_guard(ok)
 SELECT CASE
-  WHEN COUNT(*) = 1 AND COUNT(DISTINCT lower(trim(email))) = 1 THEN 1
+  WHEN COUNT(*) = 1
+    AND COUNT(DISTINCT lower(trim(email))) = 1
+    AND (SELECT COUNT(*) FROM users WHERE lower(trim(role))='owner') = 0
+    THEN 1
   ELSE 0
 END
 FROM users
