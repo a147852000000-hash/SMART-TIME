@@ -87,6 +87,7 @@ CREATE INDEX IF NOT EXISTS idx_ai_event_reminders_user_pending
 CREATE TABLE IF NOT EXISTS finance_expenses (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
+  expense_type TEXT NOT NULL DEFAULT 'personal',
   title TEXT NOT NULL,
   amount REAL NOT NULL,
   currency TEXT NOT NULL DEFAULT 'EGP',
