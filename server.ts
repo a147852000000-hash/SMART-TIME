@@ -313,6 +313,7 @@ if (ORACLE_AUTH_BRIDGE_ENABLED) {
 }
 
 app.get('/api/trial/session', (req,res) => {
+  if (ORACLE_AUTH_BRIDGE_ENABLED) return res.status(410).json({ error: 'Trial identity creation is disabled when Oracle owns authentication.' });
   if (!TRIAL_MODE) return res.status(404).json({ error: 'Trial mode is disabled' });
   try {
     const now = new Date().toISOString();
