@@ -10,6 +10,7 @@ const routes = read('../src/types.ts');
 const dashboard = read('../src/components/DashboardView.tsx');
 const trips = read('../src/components/TripsView.tsx');
 const expenseForm = read('../src/components/expenses/AddExpenseModal.tsx');
+const ownerPanel = read('../src/components/OwnerAdminPanel.tsx');
 
 const registerStart = server.indexOf("app.post('/api/auth/register'");
 const registerEnd = server.indexOf("app.post('/api/auth/register/verify-phone'", registerStart);
@@ -41,5 +42,13 @@ assert.doesNotMatch(dashboard, /id: 'wallet'|Smart Wallet|محفظة/);
 assert.doesNotMatch(trips, /WalletService|walletBalance|tripCost|onOpenWallet|INSUFFICIENT_BALANCE|شحن الرصيد/);
 assert.doesNotMatch(expenseForm, /فودافون\s*كاش|vodafone_cash/i);
 assert.match(expenseForm, /محفظة إلكترونية أخرى/);
+
+assert.match(app, /sessionRole === 'owner'/, 'owner sessions must open the owner management panel');
+assert.match(app, /<OwnerAdminPanel/, 'owner panel must be mounted by the app');
+assert.match(ownerPanel, /\/api\/owner\/admins\?view=users/);
+assert.match(ownerPanel, /\/api\/owner\/admins\?view=admins/);
+assert.match(ownerPanel, /\/api\/auth\/owner\/activate/);
+assert.match(ownerPanel, /action: action/);
+
 
 console.log('Auth, owner activation, wallet removal, trip comparison, and expense payment regression checks passed.');
