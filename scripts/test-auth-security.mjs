@@ -48,7 +48,7 @@ assert.match(app, /<OwnerAdminPanel/, 'owner panel must be mounted by the app');
 assert.match(ownerPanel, /\/api\/owner\/admins\?view=users/);
 assert.match(ownerPanel, /\/api\/owner\/admins\?view=admins/);
 assert.match(ownerPanel, /\/api\/auth\/owner\/activate/);
-assert.match(ownerPanel, /action: action/);
+assert.match(ownerPanel, /JSON\.stringify\(\{ action \}\)/);
 
 
 console.log('Auth, owner activation, wallet removal, trip comparison, and expense payment regression checks passed.');
