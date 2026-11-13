@@ -14,6 +14,7 @@ let child;
 let output = '';
 let server;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const testResetSecret = 'test-only-secret-for-password-reset-hmac-2026-11';
 
 async function freePort() {
   return await new Promise((resolve, reject) => {
@@ -71,7 +72,7 @@ try {
       SMTP_HOST: '',
       SMTP_USER: '',
       SMTP_PASS: '',
-      PASSWORD_RESET_HMAC_SECRET: 'test-only-secret-for-password-reset-hmac-2026-11',
+      PASSWORD_RESET_HMAC_SECRET: testResetSecret,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -222,7 +223,6 @@ try {
   assert.equal(unknownResetSecond.status, 404);
   assert.equal(unknownResetThird.status, 404);
   assert.equal(unknownResetThrottled.status, 429, 'password reset requests must be throttled per email');
-  assert.ok(Number(unknownResetThrottled.data.retryAfter || 0) >= 0 || unknownResetThrottled.status === 429);
 
   // Successful reset must invalidate every previously issued session for that account.
   const resetLoginA = await request(baseUrl, '/api/auth/login', {
@@ -239,7 +239,7 @@ try {
   db.prepare(`INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at)
     VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,
     expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at`)
-    .run('auth-test-user@example.invalid', crypto.createHmac('sha256', process.env.PASSWORD_RESET_HMAC_SECRET).update(resetCode).digest('hex'),
+    .run('auth-test-user@example.invalid', crypto.createHmac('sha256', testResetSecret).update(resetCode).digest('hex'),
       new Date(Date.now() + 10 * 60_000).toISOString(), 0, new Date().toISOString());
   const passwordReset = await request(baseUrl, '/api/auth/reset-password', {
     method: 'POST',
