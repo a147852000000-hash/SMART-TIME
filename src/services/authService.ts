@@ -175,8 +175,6 @@ export async function registerWithEmail(name: string, username: string, email: s
 }
 
 export async function verifyRegistrationPhone(phone: string, code: string, turnstileToken?: string): Promise<any> { const data=await request('/api/auth/register/verify-phone',{phone,code,deviceId:getDeviceId(),turnstileToken: turnstileToken || ''}); if(data?.user){ const current=getStoredSession(); if(current?.token){ saveSession({token:current.token,user:data.user}); applyUserToProfile(data.user); } } return data; }
-export async function requestTripsPhoneOtp(phone: string, turnstileToken?: string): Promise<any> { return request('/api/auth/trips/request-phone-otp',{phone,turnstileToken:turnstileToken || ''}); }
-export async function verifyTripsPhone(phone: string, code: string, turnstileToken?: string): Promise<any> { const data=await request('/api/auth/trips/verify-phone',{phone,code,deviceId:getDeviceId(),turnstileToken:turnstileToken || ''}); if(data?.user){ const current=getStoredSession(); if(current?.token){ saveSession({token:current.token,user:data.user}); applyUserToProfile(data.user); } } return data; }
 
 export async function restoreSession(): Promise<AuthSession | null> {
   const stored = getStoredSession();
