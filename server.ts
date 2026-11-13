@@ -11,6 +11,7 @@ import { getServiceStatuses, seedServiceStatuses, setServiceStatus } from "./bac
 import { chatRouter, setupChatWebSocket } from "./backend/chatServer.js";
 import { createCanonicalExpense, deleteCanonicalExpense, getCanonicalExpense, FINANCE_EXPENSE_TYPES, type FinanceExpenseType } from "./backend/ai/finance/financeRepository.js";
 import { getAiCanonicalState } from "./backend/ai/finance/aiCanonicalProjection.js";
+import { acknowledgeEventReminder, listPendingEventReminders, queueDueEventReminders } from "./backend/ai/calendar/reminderScheduler.js";
 import { estimateProviderPrice, type RideProvider, type RideCategory } from "./src/services/ridePriceEstimator.js";
 import { askSmartAiCore } from "./backend/ai/smartAiCore.js";
 import { isLocalSmartAiConfigured } from "./backend/ai/localInference.js";
@@ -121,6 +122,60 @@ function sessionAccountRole(row:any): 'owner'|'admin'|'user' { if (resolvedAccou
 function publicUser(row:any){return {id:row.id,email:row.email,username:row.username||undefined,name:row.name||row.display_name||'',phone:row.phone||undefined,phoneVerified:!!row.phoneVerified,role:sessionAccountRole(row),activationStatus:row.activation_status||row.activationStatus||'pending'};}
 function normalizePhone(phone:string){return String(phone||'').replace(/[\s()-]/g,'');}
 function normalizeUsername(username:string){return String(username||'').trim().toLowerCase();}
+
+// ----------------------------------------------------
+// [FIX B-3] Persistent authentication rate limiting.
+// Keys are stored SHA-256 hashed (identifiers/IPs never sit in the database
+// in plaintext, matching the password-reset limiter approach), windows are
+// fixed-length, and the counter is enforced BEFORE any expensive work
+// (scrypt password verification / SMS provider calls). This protects the
+// free tiers: brute-force login attempts and OTP spam stop before they can
+// burn SMS quota or server CPU.
+// ----------------------------------------------------
+db.exec(`CREATE TABLE IF NOT EXISTS auth_rate_limits (
+  key_hash TEXT PRIMARY KEY,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  window_start INTEGER NOT NULL,
+  updated_at TEXT NOT NULL
+)`);
+
+function clientIp(req: express.Request): string {
+  const forwarded = String((req.headers as any)['x-forwarded-for'] || '').split(',')[0].trim();
+  return forwarded || String((req.socket as any)?.remoteAddress || 'unknown');
+}
+
+function authRateLimitKey(kind: string, parts: string[]): string {
+  return crypto.createHash('sha256').update(`${kind}|${parts.join('|')}`).digest('hex');
+}
+
+function enforceAuthRateLimit(key: string, max: number, windowMinutes: number): { allowed: boolean; retryAfterSeconds?: number } {
+  const nowMs = Date.now();
+  const windowMs = windowMinutes * 60000;
+  const row = db.prepare('SELECT attempts, window_start FROM auth_rate_limits WHERE key_hash = ?').get(key) as any;
+  if (!row || nowMs - Number(row.window_start) >= windowMs) {
+    db.prepare('INSERT INTO auth_rate_limits (key_hash, attempts, window_start, updated_at) VALUES (?, 1, ?, ?) ON CONFLICT(key_hash) DO UPDATE SET attempts = 1, window_start = excluded.window_start, updated_at = excluded.updated_at')
+      .run(key, nowMs, new Date().toISOString());
+    return { allowed: true };
+  }
+  if (Number(row.attempts) >= max) {
+    return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((windowMs - (nowMs - Number(row.window_start))) / 1000)) };
+  }
+  db.prepare('UPDATE auth_rate_limits SET attempts = attempts + 1, updated_at = ? WHERE key_hash = ?')
+    .run(new Date().toISOString(), key);
+  return { allowed: true };
+}
+
+function rateLimitGuard(kind: string, max: number, windowMinutes: number, keyPartsFrom: (req: express.Request) => string[]) {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const limit = enforceAuthRateLimit(authRateLimitKey(kind, keyPartsFrom(req)), max, windowMinutes);
+    if (!limit.allowed) {
+      res.setHeader('Retry-After', String(limit.retryAfterSeconds || 60));
+      return res.status(429).json({ error: 'محاولات كثيرة جدًا. حاول بعد قليل.', retryAfterSeconds: limit.retryAfterSeconds });
+    }
+    next();
+  };
+}
+
 function otpHash(code:string){return crypto.createHash('sha256').update(code).digest('hex');}
 async function sendSms(phone:string, code:string){
   const provider=String(process.env.SMS_PROVIDER||'').trim().toLowerCase();
@@ -209,6 +264,11 @@ async function validateMessageCentralOtp(verificationId: string, code: string): 
 // and the "provider generates the code" flow (messagecentral).
 // ----------------------------------------------------
 async function requestPhoneOtp(phone: string): Promise<{ expires: string; provider: string; devCode?: string }> {
+  // [FIX B-6] The OTP code reaches the client response only when explicitly
+  // allowed: in the automated test environment, or when an operator sets
+  // SMART_TIME_ALLOW_DEV_OTP=1 for local development. A production server
+  // with a forgotten/unset NODE_ENV no longer leaks live codes.
+  const DEV_OTP_EXPOSED = process.env.NODE_ENV === 'test' || process.env.SMART_TIME_ALLOW_DEV_OTP === '1';
   const provider = String(process.env.SMS_PROVIDER || '').trim().toLowerCase();
   const expires = new Date(Date.now() + 300000).toISOString();
   const createdAt = new Date().toISOString();
@@ -225,7 +285,18 @@ async function requestPhoneOtp(phone: string): Promise<{ expires: string; provid
     const info = await sendSms(phone, code);
     return { expires, provider: info.provider };
   } catch (e: any) {
-    if (process.env.NODE_ENV !== 'production') return { expires, provider: 'development', devCode: code };
+    if (process.env.NODE_ENV !== 'production') {
+      // [FIX B-6] The generated OTP code is only handed back to the client when
+      // explicitly opted in (test env or SMART_TIME_ALLOW_DEV_OTP=1). Previously
+      // every non-production environment - including a production server whose
+      // NODE_ENV was left unset - returned the live OTP code in the HTTP
+      // response, letting anyone verify any phone number.
+      if (DEV_OTP_EXPOSED) {
+        console.warn(`[SMART TIME] DEV OTP exposed for ${phone} — set SMS_PROVIDER or unset SMART_TIME_ALLOW_DEV_OTP in real environments.`);
+        return { expires, provider: 'development', devCode: code };
+      }
+      return { expires, provider: 'development' };
+    }
     throw e;
   }
 }
@@ -270,7 +341,7 @@ app.get('/api/trial/session', (req,res) => {
   }
 });
 
-app.post('/api/auth/register', async (req,res)=>{
+app.post('/api/auth/register', rateLimitGuard('register', 10, 60, (req) => [clientIp(req)]), async (req,res)=>{
   try{
     const name=String(req.body.name||'').trim(), username=normalizeUsername(req.body.username), email=String(req.body.email||'').trim().toLowerCase(), password=String(req.body.password||'');
     // TEMPORARY (testing phase): phone is now optional at signup. Leaving it blank skips phone
@@ -328,7 +399,13 @@ app.post('/api/auth/register/verify-phone',async(req,res)=>{
   }catch(e:any){res.status(500).json({error:e.message||'تعذر تأكيد رقم الهاتف'});}
 });
 
-app.post('/api/auth/login',(req,res)=>{try{const identifier=String(req.body.identifier||req.body.email||'').trim(),normalizedEmail=identifier.toLowerCase(),normalizedUsername=normalizeUsername(identifier),password=String(req.body.password||'');let row:any=null;if(identifier.includes('@')) row=db.prepare('SELECT * FROM users WHERE email=?').get(normalizedEmail) as any;else row=db.prepare('SELECT * FROM users WHERE username=?').get(normalizedUsername) as any;if(!row||!verifyPassword(password,row.password_hash))return res.status(401).json({error:'بيانات الدخول غير صحيحة. تأكد من البريد أو اسم المستخدم وكلمة المرور.'});if(resolvedAccountRole(row)==='owner'){const roleChoiceTicket=createSession(row.id,'role_choice',5/1440);return res.json({requiresRoleChoice:true,availableRoles:['owner','user'],roleChoiceTicket});}const role=resolvedAccountRole(row);const user={...row,name:row.display_name,phoneVerified:row.phone_verified,session_role:role};res.json({token:createSession(row.id,role),user:publicUser(user)});}catch(e:any){res.status(500).json({error:e.message||'تعذر تسجيل الدخول'});}});
+app.post('/api/auth/login', rateLimitGuard('login', 10, 15, (req) => {
+  // Mirror the route's own normalization so case/format tricks cannot split
+  // the limiter key and bypass the counter.
+  const identifier = String(req.body?.identifier || req.body?.email || '').trim();
+  const normalized = identifier.includes('@') ? identifier.toLowerCase() : normalizeUsername(identifier);
+  return [normalized || 'unknown', clientIp(req)];
+}),(req,res)=>{try{const identifier=String(req.body.identifier||req.body.email||'').trim(),normalizedEmail=identifier.toLowerCase(),normalizedUsername=normalizeUsername(identifier),password=String(req.body.password||'');let row:any=null;if(identifier.includes('@')) row=db.prepare('SELECT * FROM users WHERE email=?').get(normalizedEmail) as any;else row=db.prepare('SELECT * FROM users WHERE username=?').get(normalizedUsername) as any;if(!row||!verifyPassword(password,row.password_hash))return res.status(401).json({error:'بيانات الدخول غير صحيحة. تأكد من البريد أو اسم المستخدم وكلمة المرور.'});if(resolvedAccountRole(row)==='owner'){const roleChoiceTicket=createSession(row.id,'role_choice',5/1440);return res.json({requiresRoleChoice:true,availableRoles:['owner','user'],roleChoiceTicket});}const role=resolvedAccountRole(row);const user={...row,name:row.display_name,phoneVerified:row.phone_verified,session_role:role};res.json({token:createSession(row.id,role),user:publicUser(user)});}catch(e:any){res.status(500).json({error:e.message||'تعذر تسجيل الدخول'});}});
 app.post('/api/auth/select-role',(req,res)=>{try{const bodyTicket=String(req.body?.roleChoiceTicket||'');const ticket=authUser(req,true,bodyTicket);if(!ticket||ticket.session_role!=='role_choice')return res.status(401).json({error:'انتهت صلاحية اختيار نوع الدخول. سجّل الدخول مرة أخرى.'});const role=String(req.body.role||'');if(role!=='owner'&&role!=='user')return res.status(400).json({error:'اختيار نوع الدخول غير صالح.'});if(resolvedAccountRole(ticket)!=='owner')return res.status(403).json({error:'هذا الاختيار مخصص لحساب المالك.'});const expires=new Date(Date.now()+AUTH_SESSION_DAYS*86400000).toISOString();db.prepare('UPDATE sessions SET session_role=?,expires_at=? WHERE id=?').run(role,expires,ticket.session_id);const user={...ticket,session_role:role};res.json({token:ticket.session_id,user:publicUser(user)});}catch(e:any){res.status(500).json({error:e.message||'تعذر اختيار نوع الدخول'});}});
 app.get('/api/auth/me',(req,res)=>{const user=authUser(req);if(!user||user.session_role==='role_choice')return res.status(401).json({error:'جلسة الدخول منتهية'});res.json({user:publicUser(user)});});
 app.get('/api/owner/admins',(req,res)=>{const actor=authUser(req);if(!actor||sessionAccountRole(actor)!=='owner')return res.status(403).json({error:'هذا القسم مخصص للمالك فقط.'});const view=String(req.query.view||'users');if(view==='admins'){const admins=db.prepare("SELECT id,email,username,display_name as name,role,activation_status FROM users WHERE role='admin' ORDER BY created_at DESC").all();return res.json({admins});}const users=db.prepare("SELECT id,email,username,display_name as name,role,activation_status FROM users WHERE lower(email)<>? AND role IN ('user','owner') ORDER BY created_at DESC").all(PROGRAM_OWNER_EMAIL);return res.json({users});});
@@ -345,12 +422,12 @@ app.post('/api/auth/owner/activate',(req,res)=>{
     res.json({ok:true,message:'تم اعتماد الحساب بنجاح.'});
   }catch(e:any){res.status(500).json({error:e.message||'تعذر اعتماد الحساب'});}
 });
-app.post('/api/auth/phone-login/request-otp',async(req,res)=>{try{const phone=normalizePhone(req.body.phone);if(phone.length<8)return res.status(400).json({error:'رقم الهاتف غير صحيح'});const row=db.prepare('SELECT id FROM users WHERE phone=? AND phone_verified=1').get(phone) as any;if(!row)return res.status(404).json({error:'هذا الرقم غير مرتبط بحساب موثق.'});try{const otpResult=await requestPhoneOtp(phone);res.json({ok:true,expiresAt:otpResult.expires,devCode:otpResult.devCode,smsProvider:otpResult.provider});}catch(err:any){return res.status(503).json({error:err.message||'تعذر إرسال SMS'});}}catch(e:any){res.status(500).json({error:e.message||'تعذر إرسال رمز SMS'});}});
+app.post('/api/auth/phone-login/request-otp', rateLimitGuard('phone-otp', 5, 60, (req) => [normalizePhone(req.body?.phone) || 'unknown', clientIp(req)]),async(req,res)=>{try{const phone=normalizePhone(req.body.phone);if(phone.length<8)return res.status(400).json({error:'رقم الهاتف غير صحيح'});const row=db.prepare('SELECT id FROM users WHERE phone=? AND phone_verified=1').get(phone) as any;if(!row)return res.status(404).json({error:'هذا الرقم غير مرتبط بحساب موثق.'});try{const otpResult=await requestPhoneOtp(phone);res.json({ok:true,expiresAt:otpResult.expires,devCode:otpResult.devCode,smsProvider:otpResult.provider});}catch(err:any){return res.status(503).json({error:err.message||'تعذر إرسال SMS'});}}catch(e:any){res.status(500).json({error:e.message||'تعذر إرسال رمز SMS'});}});
 app.post('/api/auth/phone-login',async(req,res)=>{try{const phone=normalizePhone(req.body.phone),code=String(req.body.code||'').trim();const check=await checkPhoneOtp(phone,code);if(!check.ok)return res.status(check.status).json({error:check.error});const row=db.prepare('SELECT * FROM users WHERE phone=? AND phone_verified=1').get(phone) as any;if(!row)return res.status(404).json({error:'هذا الرقم غير مرتبط بحساب موثق.'});db.prepare('DELETE FROM phone_otps WHERE phone=?').run(phone);res.json({token:createSession(row.id),user:publicUser({...row,name:row.display_name,phoneVerified:row.phone_verified})});}catch(e:any){res.status(500).json({error:e.message||'تعذر تسجيل الدخول بالهاتف'});}});
 app.post('/api/auth/forgot-password',async(req,res)=>{try{const email=String(req.body.email||'').trim().toLowerCase();const row=db.prepare('SELECT id FROM users WHERE email=?').get(email) as any;if(!row)return res.json({ok:true,emailSent:false,message:'إذا كان البريد مسجلاً فستصلك تعليمات الاستعادة.'});const code=String(crypto.randomInt(100000,1000000)),expires=new Date(Date.now()+PASSWORD_RESET_MINUTES*60000).toISOString();db.prepare(`INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at`).run(email,otpHash(code),expires,0,new Date().toISOString());try{const info=await sendPasswordResetEmail(email,code);res.json({ok:true,emailSent:true,provider:info.provider});}catch(mailErr:any){db.prepare('DELETE FROM password_resets WHERE email=?').run(email);res.status(503).json({error:mailErr.message||'تعذر إرسال رسالة إعادة تعيين كلمة المرور.'});}}catch(e:any){res.status(500).json({error:e.message||'تعذر بدء استعادة كلمة المرور'});}});
 app.post('/api/auth/reset-password',(req,res)=>{try{const email=String(req.body.email||'').trim().toLowerCase(),code=String(req.body.code||'').trim(),newPassword=String(req.body.newPassword||'');if(newPassword.length<8)return res.status(400).json({error:'كلمة المرور يجب أن تكون 8 أحرف على الأقل'});const reset=db.prepare('SELECT * FROM password_resets WHERE email=?').get(email) as any;if(!reset||new Date(reset.expires_at).getTime()<Date.now())return res.status(400).json({error:'رمز الاستعادة منتهي أو غير موجود'});if(reset.attempts>=5)return res.status(429).json({error:'تم تجاوز عدد المحاولات.'});db.prepare('UPDATE password_resets SET attempts=attempts+1 WHERE email=?').run(email);if(otpHash(code)!==reset.code_hash)return res.status(400).json({error:'رمز الاستعادة غير صحيح'});db.prepare('UPDATE users SET password_hash=? WHERE email=?').run(hashPassword(newPassword),email);db.prepare('DELETE FROM password_resets WHERE email=?').run(email);res.json({ok:true});}catch(e:any){res.status(500).json({error:e.message||'تعذر تغيير كلمة المرور'});}});
 app.post('/api/auth/logout',(req,res)=>{const h=String(req.headers.authorization||''),token=h.startsWith('Bearer ')?h.slice(7).trim():'';if(token)db.prepare('DELETE FROM sessions WHERE id=?').run(token);res.json({ok:true});});
-app.post('/api/auth/chat/request-otp',async(req,res)=>{try{const user=authUser(req);if(!user)return res.status(401).json({error:'يجب تسجيل الدخول بالبريد أولاً'});const phone=normalizePhone(req.body.phone);if(phone.length<8)return res.status(400).json({error:'رقم الهاتف غير صحيح'});const taken=db.prepare('SELECT id FROM users WHERE phone=? AND id<>?').get(phone,user.id) as any;if(taken)return res.status(409).json({error:'رقم الهاتف مرتبط بحساب آخر'});try{const otpResult=await requestPhoneOtp(phone);res.json({ok:true,expiresAt:otpResult.expires,devCode:otpResult.devCode,smsProvider:otpResult.provider});}catch(err:any){return res.status(503).json({error:err.message||'تعذر إرسال SMS'});}}catch(e:any){res.status(500).json({error:e.message||'تعذر إرسال رمز التحقق'});}});
+app.post('/api/auth/chat/request-otp', rateLimitGuard('phone-otp', 5, 60, (req) => [normalizePhone(req.body?.phone) || 'unknown', clientIp(req)]),async(req,res)=>{try{const user=authUser(req);if(!user)return res.status(401).json({error:'يجب تسجيل الدخول بالبريد أولاً'});const phone=normalizePhone(req.body.phone);if(phone.length<8)return res.status(400).json({error:'رقم الهاتف غير صحيح'});const taken=db.prepare('SELECT id FROM users WHERE phone=? AND id<>?').get(phone,user.id) as any;if(taken)return res.status(409).json({error:'رقم الهاتف مرتبط بحساب آخر'});try{const otpResult=await requestPhoneOtp(phone);res.json({ok:true,expiresAt:otpResult.expires,devCode:otpResult.devCode,smsProvider:otpResult.provider});}catch(err:any){return res.status(503).json({error:err.message||'تعذر إرسال SMS'});}}catch(e:any){res.status(500).json({error:e.message||'تعذر إرسال رمز التحقق'});}});
 app.post('/api/auth/chat/verify-otp',async(req,res)=>{try{const user=authUser(req);if(!user)return res.status(401).json({error:'جلسة الدخول غير صالحة'});const phone=normalizePhone(req.body.phone),code=String(req.body.code||'').trim();const check=await checkPhoneOtp(phone,code);if(!check.ok)return res.status(check.status).json({error:check.error});db.prepare('UPDATE users SET phone=?,phone_verified=1 WHERE id=?').run(phone,user.id);db.prepare('DELETE FROM phone_otps WHERE phone=?').run(phone);const refreshed=db.prepare('SELECT id,email,username,display_name as name,phone,phone_verified as phoneVerified,activation_status FROM users WHERE id=?').get(user.id) as any;res.json({token:createSession(user.id),user:publicUser(refreshed)});}catch(e:any){res.status(500).json({error:e.message||'تعذر تأكيد الرقم'});}});
 
 
@@ -1755,6 +1832,33 @@ app.delete("/api/finance/expenses/:expenseId", (req, res) => {
     const message = e instanceof Error ? e.message : "تعذر حذف المصروف.";
     const notFound = /not found/i.test(message);
     res.status(notFound ? 404 : 500).json({ error: message });
+  }
+});
+
+// [FIX] Event reminders API — the endpoints src/services/aiService.ts already
+// calls (GET /api/ai/reminders, POST /api/ai/reminders/:id/ack). Protected
+// like every other user-data route; due reminders are queued before listing.
+app.get("/api/ai/reminders", (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  try {
+    queueDueEventReminders();
+    const limit = Math.max(1, Math.min(100, Math.floor(Number(req.query.limit) || 50)));
+    res.json({ reminders: listPendingEventReminders(user.id, limit) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || "تعذر قراءة التذكيرات." });
+  }
+});
+
+app.post("/api/ai/reminders/:reminderId/ack", (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  try {
+    const acked = acknowledgeEventReminder(user.id, String(req.params.reminderId || ""));
+    if (!acked) return res.status(404).json({ error: "التذكير غير موجود." });
+    res.json({ ok: true, acknowledged: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || "تعذر تأكيد التذكير." });
   }
 });
 
