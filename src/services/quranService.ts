@@ -81,7 +81,10 @@ export const QURANIC_PUNCTUATION_SIGNS: QuranPunctuationSign[] = [
   },
 ];
 
-// Complete 114 Surahs Index with exact page numbers in Madinah Mushaf
+// Surah index for the offline picker. NOT the full 114 list: only surahs
+// whose metadata is present in the repo are listed, so the UI never shows a
+// surah with made-up metadata. Complete mushaf data comes from the online
+// fetch path (alquran.cloud) instead.
 export const ALL_SURAHS: QuranSurahInfo[] = [
   { number: 1, name: 'الفاتحة', englishName: 'Al-Fatihah', englishNameTranslation: 'The Opening', ayahsCount: 7, type: 'مكية', startPage: 1 },
   { number: 2, name: 'البقرة', englishName: 'Al-Baqarah', englishNameTranslation: 'The Cow', ayahsCount: 286, type: 'مدنية', startPage: 2 },
@@ -113,102 +116,50 @@ export const ALL_SURAHS: QuranSurahInfo[] = [
   { number: 114, name: 'الناس', englishName: 'An-Nas', englishNameTranslation: 'Mankind', ayahsCount: 6, type: 'مكية', startPage: 604 },
 ];
 
-// Offline Authentic Surah Verses with Tajweed Punctuation & Stopping Marks
+// Offline embedded verses: ONLY surahs embedded COMPLETELY, verse-for-verse,
+// with no fabricated tajweed/stop marks (a wrong stop mark is a religious
+// ruling, so none are asserted here — stop marks must come from a verified
+// mushaf source, not from code). Partial ("highlights") surahs were removed:
+// showing 8 verses of Al-Baqarah as if it were the whole surah is misleading.
 export const EMBEDDED_SURAH_VERSES: Record<number, QuranVerseItem[]> = {
-  // Surah 1: Al-Fatihah
   1: [
-    { num: 1, text: 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ', page: 1, juz: 1, stopMark: 'ج' },
-    { num: 2, text: 'الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ', page: 1, juz: 1, stopMark: 'صلى' },
-    { num: 3, text: 'الرَّحْمَٰنِ الرَّحِيمِ', page: 1, juz: 1, stopMark: 'صلى' },
-    { num: 4, text: 'مَالِكِ يَوْمِ الدِّينِ', page: 1, juz: 1, stopMark: 'ج' },
-    { num: 5, text: 'إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ', page: 1, juz: 1, stopMark: 'قلى' },
-    { num: 6, text: 'اهْدِنَا الصِّرَاطَ الْمُسْتَقِيمَ', page: 1, juz: 1, stopMark: 'صلى' },
-    { num: 7, text: 'صِرَاطَ الَّذِينَ أَنْعَمْتَ عَلَيْهِمْ غَيْرِ الْمَغْضُوبِ عَلَيْهِمْ وَلَا الضَّالِّينَ', page: 1, juz: 1, stopMark: 'مـ' },
+    { num: 1, text: 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ', page: 1, juz: 1 },
+    { num: 2, text: 'الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ', page: 1, juz: 1 },
+    { num: 3, text: 'الرَّحْمَٰنِ الرَّحِيمِ', page: 1, juz: 1 },
+    { num: 4, text: 'مَالِكِ يَوْمِ الدِّينِ', page: 1, juz: 1 },
+    { num: 5, text: 'إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ', page: 1, juz: 1 },
+    { num: 6, text: 'اهْدِنَا الصِّرَاطَ الْمُسْتَقِيمَ', page: 1, juz: 1 },
+    { num: 7, text: 'صِرَاطَ الَّذِينَ أَنْعَمْتَ عَلَيْهِمْ غَيْرِ الْمَغْضُوبِ عَلَيْهِمْ وَلَا الضَّالِّينَ', page: 1, juz: 1 },
   ],
 
-  // Surah 2: Al-Baqarah Highlights (1-5, 255 Ayat Al-Kursi, 284-286)
-  2: [
-    { num: 1, text: 'الم', page: 2, juz: 1, stopMark: 'ج' },
-    { num: 2, text: 'ذَٰلِكَ الْكِتَابُ لَا رَيْبَ ۛ فِيهِ ۛ هُدًى لِّلْمُتَّقِينَ', page: 2, juz: 1, stopMark: '∴' },
-    { num: 3, text: 'الَّذِينَ يُؤْمِنُونَ بِالْغَيْبِ وَيُقِيمُونَ الصَّلَاةَ وَمِمَّا رَزَقْنَاهُمْ يُنفِقُونَ', page: 2, juz: 1, stopMark: 'ج' },
-    { num: 4, text: 'وَالَّذِينَ يُؤْمِنُونَ بِمَا أُنزِلَ إِلَيْكَ وَمَا أُنزِلَ مِن قَبْلِكَ وَبِالْآخِرَةِ هُمْ يُوقِنُونَ', page: 2, juz: 1, stopMark: 'ج' },
-    { num: 5, text: 'أُولَٰئِكَ عَلَىٰ هُدًى مِّن رَّبِّهِمْ ۖ وَأُولَٰئِكَ هُمُ الْمُفْلِحُونَ', page: 2, juz: 1, stopMark: 'صلى' },
-    { num: 255, text: 'اللَّهُ لَا إِلَٰهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ ۚ لَا تَأْخُذُهُ سِنَةٌ وَلَا نَوْمٌ ۚ لَّهُ مَا فِي السَّمَاوَاتِ وَمَا فِي الْأَرْضِ ۗ مَن ذَا الَّذِي يَشْفَعُ عِندَهُ إِلَّا بِإِذْنِهِ ۚ يَعْلَمُ مَا بَيْنَ أَيْدِيهِمْ وَمَا خَلْفَهُمْ ۖ وَلَا يُحِيطُونَ بِشَيْءٍ مِّنْ عِلْمِهِ إِلَّا بِمَا شَاءَ ۚ وَسِعَ كُرْسِيُّهُ السَّمَاوَاتِ وَالْأَرْضَ ۖ وَلَا يَئُودُهُ حِفْظُهُمَا ۚ وَهُوَ الْعَلِيُّ الْعَظِيمُ', page: 42, juz: 3, stopMark: 'قلى' },
-    { num: 285, text: 'آمَنَ الرَّسُولُ بِمَا أُنزِلَ إِلَيْهِ مِن رَّبِّهِ وَالْمُؤْمِنُونَ ۚ كُلٌّ آمَنَ بِاللَّهِ وَمَلَائِكَتِهِ وَكُتُبِهِ وَرُسُلِهِ لَا نُفَرِّقُ بَيْنَ أَحَدٍ مِّن رُّسُلِهِ ۚ وَقَالُوا سَمِعْنَا وَأَطَعْنَا ۖ غُفْرَانَكَ رَبَّنَا وَإِلَيْكَ الْمَصِيرُ', page: 49, juz: 3, stopMark: 'مـ' },
-    { num: 286, text: 'لَا يُكَلِّفُ اللَّهُ نَفْسًا إِلَّا وُسْعَهَا ۚ لَهَا مَا كَسَبَتْ وَعَلَيْهَا مَا اكْتَسَبَتْ ۗ رَبَّنَا لَا تُؤَاخِذْنَا إِن نَّسِينَا أَوْ أَخْطَأْنَا ۚ رَبَّنَا وَلَا تَحْمِلْ عَلَيْنَا إِصْرًا كَمَا حَمَلْتَهُ عَلَى الَّذِينَ مِن قَبْلِنَا ۚ رَبَّنَا وَلَا تُحَمِّلْنَا مَا لَا طَاقَةَ لَنَا بِهِ ۖ وَاعْفُ عَنَّا وَاغْفِرْ لَنَا وَارْحَمْنَا ۚ أَنتَ مَوْلَانَا فَانصُرْنَا عَلَى الْقَوْمِ الْكَافِرِينَ', page: 49, juz: 3, stopMark: 'مـ' },
-  ],
-
-  // Surah 36: Ya-Sin
-  36: [
-    { num: 1, text: 'يس', page: 440, juz: 22, stopMark: 'ج' },
-    { num: 2, text: 'وَالْقُرْآنِ الْحَكِيمِ', page: 440, juz: 22, stopMark: 'صلى' },
-    { num: 3, text: 'إِنَّكَ لَمِنَ الْمُرْسَلِينَ', page: 440, juz: 22, stopMark: 'صلى' },
-    { num: 4, text: 'عَلَىٰ صِرَاطٍ مُّسْتَقِيمٍ', page: 440, juz: 22, stopMark: 'ج' },
-    { num: 5, text: 'تَنزِيلَ الْعَزِيزِ الرَّحِيمِ', page: 440, juz: 22, stopMark: 'صلى' },
-    { num: 6, text: 'لِتُنذِرَ قَوْمًا مَّا أُنذِرَ آبَاؤُهُمْ فَهُمْ غَافِلُونَ', page: 440, juz: 22, stopMark: 'قلى' },
-    { num: 7, text: 'لَقَدْ حَقَّ الْقَوْلُ عَلَىٰ أَكْثَرِهِمْ فَهُمْ لَا يُؤْمِنُونَ', page: 440, juz: 22, stopMark: 'مـ' },
-    { num: 8, text: 'إِنَّا جَعَلْنَا فِي أَعْنَاقِهِمْ أَغْلَالًا فَهِيَ إِلَى الْأَذْقَانِ فَهُم مُّقْمَحُونَ', page: 440, juz: 22, stopMark: 'ج' },
-    { num: 9, text: 'وَجَعَلْنَا مِن بَيْنِ أَيْدِيهِمْ سَدًّا وَمِنْ خَلْفِهِمْ سَدًّا فَأَغْشَيْنَاهُمْ فَهُمْ لَا يُبْصِرُونَ', page: 440, juz: 22, stopMark: 'مـ' },
-  ],
-
-  // Surah 55: Ar-Rahman
-  55: [
-    { num: 1, text: 'الرَّحْمَٰنُ', page: 531, juz: 27, stopMark: 'ج' },
-    { num: 2, text: 'عَلَّمَ الْقُرْآنَ', page: 531, juz: 27, stopMark: 'صلى' },
-    { num: 3, text: 'خَلَقَ الْإِنسَانَ', page: 531, juz: 27, stopMark: 'صلى' },
-    { num: 4, text: 'عَلَّمَهُ الْبَيَانَ', page: 531, juz: 27, stopMark: 'ج' },
-    { num: 5, text: 'الشَّمْسُ وَالْقَمَرُ بِحُسْبَانٍ', page: 531, juz: 27, stopMark: 'ج' },
-    { num: 6, text: 'وَالنَّجْمُ وَالشَّجَرُ يَسْجُدَانِ', page: 531, juz: 27, stopMark: 'ج' },
-    { num: 7, text: 'وَالسَّمَاءَ رَفَعَهَا وَوَضَعَ الْمِيزَانَ', page: 531, juz: 27, stopMark: 'قلى' },
-    { num: 8, text: 'أَلَّا تَطْغَوْا فِي الْمِيزَانِ', page: 531, juz: 27, stopMark: 'صلى' },
-    { num: 9, text: 'وَأَقِيمُوا الْوَزْنَ بِالْقِسْطِ وَلَا تُخْسِرُوا الْمِيزَانَ', page: 531, juz: 27, stopMark: 'قلى' },
-    { num: 10, text: 'وَالْأَرْضَ وَضَعَهَا لِلْأَنَامِ', page: 531, juz: 27, stopMark: 'ج' },
-    { num: 11, text: 'فِيهَا فَاكِهَةٌ وَالنَّخْلُ ذَاتُ الْأَكْمَامِ', page: 531, juz: 27, stopMark: 'ج' },
-    { num: 12, text: 'وَالْحَبُّ ذُو الْعَصْفِ وَالرَّيْحَانُ', page: 531, juz: 27, stopMark: 'قلى' },
-    { num: 13, text: 'فَبِأَيِّ آلَاءِ رَبِّكُمَا تُكَذِّبَانِ', page: 531, juz: 27, stopMark: 'مـ' },
-  ],
-
-  // Surah 67: Al-Mulk
-  67: [
-    { num: 1, text: 'تَبَارَكَ الَّذِي بِيَدِهِ الْمُلْكُ وَهُوَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ', page: 562, juz: 29, stopMark: 'قلى' },
-    { num: 2, text: 'الَّذِي خَلَقَ الْمَوْتَ وَالْحَيَاةَ لِيَبْلُوَكُمْ أَيُّكُمْ أَحْسَنُ عَمَلًا ۚ وَهُوَ الْعَزِيزُ الْغَفُورُ', page: 562, juz: 29, stopMark: 'ج' },
-    { num: 3, text: 'الَّذِي خَلَقَ سَبْعَ سَمَاوَاتٍ طِبَاقًا ۖ مَّا تَرَىٰ فِي خَلْقِ الرَّحْمَٰنِ مِن تَفَاوُتٍ ۖ فَارْجِعِ الْبَصَرَ هَلْ تَرَىٰ مِن فُطُورٍ', page: 562, juz: 29, stopMark: 'قلى' },
-    { num: 4, text: 'ثُمَّ ارْجِعِ الْبَصَرَ كَرَّتَيْنِ يَنقَلِبْ إِلَيْكَ الْبَصَرُ خَاسِئًا وَهُوَ حَسِيرٌ', page: 562, juz: 29, stopMark: 'مـ' },
-    { num: 5, text: 'وَلَقَدْ زَيَّنَّا السَّمَاءَ الدُّنْيَا بِمَصَابِيحَ وَجَعَلْنَاهَا رُجُومًا لِّلشَّيَاطِينِ ۖ وَأَعْتَدْنَا لَهُمْ عَذَابَ السَّعِيرِ', page: 562, juz: 29, stopMark: 'ج' },
-  ],
-
-  // Surah 108: Al-Kawthar
   108: [
-    { num: 1, text: 'إِنَّا أَعْطَيْنَاكَ الْكَوْثَرَ', page: 602, juz: 30, stopMark: 'صلى' },
-    { num: 2, text: 'فَصَلِّ لِرَبِّكَ وَانْحَرْ', page: 602, juz: 30, stopMark: 'قلى' },
-    { num: 3, text: 'إِنَّ شَانِئَكَ هُوَ الْأَبْتَرُ', page: 602, juz: 30, stopMark: 'مـ' },
+    { num: 1, text: 'إِنَّا أَعْطَيْنَاكَ الْكَوْثَرَ', page: 602, juz: 30 },
+    { num: 2, text: 'فَصَلِّ لِرَبِّكَ وَانْحَرْ', page: 602, juz: 30 },
+    { num: 3, text: 'إِنَّ شَانِئَكَ هُوَ الْأَبْتَرُ', page: 602, juz: 30 },
   ],
 
-  // Surah 112: Al-Ikhlas
   112: [
-    { num: 1, text: 'قُلْ هُوَ اللَّهُ أَحَدٌ', page: 604, juz: 30, stopMark: 'قلى' },
-    { num: 2, text: 'اللَّهُ الصَّمَدُ', page: 604, juz: 30, stopMark: 'ج' },
-    { num: 3, text: 'لَمْ يَلِدْ وَلَمْ يُولَدْ', page: 604, juz: 30, stopMark: 'صلى' },
-    { num: 4, text: 'وَلَمْ يَكُن لَّهُ كُفُوًا أَحَدٌ', page: 604, juz: 30, stopMark: 'مـ' },
+    { num: 1, text: 'قُلْ هُوَ اللَّهُ أَحَدٌ', page: 604, juz: 30 },
+    { num: 2, text: 'اللَّهُ الصَّمَدُ', page: 604, juz: 30 },
+    { num: 3, text: 'لَمْ يَلِدْ وَلَمْ يُولَدْ', page: 604, juz: 30 },
+    { num: 4, text: 'وَلَمْ يَكُن لَّهُ كُفُوًا أَحَدٌ', page: 604, juz: 30 },
   ],
 
-  // Surah 113: Al-Falaq
   113: [
-    { num: 1, text: 'قُلْ أَعُوذُ بِرَبِّ الْفَلَقِ', page: 604, juz: 30, stopMark: 'ج' },
-    { num: 2, text: 'مِن شَرِّ مَا خَلَقَ', page: 604, juz: 30, stopMark: 'صلى' },
-    { num: 3, text: 'وَمِن شَرِّ غَاسِقٍ إِذَا وَقَبَ', page: 604, juz: 30, stopMark: 'صلى' },
-    { num: 4, text: 'وَمِن شَرِّ النَّفَّاثَاتِ فِي الْعُقَدِ', page: 604, juz: 30, stopMark: 'صلى' },
-    { num: 5, text: 'وَمِن شَرِّ حَاسِدٍ إِذَا حَسَدَ', page: 604, juz: 30, stopMark: 'مـ' },
+    { num: 1, text: 'قُلْ أَعُوذُ بِرَبِّ الْفَلَقِ', page: 604, juz: 30 },
+    { num: 2, text: 'مِن شَرِّ مَا خَلَقَ', page: 604, juz: 30 },
+    { num: 3, text: 'وَمِن شَرِّ غَاسِقٍ إِذَا وَقَبَ', page: 604, juz: 30 },
+    { num: 4, text: 'وَمِن شَرِّ النَّفَّاثَاتِ فِي الْعُقَدِ', page: 604, juz: 30 },
+    { num: 5, text: 'وَمِن شَرِّ حَاسِدٍ إِذَا حَسَدَ', page: 604, juz: 30 },
   ],
 
-  // Surah 114: An-Nas
   114: [
-    { num: 1, text: 'قُلْ أَعُوذُ بِرَبِّ النَّاسِ', page: 604, juz: 30, stopMark: 'ج' },
-    { num: 2, text: 'مَلِكِ النَّاسِ', page: 604, juz: 30, stopMark: 'صلى' },
-    { num: 3, text: 'إِلَٰهِ النَّاسِ', page: 604, juz: 30, stopMark: 'صلى' },
-    { num: 4, text: 'مِن شَرِّ الْوَسْوَاسِ الْخَنَّاسِ', page: 604, juz: 30, stopMark: 'صلى' },
-    { num: 5, text: 'الَّذِي يُوَسْوِسُ فِي صُدُورِ النَّاسِ', page: 604, juz: 30, stopMark: 'صلى' },
-    { num: 6, text: 'مِنَ الْجِنَّةِ وَالنَّاسِ', page: 604, juz: 30, stopMark: 'مـ' },
+    { num: 1, text: 'قُلْ أَعُوذُ بِرَبِّ النَّاسِ', page: 604, juz: 30 },
+    { num: 2, text: 'مَلِكِ النَّاسِ', page: 604, juz: 30 },
+    { num: 3, text: 'إِلَٰهِ النَّاسِ', page: 604, juz: 30 },
+    { num: 4, text: 'مِن شَرِّ الْوَسْوَاسِ الْخَنَّاسِ', page: 604, juz: 30 },
+    { num: 5, text: 'الَّذِي يُوَسْوِسُ فِي صُدُورِ النَّاسِ', page: 604, juz: 30 },
+    { num: 6, text: 'مِنَ الْجِنَّةِ وَالنَّاسِ', page: 604, juz: 30 },
   ],
 };
 
@@ -329,12 +280,14 @@ export class QuranService {
           const surahMeta = ALL_SURAHS.find((s) => s.number === surahNumber);
           const startPage = surahMeta?.startPage || 1;
 
-          const fetchedVerses: QuranVerseItem[] = json.data.ayahs.map((a: any, idx: number) => ({
+          // No synthetic stop marks: assigning وقف marks by modulo arithmetic
+          // fabricates religious rulings. Real marks must come from a verified
+          // mushaf source.
+          const fetchedVerses: QuranVerseItem[] = json.data.ayahs.map((a: any) => ({
             num: a.numberInSurah,
             text: a.text,
             page: a.page || startPage,
             juz: a.juz || 1,
-            stopMark: idx % 3 === 0 ? 'ج' : idx % 5 === 0 ? 'صلى' : undefined,
           }));
 
           StorageAdapter.setItem(cacheKey, fetchedVerses);
@@ -345,20 +298,10 @@ export class QuranService {
       // Offline fallback
     }
 
-    // 4. Return synthetic structured placeholder verses if offline and not in embedded list
-    const surahMeta = ALL_SURAHS.find((s) => s.number === surahNumber) || {
-      name: 'سورة',
-      ayahsCount: 5,
-      startPage: 1,
-    };
-    const syntheticVerses: QuranVerseItem[] = Array.from({ length: Math.min(surahMeta.ayahsCount, 10) }, (_, i) => ({
-      num: i + 1,
-      text: `آية كريمة من سورة ${surahMeta.name} المباركة رقم (${i + 1})`,
-      page: surahMeta.startPage,
-      juz: Math.ceil(surahMeta.startPage / 20),
-      stopMark: i % 2 === 0 ? 'ج' : 'صلى',
-    }));
-
-    return syntheticVerses;
+    // 4. Offline with no embedded/cache data: return an empty list. NEVER
+    // fabricate placeholder "verses" — invented text presented as Quran is
+    // religious misinformation. The UI shows an offline notice for empty lists.
+    console.warn(`[QuranService] Offline and no cached verses for surah ${surahNumber}.`);
+    return [];
   }
 }

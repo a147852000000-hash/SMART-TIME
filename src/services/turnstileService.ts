@@ -23,9 +23,7 @@ declare global {
   }
 }
 
-const TURNSTILE_SITE_KEY = String(
-  import.meta.env.VITE_TURNSTILE_SITE_KEY || "0x4AAAAAAFRjix4A7Wlbz4cu",
-).trim();
+const TURNSTILE_SITE_KEY = String(import.meta.env.VITE_TURNSTILE_SITE_KEY || "").trim();
 
 const SCRIPT_ID = "smart-time-cloudflare-turnstile-script";
 const SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
@@ -84,6 +82,11 @@ export async function renderTurnstile(
     "expired-callback": onFailure,
     "timeout-callback": onFailure,
   });
+}
+
+/** Whether the deployment ships a public site key (widget is worth rendering). */
+export function isTurnstileWidgetConfigured(): boolean {
+  return Boolean(TURNSTILE_SITE_KEY);
 }
 
 export function resetTurnstile(widgetId: TurnstileWidgetId | null) {

@@ -45,6 +45,7 @@ import {
 // Components
 import { AndroidStatusBar } from './components/AndroidStatusBar';
 import { NavigationHeader } from './components/NavigationHeader';
+import { getCurrentMonthKey, isDateInMonth } from './services/financeCalculations';
 import { DashboardView } from './components/DashboardView';
 import { NotesAndAccountingView } from './components/NotesAndAccountingView';
 import { ExpensesView } from './components/ExpensesView';
@@ -251,7 +252,18 @@ export default function App() {
         }
 
         if (state.budget) {
-          const totalExpenses = state.transactions.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+          // B-12: the canonical budget is a MONTHLY limit — compare it only
+          // against the transactions of the CURRENT month, not against every
+          // transaction the account has ever had (which made "remaining"
+          // collapse below zero and pinned percentUsed at 100%).
+          const monthKey = getCurrentMonthKey();
+          const totalExpenses = state.transactions.reduce(
+            (sum, item) =>
+              isDateInMonth(String((item as Expense).date || ''), monthKey)
+                ? sum + Number(item.amount || 0)
+                : sum,
+            0
+          );
           const totalBudget = Number(state.budget.monthlyLimit || 0);
           const remaining = Math.round((totalBudget - totalExpenses) * 100) / 100;
           setBudget({

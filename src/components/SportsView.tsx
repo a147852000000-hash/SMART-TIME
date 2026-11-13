@@ -24,6 +24,7 @@ import {
 import { UserProfile } from '../types';
 import { fetchLiveNews, fetchLiveSports, LiveNewsArticle, LiveSportsMatch } from '../services/liveDataService';
 import { apiUrl } from '../services/apiConfig';
+import { authHeaders } from '../services/authService';
 import { STORAGE_KEYS } from '../services/storageKeys';
 import { StorageAdapter } from '../services/storageAdapter';
 
@@ -199,7 +200,7 @@ export const SportsView: React.FC<SportsViewProps> = ({ user }) => {
     setExerciseError('');
     try {
       const q = muscle === 'all' ? '' : `?bodyPart=${encodeURIComponent(muscle)}`;
-      const res = await fetch(apiUrl(`/api/sports/exercises${q}`));
+      const res = await fetch(apiUrl(`/api/sports/exercises${q}`), { headers: { ...authHeaders() } });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'تعذر تحميل التمارين');
       setExercises(Array.isArray(data) ? data : []);

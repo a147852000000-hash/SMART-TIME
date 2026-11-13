@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Eye, EyeOff, LockKeyhole, Mail, UserRound } from 'lucide-react';
 import { forgotPassword, loginWithIdentifier, registerWithEmail, resetPassword, selectLoginRole } from '../services/authService';
+import { isTurnstileWidgetConfigured, renderTurnstile, resetTurnstile } from '../services/turnstileService';
 
 interface Props {
   onAuthenticated: () => void;
@@ -26,6 +27,32 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
   const [showRoleChoice, setShowRoleChoice] = useState(false);
   const [emailExistsInRailway, setEmailExistsInRailway] = useState(false);
 
+  // B-2: the Turnstile widget is only wired when the deployment ships a site
+  // key (VITE_TURNSTILE_SITE_KEY). The token is sent with every auth request
+  // and the SERVER decides whether to verify it (TURNSTILE_SECRET_KEY).
+  const captchaRef = useRef<HTMLDivElement | null>(null);
+  const widgetIdRef = useRef<string | number | null>(null);
+  const [challenge, setChallenge] = useState('');
+  const captchaConfigured = isTurnstileWidgetConfigured();
+
+  useEffect(() => {
+    if (!captchaConfigured || !captchaRef.current) return;
+    let cancelled = false;
+    setChallenge('');
+    renderTurnstile(
+      captchaRef.current,
+      (token) => { if (!cancelled) setChallenge(token); },
+      () => { if (!cancelled) setChallenge(''); },
+    )
+      .then((id) => { widgetIdRef.current = id; })
+      .catch(() => { if (!cancelled) setChallenge(''); });
+    return () => {
+      cancelled = true;
+      resetTurnstile(widgetIdRef.current);
+      widgetIdRef.current = null;
+    };
+  }, [captchaConfigured, mode]);
+
   const clearError = () => setError('');
   const handleGuest = async () => {
     if (guestBusy || busy) return;
@@ -44,11 +71,14 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setError(''); setBusy(true);
     try {
-      const challenge = '';
+      if (captchaConfigured && !challenge) {
+        throw new Error('أكمل التحقق الأمني قبل المتابعة.');
+      }
+      const challengeToken = challenge;
       if (mode === 'register') {
         if (name.trim().length < 2) throw new Error('اكتب اسمًا صحيحًا.');
         if (!username.trim()) throw new Error('اسم المستخدم مطلوب.');
-        const registration = await registerWithEmail(name.trim(), username.trim(), email.trim().toLowerCase(), password, challenge);
+        const registration = await registerWithEmail(name.trim(), username.trim(), email.trim().toLowerCase(), password, challengeToken);
         if (registration?.alreadyExists || registration?.registered && !registration?.token) {
           throw new Error('هذا البريد مسجل بالفعل، يرجى تسجيل الدخول');
         }
@@ -72,12 +102,12 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
           }
           return;
         }
-        await resetPassword(email.trim(), code.trim(), password, challenge);
+        await resetPassword(email.trim(), code.trim(), password, challengeToken);
         setMode('login'); setCode(''); setPassword(''); setResetSent(false);
         setError('تم تغيير كلمة المرور بنجاح. يمكنك تسجيل الدخول الآن.'); return;
       }
       if (!email.trim()) throw new Error('أدخل بريدك الإلكتروني.');
-      const result = await loginWithIdentifier(email.trim(), password, challenge);
+      const result = await loginWithIdentifier(email.trim(), password, challengeToken);
       if ('requiresRoleChoice' in result && result.requiresRoleChoice) {
         setRoleChoiceTicket(result.roleChoiceTicket || '');
         setShowRoleChoice(true);
@@ -98,7 +128,13 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
         }
       }
     }
-    finally { setBusy(false); }
+    finally {
+      setBusy(false);
+      if (captchaConfigured) {
+        resetTurnstile(widgetIdRef.current);
+        setChallenge('');
+      }
+    }
   };
 
   const chooseRole = async (role: 'owner' | 'user') => {
@@ -183,6 +219,13 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
             ) : null}
 
             {error && <div role="alert" className={`rounded-xl p-3 text-sm font-medium ${error.includes('تم ') ? 'border border-emerald-200 bg-emerald-50 text-emerald-700' : 'border border-red-200 bg-red-50 text-red-700'}`}>{error}</div>}
+
+            {captchaConfigured && (
+              <div>
+                <div ref={captchaRef} />
+                <p className="mt-1 text-[11px] text-gray-500">محمي بواسطة Cloudflare Turnstile</p>
+              </div>
+            )}
 
             <button disabled={busy || (mode === 'register' && emailExistsInRailway)} className="flex h-10 sm:h-[72px] w-full items-center justify-center rounded-full bg-[#090909] px-4 font-semibold text-[14px] sm:text-[24px] text-[#D6AD52] shadow-[0_8px_20px_rgba(0,0,0,0.08)] transition hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C5A059] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
               {busy?'Please wait…':mode==='register'?'Create account':mode==='forgot'?(resetSent?'Reset password':'Send reset code'):'Sign In'}

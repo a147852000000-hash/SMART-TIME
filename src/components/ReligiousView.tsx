@@ -788,6 +788,22 @@ export const ReligiousView: React.FC<ReligiousViewProps> = ({
                       <div className="w-8 h-8 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin mx-auto" />
                       <span>جارِ تحميل آيات سورة {currentSurahMeta.name}...</span>
                     </div>
+                  ) : versesList.length === 0 ? (
+                    /* No fabricated offline placeholders: an empty list here
+                       means the surah needs an internet connection to load. */
+                    <div className="py-16 text-center text-slate-500 dark:text-slate-400 text-sm space-y-3">
+                      <div className="text-4xl">📡</div>
+                      <p className="font-bold">
+                        {language === 'ar'
+                          ? 'لا يمكن عرض نص السورة بدون اتصال بالإنترنت.'
+                          : 'The surah text requires an internet connection.'}
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        {language === 'ar'
+                          ? 'لا نعرض أي نص بديل أو مُختلَق للقرآن الكريم — عند توفر الشبكة ستُحمَّل الآيات من مصدر موثوق وتُحفظ للقراءة دون اتصال.'
+                          : 'No substitute or invented text is shown for the Quran — once online, verses load from a trusted source and are cached for offline reading.'}
+                      </p>
+                    </div>
                   ) : (
                     <div className="space-y-4">
                       {versesList.map((verse) => {

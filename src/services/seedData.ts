@@ -29,35 +29,37 @@ import {
 
 export const DEFAULT_USER: UserProfile = {
   id: 'usr_main_1',
-  name: 'أحمد محمود',
-  email: 'ahmed@smarttime.app',
-  phone: '+20 100 123 4567',
-  avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+  // No fake identity: new or guest profiles start empty and are filled in by
+  // onboarding / the authenticated account (applyUserToProfile).
+  name: '',
+  email: '',
+  phone: '',
+  avatarUrl: '',
   country: 'مصر',
-  city: 'القاهرة',
+  city: '',
   gender: 'male',
-  occupation: 'مهندس برمجيات ورائد أعمال',
+  occupation: '',
   currency: 'EGP',
   language: 'ar',
   theme: 'light',
   religiousPreference: 'islam',
-  isOnboarded: true,
-  biometricEnabled: true,
-  birthDate: '1995-09-15',
-  zodiacSign: 'العذراء',
+  isOnboarded: false,
+  biometricEnabled: false,
+  birthDate: '',
+  zodiacSign: '',
   tickerPreferences: {
     showDailyTasks: true,
     showZakkirni: true,
     showTimeAndDate: true,
     showGold: true,
     showSilver: true,
-    showZodiac: true,
+    showZodiac: false,
     showEgyptianLeague: true,
     showCrypto: true,
     showCurrencies: true,
     showWeather: true,
     showCustomMessage: true,
-    customMessage: 'وقتك من ذهب ⏳ استثمر يومك في طاعة الله والإنجاز',
+    customMessage: 'وقتك من ذهب — استثمر يومك في طاعة الله والإنجاز',
     favoriteEgyptianTeam: 'الأهلي',
     favoriteTeam: 'الأهلي',
     silverUnit: '999',
@@ -66,14 +68,14 @@ export const DEFAULT_USER: UserProfile = {
     speed: 'slow',
   },
   vehiclePreferences: {
-    primaryVehicleName: 'تويوتا كورولا 2023',
+    primaryVehicleName: '',
     fuelType: 'gasoline95',
     serviceIntervalKm: 10000,
   },
   budgetPreferences: {
-    monthlyBudgetLimit: 25000,
+    monthlyBudgetLimit: 0,
     alertThresholdPercent: 80,
-    defaultPaymentMethod: 'instapay',
+    defaultPaymentMethod: 'cash',
   },
   religiousDetails: {
     reciter: 'الشيخ محمود خليل الحصري',
@@ -98,556 +100,44 @@ export const DEFAULT_NOTE_TAGS: NoteTag[] = [
   { id: 't_meeting', name: 'اجتماع', color: '#06b6d4' },
 ];
 
-export const DEFAULT_DAILY_TASKS: DailyTask[] = [
-  {
-    id: 'dt_1',
-    title: 'مراجعة أولويات العمل واجتماع الربع السنوي',
-    completed: false,
-    priority: 'high',
-    category: 'work',
-    dueTime: '10:30',
-    dueDate: new Date().toISOString().split('T')[0],
-    reminderEnabled: true,
-    noteId: 'note_1',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'dt_2',
-    title: 'فحص ضغط إطارات السيارة ومستوى الزيت',
-    completed: false,
-    priority: 'medium',
-    category: 'personal',
-    dueTime: '14:00',
-    dueDate: new Date().toISOString().split('T')[0],
-    reminderEnabled: true,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'dt_3',
-    title: 'تسجيل المصاريف اليومية وتحديث الميزانية',
-    completed: false,
-    priority: 'medium',
-    category: 'finance',
-    dueTime: '18:00',
-    dueDate: new Date().toISOString().split('T')[0],
-    reminderEnabled: true,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'dt_4',
-    title: 'شرب 3 لتر ماء والمشي 45 دقيقة',
-    completed: true,
-    priority: 'low',
-    category: 'health',
-    dueTime: '20:00',
-    dueDate: new Date().toISOString().split('T')[0],
-    reminderEnabled: false,
-    noteId: 'note_2',
-    createdAt: new Date().toISOString(),
-    completedAt: new Date().toISOString(),
-  },
-];
+export const DEFAULT_DAILY_TASKS: DailyTask[] = [] /* DailyTask[]: no fabricated demo data (B-14) */;
 
-export const DEFAULT_NOTES: Note[] = [
-  {
-    id: 'note_1',
-    title: 'خطة إطلاق المشروع والمهام المالية',
-    content: `<h3>أهم الأولويات لهذا الأسبوع:</h3>
-<ul>
-  <li><strong>مراجعة الميزانية الشهرية:</strong> التأكد من توزيع المصاريف بين الصيانة والتعليم.</li>
-  <li><strong>اجتماع فريق العمل:</strong> مناقشة تقرير الربع السنوي والتحول الرقمي.</li>
-  <li><strong>حجز موعد صيانة السيارة:</strong> تغيير الزيت وفحص الإطارات.</li>
-</ul>
-<blockquote><em>"وقتك من ذهب، كل دقيقة محسوبة هي خطوة نحو أهدافك."</em></blockquote>`,
-    folderId: 'f_work',
-    tags: ['t_urgent', 't_meeting'],
-    color: '#ffffff',
-    isFavorite: true,
-    isArchived: false,
-    createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-    updatedAt: new Date().toISOString(),
-    date: '2026-02-28',
-  },
-  {
-    id: 'note_2',
-    title: 'أفكار لتحسين النظام الغذائي والرياضة',
-    content: `<p>الالتزام بنظام <strong>الطيبات / الكيتو</strong> المتوازن:</p>
-<ol>
-  <li>شرب 3 لتر ماء يوميًا.</li>
-  <li>المشي 45 دقيقة بعد صلاة المغرب.</li>
-  <li>التركيز على الدهون الصحية والبروتين وتجنب الزيوت المهدرجة.</li>
-</ol>`,
-    folderId: 'f_personal',
-    tags: ['t_idea'],
-    color: '#ffffff',
-    isFavorite: false,
-    isArchived: false,
-    createdAt: new Date(Date.now() - 3600000 * 48).toISOString(),
-    updatedAt: new Date().toISOString(),
-    date: '2026-02-27',
-  },
-];
+export const DEFAULT_NOTES: Note[] = [] /* Note[]: no fabricated demo data (B-14) */;
 
-export const DEFAULT_EXPENSES: Expense[] = [
-  {
-    id: 'exp_1',
-    title: 'سوبرماركت ومشتريات البيت الأسبوعية',
-    amount: 1450,
-    // @ts-ignore Legacy category retained for existing seed data.
-    category: 'food',
-    date: new Date(Date.now() - 3600000 * 12).toISOString().split('T')[0],
-    paymentMethod: 'card',
-    notes: 'لحوم وخضروات ومكسرات صحية',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'exp_2',
-    title: 'تفويلة بنزين 95 (تويوتا كورولا)',
-    amount: 680,
-    category: 'vehicle',
-    date: new Date(Date.now() - 3600000 * 36).toISOString().split('T')[0],
-    paymentMethod: 'wallet',
-    notes: 'محطة شل - 45 لتر',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'exp_3',
-    title: 'مصاريف مدرسة وكورسات لغات',
-    amount: 2200,
-    category: 'education',
-    date: new Date(Date.now() - 3600000 * 72).toISOString().split('T')[0],
-    paymentMethod: 'cash',
-    notes: 'قسط الفصل الدراسي الثاني',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'exp_4',
-    title: 'فاتورة الكهرباء والإنترنت المنزلي',
-    amount: 850,
-    category: 'bills',
-    date: new Date(Date.now() - 3600000 * 96).toISOString().split('T')[0],
-    paymentMethod: 'card',
-    notes: 'دفع فوري أونلاين',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'exp_5',
-    title: 'مشوار أوبر إلى المعادي',
-    amount: 125,
-    category: 'transport',
-    date: new Date(Date.now() - 3600000 * 120).toISOString().split('T')[0],
-    paymentMethod: 'wallet',
-    notes: 'مشوار عمل عاجل',
-    createdAt: new Date().toISOString(),
-  },
-];
+export const DEFAULT_EXPENSES: Expense[] = [] /* Expense[]: no fabricated demo data (B-14) */;
 
 export const DEFAULT_BUDGET: BudgetSummary = {
-  totalBudget: 18000,
-  totalExpenses: 5305,
-  remaining: 12695,
-  percentUsed: 29.5,
-};
+  totalBudget: 0,
+  totalExpenses: 0,
+  remaining: 0,
+  percentUsed: 0,
+} /* honest zero state until the user sets a budget (B-14) */;
 
-export const DEFAULT_VEHICLES: Vehicle[] = [
-  {
-    id: 'veh_1',
-    name: 'تويوتا كورولا (Toyota Corolla)',
-    model: 'Corolla Active Plus',
-    year: 2023,
-    plateNumber: 'أ ب ج ٩٨٧٤',
-    fuelType: '95',
-    currentMileage: 28450,
-    color: '#0284c7',
-  },
-  {
-    id: 'veh_2',
-    name: 'هيونداي إلنترا (Hyundai Elantra)',
-    model: 'Elantra CN7',
-    year: 2022,
-    plateNumber: 'س ص ع ١٢٣٤',
-    fuelType: '92',
-    currentMileage: 46200,
-    color: '#475569',
-  },
-];
+export const DEFAULT_VEHICLES: Vehicle[] = [] /* Vehicle[]: no fabricated demo data (B-14) */;
 
-export const DEFAULT_FUEL_RECORDS: FuelRecord[] = [
-  {
-    id: 'fuel_1',
-    vehicleId: 'veh_1',
-    liters: 45,
-    pricePerLiter: 15.0,
-    totalCost: 675,
-    mileage: 28400,
-    date: new Date(Date.now() - 3600000 * 40).toISOString().split('T')[0],
-    stationName: 'شل مصر الجديدة',
-    notes: 'تفويلة كاملة 95',
-  },
-  {
-    id: 'fuel_2',
-    vehicleId: 'veh_1',
-    liters: 42,
-    pricePerLiter: 15.0,
-    totalCost: 630,
-    mileage: 27900,
-    date: new Date(Date.now() - 3600000 * 200).toISOString().split('T')[0],
-    stationName: 'موبيل التجمع الخامس',
-  },
-];
+export const DEFAULT_FUEL_RECORDS: FuelRecord[] = [] /* FuelRecord[]: no fabricated demo data (B-14) */;
 
-export const DEFAULT_MAINTENANCE_RECORDS: MaintenanceRecord[] = [
-  {
-    id: 'maint_1',
-    vehicleId: 'veh_1',
-    systemType: 'oil',
-    title: 'تغيير زيت المحرك 10,000 كم + فلتر الزيت الأصلي',
-    cost: 1850,
-    currentMileage: 25000,
-    nextMileageDue: 35000,
-    date: new Date(Date.now() - 3600000 * 400).toISOString().split('T')[0],
-    serviceCenter: 'مركز الصيانة المعتمد',
-    notes: 'زيت تويوتا التخليقي الكامل 5W-30',
-  },
-  {
-    id: 'maint_2',
-    vehicleId: 'veh_1',
-    systemType: 'tires',
-    title: 'ترصيص وتدوير الإطارات وضبط زوايا',
-    cost: 450,
-    currentMileage: 26000,
-    nextMileageDue: 36000,
-    date: new Date(Date.now() - 3600000 * 300).toISOString().split('T')[0],
-    serviceCenter: 'بريدجستون فيت آند فيكس',
-  },
-  {
-    id: 'maint_3',
-    vehicleId: 'veh_1',
-    systemType: 'battery',
-    title: 'فحص البطارية والدينامو ونظافة الأقطاب',
-    cost: 150,
-    currentMileage: 27500,
-    nextMileageDue: 45000,
-    date: new Date(Date.now() - 3600000 * 100).toISOString().split('T')[0],
-    serviceCenter: 'المهندس للكهرباء',
-  },
-];
+export const DEFAULT_MAINTENANCE_RECORDS: MaintenanceRecord[] = [] /* MaintenanceRecord[]: no fabricated demo data (B-14) */;
 
-export const DEFAULT_STUDENTS: Student[] = [
-  {
-    id: 'stud_1',
-    name: 'يوسف أحمد',
-    grade: 'الصف الأول الثانوي',
-    schoolName: 'مدرسة النيل الدولية',
-    avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=120&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'stud_2',
-    name: 'مريم أحمد',
-    grade: 'الصف الخامس الابتدائي',
-    schoolName: 'مدرسة المستقبل للغات',
-    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=120&auto=format&fit=crop&q=80',
-  },
-];
+export const DEFAULT_STUDENTS: Student[] = [] /* Student[]: no fabricated demo data (B-14) */;
 
-export const DEFAULT_LESSONS: LessonItem[] = [
-  {
-    id: 'les_1',
-    studentId: 'stud_1',
-    subject: 'الرياضيات والفيزياء',
-    title: 'حساب المثلثات والميكانيكا',
-    dayOfWeek: 'الأحد والثلاثاء',
-    time: '05:00 م - 07:00 م',
-    tutorName: 'أ. طارق عبد الفتاح',
-    monthlyFee: 800,
-    isPaid: true,
-  },
-  {
-    id: 'les_2',
-    studentId: 'stud_1',
-    subject: 'اللغة الإنجليزية',
-    title: 'General English & IELTS Prep',
-    dayOfWeek: 'الاثنين والخميس',
-    time: '06:00 م - 07:30 م',
-    tutorName: 'Mr. David Wilson',
-    monthlyFee: 750,
-    isPaid: false,
-  },
-  {
-    id: 'les_3',
-    studentId: 'stud_2',
-    subject: 'العلوم والساينس',
-    title: 'Living Systems & Energy',
-    dayOfWeek: 'السبت والأربعاء',
-    time: '04:00 م - 05:30 م',
-    tutorName: 'ميس نورهان إبراهيم',
-    monthlyFee: 600,
-    isPaid: true,
-  },
-];
+export const DEFAULT_LESSONS: LessonItem[] = [] /* LessonItem[]: no fabricated demo data (B-14) */;
 
-export const DEFAULT_EDUCATION_EXPENSES: EducationExpense[] = [
-  {
-    id: 'eduexp_1',
-    studentId: 'stud_1',
-    title: 'الكتب الخارجية وملازم المراجعة',
-    amount: 650,
-    category: 'books',
-    date: new Date(Date.now() - 3600000 * 50).toISOString().split('T')[0],
-  },
-  {
-    id: 'eduexp_2',
-    studentId: 'stud_2',
-    title: 'أدوات مدرسية وألوان للأنشطة',
-    amount: 320,
-    category: 'supplies',
-    date: new Date(Date.now() - 3600000 * 120).toISOString().split('T')[0],
-  },
-];
+export const DEFAULT_EDUCATION_EXPENSES: EducationExpense[] = [] /* EducationExpense[]: no fabricated demo data (B-14) */;
 
-export const DEFAULT_FAVORITE_PLACES: FavoritePlace[] = [
-  {
-    id: 'fav_home',
-    title: 'المنزل (البيت)',
-    type: 'home',
-    point: { name: 'المنزل', address: 'مدينة نصر، القاهرة', lat: 30.0561, lng: 31.3301 },
-  },
-  {
-    id: 'fav_work',
-    title: 'العمل (الشركة)',
-    type: 'work',
-    point: { name: 'المقر الرئيسي', address: 'التجمع الخامس، القاهرة الجديدة', lat: 30.0131, lng: 31.4289 },
-  },
-  {
-    id: 'fav_family',
-    title: 'بيت العائلة',
-    type: 'family',
-    point: { name: 'منزل الوالدين', address: 'مصر الجديدة، القاهرة', lat: 30.0894, lng: 31.3285 },
-  },
-];
+export const DEFAULT_FAVORITE_PLACES: FavoritePlace[] = [] /* FavoritePlace[]: no fabricated demo data (B-14) */;
 
-export const DEFAULT_RECENT_TRIPS: RecentTrip[] = [
-  {
-    id: 'rtrip_1',
-    from: { name: 'المنزل (مدينة نصر)', address: 'شارع عباس العقاد', lat: 30.0561, lng: 31.3301 },
-    to: { name: 'العمل (التجمع الخامس)', address: 'شارع التسعين الشمالي', lat: 30.0131, lng: 31.4289 },
-    date: 'أمس 08:30 ص',
-    provider: 'Uber Comfort',
-    rideType: 'Comfort',
-    fare: 115,
-  },
-  {
-    id: 'rtrip_2',
-    from: { name: 'ميدان التحرير', address: 'وسط البلد، القاهرة', lat: 30.0444, lng: 31.2357 },
-    to: { name: 'مطار القاهرة الدولي صالة 3', address: 'مطار القاهرة', lat: 30.1219, lng: 31.4056 },
-    date: 'منذ 3 أيام',
-    provider: 'Uber X',
-    rideType: 'Normal',
-    fare: 185,
-  },
-];
+export const DEFAULT_RECENT_TRIPS: RecentTrip[] = [] /* RecentTrip[]: no fabricated demo data (B-14) */;
 
-export const DEFAULT_CHAT_ROOMS: ChatRoom[] = [
-  {
-    id: 'room_family',
-    title: 'جروب العائلة 👨‍👩‍👧‍👦',
-    name: 'جروب العائلة 👨‍👩‍👧‍👦',
-    type: 'group',
-    avatar: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=100&auto=format&fit=crop&q=80',
-    lastMessage: 'يوسف: خلصت درس الرياضيات والحمد لله حليت الواجب!',
-    lastMessageTime: '10:45 ص',
-    unreadCount: 2,
-    isOnline: true,
-  },
-  {
-    id: 'room_work',
-    title: 'فريق مشروع Smart Time 🚀',
-    name: 'فريق مشروع Smart Time 🚀',
-    type: 'group',
-    avatar: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=100&auto=format&fit=crop&q=80',
-    lastMessage: 'م. سارة: تم تحديث مواعيد التسليم ورفع الملفات.',
-    lastMessageTime: '09:15 ص',
-    unreadCount: 0,
-    isOnline: true,
-  },
-  {
-    id: 'room_ai_assistant',
-    title: 'Smart Time AI Bot 🤖',
-    name: 'Smart Time AI Bot 🤖',
-    type: 'direct',
-    avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80',
-    lastMessage: 'أنا جاهز لمساعدتك في أي استفسار أو تنظيم ليومك!',
-    lastMessageTime: '08:00 ص',
-    unreadCount: 0,
-    isOnline: true,
-  },
-];
+export const DEFAULT_CHAT_ROOMS: ChatRoom[] = [] /* ChatRoom[]: no fabricated demo data (B-14) */;
 
-export const DEFAULT_CHAT_MESSAGES: ChatMessage[] = [
-  {
-    id: 'msg_1',
-    roomId: 'room_family',
-    senderId: 'usr_sarah',
-    senderName: 'سارة محمود',
-    senderAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80',
-    text: 'صباح الخير جميعًا! لا تنسوا مراجعة قائمة المشتريات اليوم.',
-    type: 'text',
-    isOutgoing: false,
-    timestamp: '09:00 ص',
-  },
-  {
-    id: 'msg_2',
-    roomId: 'room_family',
-    senderId: 'usr_main_1',
-    senderName: 'أحمد محمود',
-    senderAvatar: DEFAULT_USER.avatarUrl,
-    text: 'صباح النور يا سارة، ضفت مكونات الكشري والستيك في قائمة المشتريات وجارِ جلبها اليوم.',
-    type: 'text',
-    isOutgoing: true,
-    timestamp: '09:12 ص',
-  },
-  {
-    id: 'msg_3',
-    roomId: 'room_family',
-    senderId: 'usr_youssef',
-    senderName: 'يوسف أحمد',
-    senderAvatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&auto=format&fit=crop&q=80',
-    text: 'خلصت درس الرياضيات والحمد لله حليت الواجب!',
-    type: 'text',
-    isOutgoing: false,
-    timestamp: '10:45 ص',
-  },
-];
+export const DEFAULT_CHAT_MESSAGES: ChatMessage[] = [] /* ChatMessage[]: no fabricated demo data (B-14) */;
 
-export const DEFAULT_MEDIA_FOLDERS: MediaFolder[] = [
-  { id: 'm_receipts', name: 'فواتير وإيصالات رسمية', icon: '🧾', itemCount: 12 },
-  { id: 'm_cars', name: 'وثائق ورخص السيارات', icon: '🚗', itemCount: 4 },
-  { id: 'm_family', name: 'صور عائلية ورحلات', icon: '🖼️', itemCount: 35 },
-  { id: 'm_docs', name: 'شهادات ومستندات PDF', icon: '📄', itemCount: 8 },
-];
+export const DEFAULT_MEDIA_FOLDERS: MediaFolder[] = [] /* MediaFolder[]: no fabricated demo data (B-14) */;
 
-export const DEFAULT_MEDIA_ITEMS: MediaItem[] = [
-  {
-    id: 'med_1',
-    title: 'فاتورة صيانة تويوتا كورولا 25 ألف كم.pdf',
-    name: 'فاتورة صيانة تويوتا كورولا 25 ألف كم.pdf',
-    type: 'pdf',
-    url: '',
-    fileSize: '245 KB',
-    sizeBytes: 245000,
-    date: '2026-02-15',
-    folderId: 'm_receipts',
-    tags: ['صيانة', 'سيارة', 'تويوتا'],
-  },
-  {
-    id: 'med_2',
-    title: 'صورة رخصة قيادة سارية 2029.jpg',
-    name: 'صورة رخصة قيادة سارية 2029.jpg',
-    type: 'image',
-    url: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=600&auto=format&fit=crop&q=80',
-    fileSize: '1.2 MB',
-    sizeBytes: 1240000,
-    date: '2026-01-10',
-    folderId: 'm_cars',
-    tags: ['رخصة', 'مرور', 'رسمي'],
-  },
-  {
-    id: 'med_3',
-    title: 'جدول امتحانات الثانوية والمراجعات.pdf',
-    name: 'جدول امتحانات الثانوية والمراجعات.pdf',
-    type: 'pdf',
-    url: '',
-    fileSize: '480 KB',
-    sizeBytes: 480000,
-    date: '2026-02-20',
-    folderId: 'm_docs',
-    tags: ['تعليم', 'يوسف', 'مدرسة'],
-  },
-];
+export const DEFAULT_MEDIA_ITEMS: MediaItem[] = [] /* MediaItem[]: no fabricated demo data (B-14) */;
 
-export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
-  {
-    id: 'notif_chat_1',
-    title: '💬 رسالة جديدة في جروب العائلة',
-    body: 'سارة محمود: "صباح الخير جميعًا! لا تنسوا مراجعة قائمة المشتريات اليوم."',
-    category: 'chat',
-    date: 'منذ 15 دقيقة',
-    isRead: false,
-    actionTab: 'chat',
-  },
-  {
-    id: 'notif_veh_1',
-    title: '🚗 تذكير بصيانة السيارة الدورية',
-    body: 'اقترب موعد فحص زيت تويوتا كورولا عند 35,000 كم (متبقي 550 كم).',
-    category: 'vehicles',
-    date: 'منذ ساعة',
-    isRead: false,
-    actionTab: 'vehicles',
-  },
-  {
-    id: 'notif_trips_1',
-    title: '📍 موعد مشوار مجدول',
-    body: 'مشوار إلى: مطار القاهرة الدولي صالة 3 - وقت الانطلاق المقترح: 04:30 م.',
-    category: 'trips',
-    date: 'منذ ساعتين',
-    isRead: false,
-    actionTab: 'trips',
-  },
-  {
-    id: 'notif_exp_1',
-    title: '💰 تحديث الميزانية والمصروفات',
-    body: 'تم تسجيل مصروف وقود بقيمة 675 ج.م. المتبقي من ميزانية الشهر 12,695 ج.م.',
-    category: 'expenses',
-    date: 'منذ 3 ساعات',
-    isRead: false,
-    actionTab: 'expenses',
-  },
-  {
-    id: 'notif_rel_1',
-    title: '🕌 اقتراب موعد صلاة العصر وأذكار المساء',
-    body: 'متبقي 20 دقيقة على أذان العصر بتوقيت القاهرة. حان وقت أذكار المساء وورد القرآن.',
-    category: 'religious',
-    date: 'منذ 4 ساعات',
-    isRead: false,
-    actionTab: 'religious',
-  },
-  {
-    id: 'notif_notes_1',
-    title: '📝 ملاحظة مثبتة بانتظار المتابعة',
-    body: 'مراجعة كشف حساب البنك الأهلي المصري وتوثيق دفع فواتير المرافق لشهر فبراير.',
-    category: 'notes',
-    date: 'منذ 5 ساعات',
-    isRead: true,
-    actionTab: 'notes',
-  },
-  {
-    id: 'notif_edu_1',
-    title: '🎓 متابعة دراسية: يوسف أحمد',
-    body: 'تم حل واجب الرياضيات لمراجعة الجبر والتفاضل بنجاح وتقييم الأداء 95%.',
-    category: 'education',
-    date: 'أمس 07:30 م',
-    isRead: true,
-    actionTab: 'education',
-  },
-  {
-    id: 'notif_food_1',
-    title: '🛒 قائمة المشتريات والمطبخ',
-    body: 'يوجد 4 أصناف بحاجة للشراء اليوم (لحم ستيك، خضروات طازجة، بهارات كشري).',
-    category: 'food',
-    date: 'أمس 04:00 م',
-    isRead: true,
-    actionTab: 'food',
-  },
-  {
-    id: 'notif_sys_1',
-    title: '☁️ اكتمال النسخ الاحتياطي للنظام',
-    body: 'تم حفظ نسخة احتياطية محلية مشفرة لجميع بيانات البرنامج تلقائيًا بنجاح.',
-    category: 'backup',
-    date: 'منذ يومين',
-    isRead: true,
-    actionTab: 'backup',
-  },
-];
+export const DEFAULT_NOTIFICATIONS: AppNotification[] = [] /* AppNotification[]: no fabricated demo data (B-14) */;
 
 export const DEFAULT_ATHKAR: AthkarItem[] = [
   {
@@ -725,15 +215,15 @@ export const DEFAULT_AI_MESSAGES: AiMessage[] = [
 ];
 
 export const DEFAULT_QURAN_WIRD_PROGRESS: QuranWirdProgress = {
-  currentPage: 45,
+  currentPage: 1,
   totalPages: 604,
-  dailyGoalPages: 4,
-  currentSurahName: 'سورة البقرة (الجزء الثالث)',
-  reminderTime: '06:30 ص',
-  reminderEnabled: true,
-  streakDays: 12,
-  lastReadDate: new Date().toISOString().split('T')[0],
-};
+  dailyGoalPages: 1,
+  currentSurahName: '',
+  reminderTime: '',
+  reminderEnabled: false,
+  streakDays: 0,
+  lastReadDate: '',
+} /* neutral progress until the user actually reads (B-14) */;
 
 export const DEFAULT_QURAN_AYAH_TOPICS: QuranAyah[] = [
   {

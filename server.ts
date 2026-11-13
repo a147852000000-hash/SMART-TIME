@@ -17,6 +17,7 @@ import { askSmartAiCore } from "./backend/ai/smartAiCore.js";
 import { isLocalSmartAiConfigured } from "./backend/ai/localInference.js";
 import { createHttpVoiceDnaProvider, DisabledVoiceDnaProvider } from "./backend/voice/voiceDnaProvider.js";
 import { sendPasswordResetEmail as sendPasswordResetEmailWithProvider } from "./backend/auth/passwordResetEmail.js";
+import { isTurnstileEnforced, verifyTurnstileToken } from "./backend/auth/turnstile.js";
 
 dotenv.config();
 
@@ -341,7 +342,24 @@ app.get('/api/trial/session', (req,res) => {
   }
 });
 
-app.post('/api/auth/register', rateLimitGuard('register', 10, 60, (req) => [clientIp(req)]), async (req,res)=>{
+// B-2: Cloudflare Turnstile verification for public auth endpoints (free).
+// Enforcement follows TURNSTILE_SECRET_KEY: unset -> skip (logged), set ->
+// required token verified server-side. See backend/auth/turnstile.ts.
+const turnstileGuard = async (req: any, res: any, next: any) => {
+  try {
+    const verdict = await verifyTurnstileToken(String(req.body?.turnstileToken || ""), clientIp(req));
+    if (!verdict.ok) return res.status(400).json({ error: "فشل التحقق الأمني (Turnstile). أعد المحاولة." });
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+if (!isTurnstileEnforced()) {
+  console.warn("[auth] TURNSTILE_SECRET_KEY غير مضبوط — التحقق من Turnstile متوقف (حدود المعدل مازالت تعمل).");
+}
+
+app.post('/api/auth/register', turnstileGuard, rateLimitGuard('register', 10, 60, (req) => [clientIp(req)]), async (req,res)=>{
   try{
     const name=String(req.body.name||'').trim(), username=normalizeUsername(req.body.username), email=String(req.body.email||'').trim().toLowerCase(), password=String(req.body.password||'');
     // TEMPORARY (testing phase): phone is now optional at signup. Leaving it blank skips phone
@@ -399,7 +417,7 @@ app.post('/api/auth/register/verify-phone',async(req,res)=>{
   }catch(e:any){res.status(500).json({error:e.message||'تعذر تأكيد رقم الهاتف'});}
 });
 
-app.post('/api/auth/login', rateLimitGuard('login', 10, 15, (req) => {
+app.post('/api/auth/login', turnstileGuard, rateLimitGuard('login', 10, 15, (req) => {
   // Mirror the route's own normalization so case/format tricks cannot split
   // the limiter key and bypass the counter.
   const identifier = String(req.body?.identifier || req.body?.email || '').trim();
@@ -422,9 +440,9 @@ app.post('/api/auth/owner/activate',(req,res)=>{
     res.json({ok:true,message:'تم اعتماد الحساب بنجاح.'});
   }catch(e:any){res.status(500).json({error:e.message||'تعذر اعتماد الحساب'});}
 });
-app.post('/api/auth/phone-login/request-otp', rateLimitGuard('phone-otp', 5, 60, (req) => [normalizePhone(req.body?.phone) || 'unknown', clientIp(req)]),async(req,res)=>{try{const phone=normalizePhone(req.body.phone);if(phone.length<8)return res.status(400).json({error:'رقم الهاتف غير صحيح'});const row=db.prepare('SELECT id FROM users WHERE phone=? AND phone_verified=1').get(phone) as any;if(!row)return res.status(404).json({error:'هذا الرقم غير مرتبط بحساب موثق.'});try{const otpResult=await requestPhoneOtp(phone);res.json({ok:true,expiresAt:otpResult.expires,devCode:otpResult.devCode,smsProvider:otpResult.provider});}catch(err:any){return res.status(503).json({error:err.message||'تعذر إرسال SMS'});}}catch(e:any){res.status(500).json({error:e.message||'تعذر إرسال رمز SMS'});}});
+app.post('/api/auth/phone-login/request-otp', turnstileGuard, rateLimitGuard('phone-otp', 5, 60, (req) => [normalizePhone(req.body?.phone) || 'unknown', clientIp(req)]),async(req,res)=>{try{const phone=normalizePhone(req.body.phone);if(phone.length<8)return res.status(400).json({error:'رقم الهاتف غير صحيح'});const row=db.prepare('SELECT id FROM users WHERE phone=? AND phone_verified=1').get(phone) as any;if(!row)return res.status(404).json({error:'هذا الرقم غير مرتبط بحساب موثق.'});try{const otpResult=await requestPhoneOtp(phone);res.json({ok:true,expiresAt:otpResult.expires,devCode:otpResult.devCode,smsProvider:otpResult.provider});}catch(err:any){return res.status(503).json({error:err.message||'تعذر إرسال SMS'});}}catch(e:any){res.status(500).json({error:e.message||'تعذر إرسال رمز SMS'});}});
 app.post('/api/auth/phone-login',async(req,res)=>{try{const phone=normalizePhone(req.body.phone),code=String(req.body.code||'').trim();const check=await checkPhoneOtp(phone,code);if(!check.ok)return res.status(check.status).json({error:check.error});const row=db.prepare('SELECT * FROM users WHERE phone=? AND phone_verified=1').get(phone) as any;if(!row)return res.status(404).json({error:'هذا الرقم غير مرتبط بحساب موثق.'});db.prepare('DELETE FROM phone_otps WHERE phone=?').run(phone);res.json({token:createSession(row.id),user:publicUser({...row,name:row.display_name,phoneVerified:row.phone_verified})});}catch(e:any){res.status(500).json({error:e.message||'تعذر تسجيل الدخول بالهاتف'});}});
-app.post('/api/auth/forgot-password',async(req,res)=>{try{const email=String(req.body.email||'').trim().toLowerCase();const row=db.prepare('SELECT id FROM users WHERE email=?').get(email) as any;if(!row)return res.json({ok:true,emailSent:false,message:'إذا كان البريد مسجلاً فستصلك تعليمات الاستعادة.'});const code=String(crypto.randomInt(100000,1000000)),expires=new Date(Date.now()+PASSWORD_RESET_MINUTES*60000).toISOString();db.prepare(`INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at`).run(email,otpHash(code),expires,0,new Date().toISOString());try{const info=await sendPasswordResetEmail(email,code);res.json({ok:true,emailSent:true,provider:info.provider});}catch(mailErr:any){db.prepare('DELETE FROM password_resets WHERE email=?').run(email);res.status(503).json({error:mailErr.message||'تعذر إرسال رسالة إعادة تعيين كلمة المرور.'});}}catch(e:any){res.status(500).json({error:e.message||'تعذر بدء استعادة كلمة المرور'});}});
+app.post('/api/auth/forgot-password',turnstileGuard,async(req,res)=>{try{const email=String(req.body.email||'').trim().toLowerCase();const row=db.prepare('SELECT id FROM users WHERE email=?').get(email) as any;if(!row)return res.json({ok:true,emailSent:false,message:'إذا كان البريد مسجلاً فستصلك تعليمات الاستعادة.'});const code=String(crypto.randomInt(100000,1000000)),expires=new Date(Date.now()+PASSWORD_RESET_MINUTES*60000).toISOString();db.prepare(`INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at`).run(email,otpHash(code),expires,0,new Date().toISOString());try{const info=await sendPasswordResetEmail(email,code);res.json({ok:true,emailSent:true,provider:info.provider});}catch(mailErr:any){db.prepare('DELETE FROM password_resets WHERE email=?').run(email);res.status(503).json({error:mailErr.message||'تعذر إرسال رسالة إعادة تعيين كلمة المرور.'});}}catch(e:any){res.status(500).json({error:e.message||'تعذر بدء استعادة كلمة المرور'});}});
 app.post('/api/auth/reset-password',(req,res)=>{try{const email=String(req.body.email||'').trim().toLowerCase(),code=String(req.body.code||'').trim(),newPassword=String(req.body.newPassword||'');if(newPassword.length<8)return res.status(400).json({error:'كلمة المرور يجب أن تكون 8 أحرف على الأقل'});const reset=db.prepare('SELECT * FROM password_resets WHERE email=?').get(email) as any;if(!reset||new Date(reset.expires_at).getTime()<Date.now())return res.status(400).json({error:'رمز الاستعادة منتهي أو غير موجود'});if(reset.attempts>=5)return res.status(429).json({error:'تم تجاوز عدد المحاولات.'});db.prepare('UPDATE password_resets SET attempts=attempts+1 WHERE email=?').run(email);if(otpHash(code)!==reset.code_hash)return res.status(400).json({error:'رمز الاستعادة غير صحيح'});db.prepare('UPDATE users SET password_hash=? WHERE email=?').run(hashPassword(newPassword),email);db.prepare('DELETE FROM password_resets WHERE email=?').run(email);res.json({ok:true});}catch(e:any){res.status(500).json({error:e.message||'تعذر تغيير كلمة المرور'});}});
 app.post('/api/auth/logout',(req,res)=>{const h=String(req.headers.authorization||''),token=h.startsWith('Bearer ')?h.slice(7).trim():'';if(token)db.prepare('DELETE FROM sessions WHERE id=?').run(token);res.json({ok:true});});
 app.post('/api/auth/chat/request-otp', rateLimitGuard('phone-otp', 5, 60, (req) => [normalizePhone(req.body?.phone) || 'unknown', clientIp(req)]),async(req,res)=>{try{const user=authUser(req);if(!user)return res.status(401).json({error:'يجب تسجيل الدخول بالبريد أولاً'});const phone=normalizePhone(req.body.phone);if(phone.length<8)return res.status(400).json({error:'رقم الهاتف غير صحيح'});const taken=db.prepare('SELECT id FROM users WHERE phone=? AND id<>?').get(phone,user.id) as any;if(taken)return res.status(409).json({error:'رقم الهاتف مرتبط بحساب آخر'});try{const otpResult=await requestPhoneOtp(phone);res.json({ok:true,expiresAt:otpResult.expires,devCode:otpResult.devCode,smsProvider:otpResult.provider});}catch(err:any){return res.status(503).json({error:err.message||'تعذر إرسال SMS'});}}catch(e:any){res.status(500).json({error:e.message||'تعذر إرسال رمز التحقق'});}});
@@ -1712,7 +1730,11 @@ app.get("/api/live/news", async (req, res) => {
     const category = String(req.query.category || "general");
     const max = String(req.query.max || "10");
 
-    if (key) {
+    // B-7: the GNews daily quota is spent server-side and is limited — only
+    // signed-in sessions may consume it. Anonymous visitors get the free
+    // Google News RSS path below without touching the key at all.
+    const session = authUser(req);
+    if (key && session) {
       try {
         const data = await fetchJson(`https://gnews.io/api/v4/top-headlines?category=${encodeURIComponent(category)}&lang=${encodeURIComponent(lang)}&country=${encodeURIComponent(country)}&max=${max}&apikey=${encodeURIComponent(key)}`);
         const payload = { source: "gnews", configured: true, fetchedAt: new Date().toISOString(), articles: data.articles || [], status: "LIVE" }; setCache(`news:${lang}:${country}:${category}`, payload, 5*60*1000); setServiceStatus("news","LIVE","gnews","Fresh provider data"); return res.json(payload);
@@ -1759,6 +1781,10 @@ app.get("/api/live/weather", async (req, res) => {
 
 app.get('/api/sports/exercises', async (req, res) => {
   try {
+    // B-7: this endpoint spends the server-side RapidAPI quota — anonymous
+    // visitors must not be able to burn it. Signed-in sessions only.
+    const caller = authUser(req);
+    if (!caller) return res.status(401).json({ error: 'هذه الخدمة تتطلب تسجيل الدخول.' });
     const key = process.env.RAPIDAPI_KEY;
     if (!key) return res.status(503).json({ error: 'RAPIDAPI_KEY غير مضبوط في متغيرات البيئة' });
     const bodyPart = typeof req.query.bodyPart === 'string' ? req.query.bodyPart : '';
@@ -1777,6 +1803,10 @@ app.get('/api/sports/exercises', async (req, res) => {
 });
 
 app.get("/api/live/sports", async (req, res) => {
+  // B-7: API-Football quota is server-side and finite — require a session.
+  if (!authUser(req)) {
+    return res.status(401).json({ error: "هذه الخدمة تتطلب تسجيل الدخول." });
+  }
   const key = process.env.API_FOOTBALL_KEY;
   if (!key) {
     return res.json({ source: "unconfigured", matches: [], configured: false, fetchedAt: new Date().toISOString() });
