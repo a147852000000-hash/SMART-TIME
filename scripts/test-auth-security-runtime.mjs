@@ -198,6 +198,49 @@ try {
   });
   assert.equal(expiredSelection.status, 401, 'expired role-choice tickets must be rejected');
 
+  // Password reset: unknown emails must not create accounts.
+  const unknownReset = await request(baseUrl, '/api/auth/forgot-password', {
+    method: 'POST',
+    body: { email: 'not-registered@example.invalid' },
+  });
+  assert.equal(unknownReset.status, 404);
+  assert.equal(unknownReset.data.code, 'EMAIL_NOT_REGISTERED');
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM users WHERE email=?').get('not-registered@example.invalid').count, 0);
+
+  // Successful reset must invalidate every previously issued session for that account.
+  const resetLoginA = await request(baseUrl, '/api/auth/login', {
+    method: 'POST',
+    body: { identifier: 'auth_test_user', password: userPassword },
+  });
+  const resetLoginB = await request(baseUrl, '/api/auth/login', {
+    method: 'POST',
+    body: { identifier: 'auth_test_user', password: userPassword },
+  });
+  assert.equal(resetLoginA.status, 200);
+  assert.equal(resetLoginB.status, 200);
+  const resetCode = '482961';
+  db.prepare(`INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at)
+    VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,
+    expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at`)
+    .run('auth-test-user@example.invalid', crypto.createHash('sha256').update(resetCode).digest('hex'),
+      new Date(Date.now() + 10 * 60_000).toISOString(), 0, new Date().toISOString());
+  const passwordReset = await request(baseUrl, '/api/auth/reset-password', {
+    method: 'POST',
+    body: { email: 'auth-test-user@example.invalid', code: resetCode, newPassword: 'New-Password-After-Reset-2026' },
+  });
+  assert.equal(passwordReset.status, 200);
+  assert.equal((await request(baseUrl, '/api/auth/me', { token: resetLoginA.data.token })).status, 401);
+  assert.equal((await request(baseUrl, '/api/auth/me', { token: resetLoginB.data.token })).status, 401);
+  assert.equal((await request(baseUrl, '/api/auth/login', {
+    method: 'POST',
+    body: { identifier: 'auth_test_user', password: userPassword },
+  })).status, 401);
+  const loginWithNewPassword = await request(baseUrl, '/api/auth/login', {
+    method: 'POST',
+    body: { identifier: 'auth_test_user', password: 'New-Password-After-Reset-2026' },
+  });
+  assert.equal(loginWithNewPassword.status, 200);
+
   db.close();
   console.log('Owner-role runtime integration tests passed: reserved registration, role-choice isolation/expiry/replay, owner-only APIs, admin assignment/removal, and role spoofing.');
 } catch (error) {
