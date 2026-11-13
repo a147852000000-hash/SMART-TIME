@@ -2,8 +2,12 @@ import { db } from "../../database.js";
 import { expandRecurringEvents } from "./recurrenceEngine.js";
 
 export interface PendingEventReminder {
-undefinedid: string;
-undefinedeventId: string;
+  // [FIX B-13] These two property names were corrupted into the literal names
+  // "undefinedid"/"undefinedeventId"; the SQL projection in
+  // listPendingEventReminders returns r.id and r.event_id as eventId, and the
+  // frontend contract (src/services/aiService.ts) uses exactly these names.
+  id: string;
+  eventId: string;
   userId: string;
   title: string;
   startAt: string;
