@@ -4,10 +4,37 @@ import { validateV2Output } from "../../../../backend/ai/training/v2StructuredOu
 import { executeToolAction } from "../../../../backend/ai/toolExecutor.js";
 import { buildSmartTimeData } from "../../../../backend/ai/appContext.js";
 import { formatSmartTimeKnowledge } from "../../../../backend/ai/smartTimeKnowledge.js";
+import { db } from "../../../../backend/database.js";
 
 const GROQ_CHAT_MODEL = String(process.env.GROQ_CHAT_MODEL || process.env.GROQ_MODEL || "openai/gpt-oss-120b").trim();
 const DEFAULT_USER_ID = "smart-time-trial-user";
 const MUTATING_TOOLS = new Set(["add_expense", "add_daily_task", "calendar.event.create"]);
+
+// [SECURITY A-3] Identity is resolved server-side from the session token
+// (Authorization: Bearer <token>). A client-supplied userId is never trusted,
+// so an unauthenticated caller can only ever reach the shared trial account
+// instead of writing into any user's expenses and tasks.
+function resolveSessionUser(request: Request): {
+  userId: string;
+  authenticated: boolean;
+  tokenPresent: boolean;
+} {
+  const header = request.headers.get("authorization") || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  if (token) {
+    try {
+      const row = db.prepare(`
+        SELECT u.id
+        FROM sessions s
+        JOIN users u ON u.id = s.user_id
+        WHERE s.id = ? AND julianday(s.expires_at) > julianday('now')
+      `).get(token) as { id?: string } | undefined;
+      if (row?.id) return { userId: String(row.id), authenticated: true, tokenPresent: true };
+    } catch {}
+    return { userId: DEFAULT_USER_ID, authenticated: false, tokenPresent: true };
+  }
+  return { userId: DEFAULT_USER_ID, authenticated: false, tokenPresent: false };
+}
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8" } });
@@ -44,7 +71,13 @@ export async function POST(request: Request): Promise<Response> {
     if (input.length > 4000) return json({ error: "input is too long" }, 413);
 
     const confirmed = body?.confirmed === true;
-    const userId = String(body?.userId || DEFAULT_USER_ID).trim() || DEFAULT_USER_ID;
+    // [SECURITY A-3] Ignore any client-supplied userId; identity comes from the
+    // session token only. A present-but-invalid token is rejected clearly so a
+    // signed-in user never silently writes into the shared trial account.
+    const { userId, authenticated, tokenPresent } = resolveSessionUser(request);
+    if (tokenPresent && !authenticated) {
+      return json({ error: "انتهت الجلسة، سجل الدخول من جديد" }, 401);
+    }
 
     let smartTimeData: Record<string, unknown> = {};
     try {
