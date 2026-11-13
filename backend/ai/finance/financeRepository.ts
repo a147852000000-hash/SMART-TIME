@@ -132,6 +132,11 @@ export function deleteCanonicalExpense(userId: string, expenseId: string): void 
   if (readExpense(uid, idValue)) throw new Error("Canonical finance delete verification failed");
 }
 
+/** Read one canonical expense for a user (camelCase projection), or null. */
+export function getCanonicalExpense(userId: string, expenseId: string): any {
+  return readExpense(text(userId, 200), text(expenseId, 200));
+}
+
 function fingerprint(row: any): string {
   return [
     text(row.title).toLowerCase(),
