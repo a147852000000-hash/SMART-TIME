@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { SmartAiVoiceConversationModal } from "../../src/components/SmartAiVoiceConversationModal";
 import { transcribeVoiceBlob } from "../../src/services/groqSttService";
-import { startTrialSession, getStoredSession } from "../../src/services/authService";
+import { startTrialSession, authHeaders } from "../../src/services/authService";
 import { StorageAdapter } from "../../src/services/storageAdapter";
 import { STORAGE_KEYS } from "../../src/services/storageKeys";
 
@@ -360,10 +360,9 @@ export default function SmartAIDemo() {
     try {
       const response = await fetch("/api/ai/infer", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
           input: text,
-          userId: getStoredSession()?.user.id,
           context: buildSmartTimeAiContext(),
           messages: messages.map((message) => ({ role: message.role, content: message.text })),
         }),

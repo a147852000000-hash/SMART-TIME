@@ -174,16 +174,35 @@ export function setupChatWebSocket(httpServer: http.Server) {
         if (type === 'join_room') {
           const { roomId } = payload || {};
           if (roomId) {
-            if (!roomSubscriptions.has(roomId)) {
-              roomSubscriptions.set(roomId, new Set());
-            }
-            roomSubscriptions.get(roomId)!.add(ws);
-            ws.rooms?.add(roomId);
+            // [SECURITY A-1] Joining a room requires an authenticated socket whose
+            // user has real access to that conversation (public rooms stay open to
+            // every authenticated non-banned user). Previously any socket could
+            // subscribe to any room id and silently read all of its traffic.
+            const access = ws.userId
+              ? verifyConversationAccess(ws.userId, roomId)
+              : { allowed: false };
+            if (!access.allowed) {
+              ws.send(JSON.stringify({
+                type: 'room_error',
+                payload: {
+                  roomId,
+                  message: ws.userId
+                    ? 'لا تملك صلاحية الوصول لهذه المحادثة'
+                    : 'يجب تسجيل الدخول قبل الانضمام للمحادثة',
+                },
+              }));
+            } else {
+              if (!roomSubscriptions.has(roomId)) {
+                roomSubscriptions.set(roomId, new Set());
+              }
+              roomSubscriptions.get(roomId)!.add(ws);
+              ws.rooms?.add(roomId);
 
-            ws.send(JSON.stringify({
-              type: 'joined_room',
-              payload: { roomId },
-            }));
+              ws.send(JSON.stringify({
+                type: 'joined_room',
+                payload: { roomId },
+              }));
+            }
           }
         }
 
@@ -247,22 +266,31 @@ export const chatRouter = express.Router();
 // 1. GET /api/chat/users - List users for direct chat or adding to group
 chatRouter.get('/users', (req, res) => {
   try {
+    // [SECURITY A-2] The user directory requires an authenticated session.
+    // Previously the endpoint returned every user's email and phone number
+    // to completely anonymous callers.
     const user = getAuthUser(req);
+    if (!user) {
+      return res.status(401).json({ error: 'يجب تسجيل الدخول لعرض المستخدمين' });
+    }
+
     const users = db.prepare(`
-      SELECT id, display_name as name, email, avatar, phone
+      SELECT id, display_name as name, email, avatar
       FROM users
       ORDER BY created_at DESC
       LIMIT 100
     `).all() as any[];
 
+    // [SECURITY A-2] Data minimisation: phone numbers are never part of the
+    // directory response; email stays available to signed-in users because
+    // the add-member modal searches and displays it (see AddMemberModal.tsx).
     const result = users.map((u) => ({
       id: u.id,
       name: u.name || u.email.split('@')[0],
       email: u.email,
       avatar: u.avatar || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80`,
-      phone: u.phone,
       isOnline: isUserOnline(u.id),
-      isCurrent: user ? user.id === u.id : false,
+      isCurrent: user.id === u.id,
     }));
 
     res.json({ users: result });
