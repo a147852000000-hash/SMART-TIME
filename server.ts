@@ -116,6 +116,45 @@ function publicUser(row:any){return {id:row.id,email:row.email,username:row.user
 function normalizePhone(phone:string){return String(phone||'').replace(/[\s()-]/g,'');}
 function normalizeUsername(username:string){return String(username||'').trim().toLowerCase();}
 function otpHash(code:string){return crypto.createHash('sha256').update(code).digest('hex');}
+function passwordResetHash(code:string){
+  const secret=String(process.env.PASSWORD_RESET_HMAC_SECRET||'').trim();
+  if(secret.length<32) throw new Error('PASSWORD_RESET_HMAC_SECRET must be configured with at least 32 characters.');
+  return crypto.createHmac('sha256',secret).update(code).digest('hex');
+}
+function consumePasswordResetRateLimit(email:string,ip:string){
+  const now=Date.now();
+  const policies=[
+    {scope:'ip',value:ip,limit:10,windowMs:15*60*1000},
+    {scope:'email',value:email,limit:3,windowMs:60*60*1000},
+  ];
+  const prepared=policies.map(policy=>({...policy,key:crypto.createHash('sha256').update(policy.scope+':'+policy.value).digest('hex')}));
+  db.exec('BEGIN IMMEDIATE');
+  try{
+    for(const policy of prepared){
+      const row=db.prepare('SELECT window_started_at,attempts FROM password_reset_rate_limits WHERE scope_key=?').get(policy.key) as any;
+      const started=row?new Date(row.window_started_at).getTime():0;
+      const active=Number.isFinite(started)&&now-started<policy.windowMs;
+      if(active&&Number(row.attempts)>=policy.limit){
+        const retryAfter=Math.max(1,Math.ceil((policy.windowMs-(now-started))/1000));
+        db.exec('ROLLBACK');
+        return {allowed:false,retryAfter};
+      }
+    }
+    for(const policy of prepared){
+      const row=db.prepare('SELECT window_started_at,attempts FROM password_reset_rate_limits WHERE scope_key=?').get(policy.key) as any;
+      const started=row?new Date(row.window_started_at).getTime():0;
+      const active=Number.isFinite(started)&&now-started<policy.windowMs;
+      if(active) db.prepare('UPDATE password_reset_rate_limits SET attempts=attempts+1 WHERE scope_key=?').run(policy.key);
+      else db.prepare('INSERT INTO password_reset_rate_limits(scope_key,window_started_at,attempts) VALUES(?,?,1) ON CONFLICT(scope_key) DO UPDATE SET window_started_at=excluded.window_started_at,attempts=1').run(policy.key,new Date(now).toISOString());
+    }
+    db.prepare("DELETE FROM password_reset_rate_limits WHERE window_started_at < ?").run(new Date(now-24*60*60*1000).toISOString());
+    db.exec('COMMIT');
+    return {allowed:true,retryAfter:0};
+  }catch(error){
+    try{db.exec('ROLLBACK');}catch{}
+    throw error;
+  }
+}
 async function sendSms(phone:string, code:string){
   const provider=String(process.env.SMS_PROVIDER||'').trim().toLowerCase();
   const body=`رمز التحقق من SMART TIME هو: ${code}. صالح لمدة 5 دقائق.`;
@@ -341,8 +380,46 @@ app.post('/api/auth/owner/activate',(req,res)=>{
 });
 app.post('/api/auth/phone-login/request-otp',async(req,res)=>{try{const phone=normalizePhone(req.body.phone);if(phone.length<8)return res.status(400).json({error:'رقم الهاتف غير صحيح'});const row=db.prepare('SELECT id FROM users WHERE phone=? AND phone_verified=1').get(phone) as any;if(!row)return res.status(404).json({error:'هذا الرقم غير مرتبط بحساب موثق.'});try{const otpResult=await requestPhoneOtp(phone);res.json({ok:true,expiresAt:otpResult.expires,devCode:otpResult.devCode,smsProvider:otpResult.provider});}catch(err:any){return res.status(503).json({error:err.message||'تعذر إرسال SMS'});}}catch(e:any){res.status(500).json({error:e.message||'تعذر إرسال رمز SMS'});}});
 app.post('/api/auth/phone-login',async(req,res)=>{try{const phone=normalizePhone(req.body.phone),code=String(req.body.code||'').trim();const check=await checkPhoneOtp(phone,code);if(!check.ok)return res.status(check.status).json({error:check.error});const row=db.prepare('SELECT * FROM users WHERE phone=? AND phone_verified=1').get(phone) as any;if(!row)return res.status(404).json({error:'هذا الرقم غير مرتبط بحساب موثق.'});db.prepare('DELETE FROM phone_otps WHERE phone=?').run(phone);res.json({token:createSession(row.id),user:publicUser({...row,name:row.display_name,phoneVerified:row.phone_verified})});}catch(e:any){res.status(500).json({error:e.message||'تعذر تسجيل الدخول بالهاتف'});}});
-app.post('/api/auth/forgot-password',async(req,res)=>{try{const email=String(req.body.email||'').trim().toLowerCase();const row=db.prepare('SELECT id FROM users WHERE email=?').get(email) as any;if(!row)return res.status(404).json({ok:false,emailSent:false,code:'EMAIL_NOT_REGISTERED',message:'هذا البريد الإلكتروني غير مسجل. أنشئ حسابًا جديدًا للمتابعة.'});const code=String(crypto.randomInt(100000,1000000)),expires=new Date(Date.now()+PASSWORD_RESET_MINUTES*60000).toISOString();db.prepare(`INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at`).run(email,otpHash(code),expires,0,new Date().toISOString());try{const info=await sendPasswordResetEmail(email,code);res.json({ok:true,emailSent:true,provider:info.provider});}catch(mailErr:any){db.prepare('DELETE FROM password_resets WHERE email=?').run(email);res.status(503).json({error:mailErr.message||'تعذر إرسال رسالة إعادة تعيين كلمة المرور.'});}}catch(e:any){res.status(500).json({error:e.message||'تعذر بدء استعادة كلمة المرور'});}});
-app.post('/api/auth/reset-password',(req,res)=>{try{const email=String(req.body.email||'').trim().toLowerCase(),code=String(req.body.code||'').trim(),newPassword=String(req.body.newPassword||'');if(newPassword.length<8)return res.status(400).json({error:'كلمة المرور يجب أن تكون 8 أحرف على الأقل'});const reset=db.prepare('SELECT * FROM password_resets WHERE email=?').get(email) as any;if(!reset||new Date(reset.expires_at).getTime()<Date.now())return res.status(400).json({error:'رمز الاستعادة منتهي أو غير موجود'});if(reset.attempts>=5)return res.status(429).json({error:'تم تجاوز عدد المحاولات.'});db.prepare('UPDATE password_resets SET attempts=attempts+1 WHERE email=?').run(email);if(otpHash(code)!==reset.code_hash)return res.status(400).json({error:'رمز الاستعادة غير صحيح'});db.exec('BEGIN IMMEDIATE');try{db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hashPassword(newPassword),reset.user_id||db.prepare('SELECT id FROM users WHERE email=?').get(email)?.id);const account=db.prepare('SELECT id FROM users WHERE email=?').get(email) as any;if(!account)throw new Error('الحساب غير موجود.');db.prepare('DELETE FROM sessions WHERE user_id=?').run(account.id);db.prepare('DELETE FROM password_resets WHERE email=?').run(email);db.exec('COMMIT');}catch(transactionError){db.exec('ROLLBACK');throw transactionError;}res.json({ok:true,message:'تم تغيير كلمة المرور. سجّل الدخول من جديد.'});}catch(e:any){res.status(500).json({error:e.message||'تعذر تغيير كلمة المرور'});}});
+app.post('/api/auth/forgot-password',async(req,res)=>{
+  try{
+    const email=String(req.body.email||'').trim().toLowerCase();
+    if(!email||email.length>254||!/^\S+@\S+\.\S+$/.test(email))return res.status(400).json({error:'البريد الإلكتروني غير صحيح.'});
+    if(String(process.env.PASSWORD_RESET_HMAC_SECRET||'').trim().length<32)return res.status(503).json({error:'خدمة استعادة كلمة المرور غير مهيأة بأمان.'});
+    const forwardedIp=String(req.get('cf-connecting-ip')||'').trim();
+    const clientIp=(forwardedIp&&!forwardedIp.includes(',')&&forwardedIp.length<=64)?forwardedIp:String(req.ip||req.socket.remoteAddress||'unknown');
+    const rate=consumePasswordResetRateLimit(email,clientIp);
+    if(!rate.allowed)return res.set('Retry-After',String(rate.retryAfter)).status(429).json({error:'تم تجاوز عدد طلبات الاستعادة. حاول مرة أخرى لاحقًا.'});
+    const row=db.prepare('SELECT id FROM users WHERE email=?').get(email) as any;
+    if(!row)return res.status(404).json({ok:false,emailSent:false,code:'EMAIL_NOT_REGISTERED',message:'هذا البريد الإلكتروني غير مسجل. أنشئ حسابًا جديدًا للمتابعة.'});
+    const code=String(crypto.randomInt(100000,1000000)),expires=new Date(Date.now()+PASSWORD_RESET_MINUTES*60000).toISOString();
+    db.prepare(`INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at`).run(email,passwordResetHash(code),expires,0,new Date().toISOString());
+    try{const info=await sendPasswordResetEmail(email,code);res.json({ok:true,emailSent:true,provider:info.provider});}
+    catch(mailErr:any){db.prepare('DELETE FROM password_resets WHERE email=?').run(email);res.status(503).json({error:mailErr.message||'تعذر إرسال رسالة إعادة تعيين كلمة المرور.'});}
+  }catch(e:any){res.status(500).json({error:e.message||'تعذر بدء استعادة كلمة المرور'});}
+});
+app.post('/api/auth/reset-password',(req,res)=>{
+  try{
+    const email=String(req.body.email||'').trim().toLowerCase(),code=String(req.body.code||'').trim(),newPassword=String(req.body.newPassword||'');
+    if(newPassword.length<8)return res.status(400).json({error:'كلمة المرور يجب أن تكون 8 أحرف على الأقل'});
+    if(String(process.env.PASSWORD_RESET_HMAC_SECRET||'').trim().length<32)return res.status(503).json({error:'خدمة استعادة كلمة المرور غير مهيأة بأمان.'});
+    const reset=db.prepare('SELECT * FROM password_resets WHERE email=?').get(email) as any;
+    if(!reset||new Date(reset.expires_at).getTime()<Date.now())return res.status(400).json({error:'رمز الاستعادة منتهي أو غير موجود'});
+    if(reset.attempts>=5)return res.status(429).json({error:'تم تجاوز عدد المحاولات.'});
+    db.prepare('UPDATE password_resets SET attempts=attempts+1 WHERE email=?').run(email);
+    const expected=Buffer.from(String(reset.code_hash||''),'hex'),actual=Buffer.from(passwordResetHash(code),'hex');
+    if(expected.length!==actual.length||!crypto.timingSafeEqual(expected,actual))return res.status(400).json({error:'رمز الاستعادة غير صحيح'});
+    db.exec('BEGIN IMMEDIATE');
+    try{
+      const account=db.prepare('SELECT id FROM users WHERE email=?').get(email) as any;
+      if(!account)throw new Error('الحساب غير موجود.');
+      db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hashPassword(newPassword),account.id);
+      db.prepare('DELETE FROM sessions WHERE user_id=?').run(account.id);
+      db.prepare('DELETE FROM password_resets WHERE email=?').run(email);
+      db.exec('COMMIT');
+    }catch(transactionError){db.exec('ROLLBACK');throw transactionError;}
+    res.json({ok:true,message:'تم تغيير كلمة المرور. سجّل الدخول من جديد.'});
+  }catch(e:any){res.status(500).json({error:e.message||'تعذر تغيير كلمة المرور'});}
+});
 app.post('/api/auth/logout',(req,res)=>{const h=String(req.headers.authorization||''),token=h.startsWith('Bearer ')?h.slice(7).trim():'';if(token)db.prepare('DELETE FROM sessions WHERE id=?').run(token);res.json({ok:true});});
 app.post('/api/auth/chat/request-otp',async(req,res)=>{try{const user=authUser(req);if(!user)return res.status(401).json({error:'يجب تسجيل الدخول بالبريد أولاً'});const phone=normalizePhone(req.body.phone);if(phone.length<8)return res.status(400).json({error:'رقم الهاتف غير صحيح'});const taken=db.prepare('SELECT id FROM users WHERE phone=? AND id<>?').get(phone,user.id) as any;if(taken)return res.status(409).json({error:'رقم الهاتف مرتبط بحساب آخر'});try{const otpResult=await requestPhoneOtp(phone);res.json({ok:true,expiresAt:otpResult.expires,devCode:otpResult.devCode,smsProvider:otpResult.provider});}catch(err:any){return res.status(503).json({error:err.message||'تعذر إرسال SMS'});}}catch(e:any){res.status(500).json({error:e.message||'تعذر إرسال رمز التحقق'});}});
 app.post('/api/auth/chat/verify-otp',async(req,res)=>{try{const user=authUser(req);if(!user)return res.status(401).json({error:'جلسة الدخول غير صالحة'});const phone=normalizePhone(req.body.phone),code=String(req.body.code||'').trim();const check=await checkPhoneOtp(phone,code);if(!check.ok)return res.status(check.status).json({error:check.error});db.prepare('UPDATE users SET phone=?,phone_verified=1 WHERE id=?').run(phone,user.id);db.prepare('DELETE FROM phone_otps WHERE phone=?').run(phone);const refreshed=db.prepare('SELECT id,email,username,display_name as name,phone,phone_verified as phoneVerified,activation_status FROM users WHERE id=?').get(user.id) as any;res.json({token:createSession(user.id),user:publicUser(refreshed)});}catch(e:any){res.status(500).json({error:e.message||'تعذر تأكيد الرقم'});}});
