@@ -1,5 +1,6 @@
 import express from "express";
 import http from "node:http";
+import fs from "node:fs";
 import path from "path";
 import dotenv from "dotenv";
 import crypto from "node:crypto";
@@ -8,6 +9,8 @@ import { db, seedDefaultChatRooms } from "./backend/database.js";
 import { getCache, setCache } from "./backend/cache.js";
 import { getServiceStatuses, seedServiceStatuses, setServiceStatus } from "./backend/serviceStatus.js";
 import { chatRouter, setupChatWebSocket } from "./backend/chatServer.js";
+import { createCanonicalExpense, deleteCanonicalExpense, getCanonicalExpense, FINANCE_EXPENSE_TYPES, type FinanceExpenseType } from "./backend/ai/finance/financeRepository.js";
+import { getAiCanonicalState } from "./backend/ai/finance/aiCanonicalProjection.js";
 import { estimateProviderPrice, type RideProvider, type RideCategory } from "./src/services/ridePriceEstimator.js";
 import { askSmartAiCore } from "./backend/ai/smartAiCore.js";
 import { isLocalSmartAiConfigured } from "./backend/ai/localInference.js";
@@ -76,8 +79,11 @@ app.use((req, res, next) => {
   const allowed =
     !origin ||
     /^https:\/\/([a-z0-9-]+\.)*vercel\.app$/i.test(origin) ||
-    /^https?:\/\/localhost(?::\\d+)?$/i.test(origin) ||
-    /^https?:\/\/127\.0\.0\.1(?::\\d+)?$/i.test(origin);
+    // [FIX B-4] These are regex literals: a doubled backslash (\\d) matched a
+    // literal "\d" string, so real ports like localhost:3000 / 127.0.0.1:5173
+    // were wrongly rejected by CORS during development and testing.
+    /^https?:\/\/localhost(?::\d+)?$/i.test(origin) ||
+    /^https?:\/\/127\.0\.0\.1(?::\d+)?$/i.test(origin);
 
   if (allowed && origin) {
     res.setHeader("Access-Control-Allow-Origin", origin);
@@ -1608,7 +1614,11 @@ async function fetchGoogleNewsRss(lang: string) {
   const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
   return items.slice(0, 15).map((m) => {
     const block = m[1];
-    const get = (tag: string) => stripXml(block.match(new RegExp(`<${tag}>([\s\S]*?)<\/${tag}>`))?.[1] || "");
+    // [FIX B-5] This RegExp is built from a template literal, so "\s" and "\S"
+    // lose their backslashes to string escaping and degrade into the character
+    // class [sS] — which matches only the letters s/S and made every RSS tag
+    // parse to an empty string (the news fallback returned zero articles).
+    const get = (tag: string) => stripXml(block.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`))?.[1] || "");
     const source = get("source");
     const url = get("link");
     const title = get("title");
@@ -1704,10 +1714,106 @@ app.get("/api/live/sports", async (req, res) => {
   }
 });
 
+// [FIX phase3] Canonical finance expense mutations — the endpoints the phase-5
+// docs, the frontend financeService, and scripts/test-phase3-api.mjs expect.
+// Protected like every other user-data route; writes go through the canonical
+// repository (ownership enforced inside it).
+app.post("/api/finance/expenses", (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  try {
+    const body = req.body || {};
+    const requestedType = String(body.type || "personal").trim();
+    const result = createCanonicalExpense(user.id, {
+      type: (FINANCE_EXPENSE_TYPES as readonly string[]).includes(requestedType)
+        ? (requestedType as FinanceExpenseType)
+        : "personal",
+      title: String(body.title || "").trim(),
+      amount: Number(body.amount),
+      category: String(body.category || "personal").trim(),
+      date: String(body.date || new Date().toISOString().slice(0, 10)),
+      paymentMethod: String(body.paymentMethod || "cash").trim(),
+      receiptUrl: body.receiptUrl ? String(body.receiptUrl) : undefined,
+      notes: body.notes == null ? null : String(body.notes),
+    });
+    const record = getCanonicalExpense(user.id, result.id);
+    res.status(201).json({ ok: true, persisted: result.persisted, record });
+  } catch (e: any) {
+    const message = e instanceof Error ? e.message : "تعذر حفظ المصروف.";
+    const badRequest = /Invalid|required|is invalid|userId is required/.test(message);
+    res.status(badRequest ? 400 : 500).json({ error: message });
+  }
+});
+
+app.delete("/api/finance/expenses/:expenseId", (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  try {
+    deleteCanonicalExpense(user.id, String(req.params.expenseId || ""));
+    res.json({ ok: true, deleted: true });
+  } catch (e: any) {
+    const message = e instanceof Error ? e.message : "تعذر حذف المصروف.";
+    const notFound = /not found/i.test(message);
+    res.status(notFound ? 404 : 500).json({ error: message });
+  }
+});
+
+// [FIX phase3] AI state projection over the canonical finance tables — the
+// read adapter asserted by scripts/test-phase3-api.mjs (create -> read-back ->
+// delete) and consumed by the AI surfaces.
+app.get("/api/ai/state", (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  try {
+    res.json(getAiCanonicalState(user.id));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || "تعذر قراءة حالة الذكاء الاصطناعي." });
+  }
+});
+
+// [FIX phase3] Canonical finance overview (read-only) — the endpoint the
+// phase-5 docs and the frontend financeService expect. It is protected like
+// every other user-data route: no session, no data. Mutations stay with the
+// existing canonical flows (toolExecutor / financeRepository).
+app.get("/api/finance/overview", (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  try {
+    const userId = user.id;
+    const expenses = db.prepare("SELECT * FROM finance_expenses WHERE user_id = ? ORDER BY date DESC, created_at DESC").all(userId);
+    const monthlyIncome = db.prepare("SELECT * FROM finance_monthly_income WHERE user_id = ? ORDER BY month DESC").all(userId);
+    const bankCertificates = db.prepare("SELECT * FROM finance_bank_certificates WHERE user_id = ? ORDER BY issue_date DESC").all(userId);
+    const fuelRecords = db.prepare("SELECT * FROM finance_fuel_records WHERE user_id = ? ORDER BY date DESC").all(userId);
+    const maintenanceRecords = db.prepare("SELECT * FROM finance_maintenance_records WHERE user_id = ? ORDER BY date DESC").all(userId);
+    const educationExpenses = db.prepare("SELECT * FROM finance_education_expenses WHERE user_id = ? ORDER BY date DESC").all(userId);
+    res.json({
+      source: "smart-time-finance-sqlite",
+      expenses,
+      monthlyIncome,
+      bankCertificates,
+      fuelRecords,
+      maintenanceRecords,
+      educationExpenses,
+      fetchedAt: new Date().toISOString(),
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || "تعذر قراءة بيانات التمويل." });
+  }
+});
+
 // ----------------------------------------------------
 // 6. Vite Integration
 // ----------------------------------------------------
 async function startServer() {
+  // [FIX] Unknown /api paths must answer 404 JSON instead of falling through
+  // to the SPA fallback, which served index.html with HTTP 200 and made
+  // missing endpoints look healthy (e.g. /api/finance/overview in
+  // scripts/test-phase3-api.mjs reported "accepted missing auth: HTTP 200").
+  // Mounted after every API route, so real endpoints are unaffected.
+  app.use("/api", (req, res) => {
+    res.status(404).json({ error: "Unknown API endpoint." });
+  });
+
   if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
@@ -1716,10 +1822,17 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
+    // [FIX B-1] The Vite client build outputs to dist/client (vite.config.ts),
+    // not dist/. Serving dist/ pointed at the server bundle directory instead
+    // of the SPA and broke the whole frontend in production (Oracle).
+    const distPath = path.join(process.cwd(), "dist", "client");
+    const spaIndex = path.join(distPath, "index.html");
+    if (!fs.existsSync(spaIndex)) {
+      console.warn("[SMART TIME] dist/client/index.html not found — run `npm run build` before serving production assets.");
+    }
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      res.sendFile(spaIndex);
     });
   }
 
