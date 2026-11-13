@@ -501,7 +501,17 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
         showToast(isAr ? 'تم استعادة البيانات بنجاح!' : 'Backup restored successfully!');
         setTimeout(() => window.location.reload(), 1000);
       } else {
-        alert(isAr ? 'ملف النسخة الاحتياطية غير صالح' : 'Invalid backup file');
+        const reason = BackupRepository.getLastImportError();
+        const storageFailure = reason === 'STORAGE_WRITE_FAILED' || reason === 'WRITE_ERROR';
+        alert(
+          storageFailure
+            ? isAr
+              ? 'تعذر حفظ البيانات في التخزين المحلي (مساحة ممتلئة أو التخزين محجوب) — لم يتم تغيير بياناتك الحالية.'
+              : 'Could not write to local storage (full or blocked) — your current data was left unchanged.'
+            : isAr
+              ? 'ملف النسخة الاحتياطية غير صالح — لم يتم تغيير بياناتك الحالية.'
+              : 'Invalid backup file — your current data was left unchanged.'
+        );
       }
     };
     reader.readAsText(file);
