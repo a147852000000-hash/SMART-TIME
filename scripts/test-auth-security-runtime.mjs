@@ -14,6 +14,7 @@ let child;
 let output = '';
 let server;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const testResetSecret = 'test-only-secret-for-password-reset-hmac-2026-11';
 
 async function freePort() {
   return await new Promise((resolve, reject) => {
@@ -71,6 +72,7 @@ try {
       SMTP_HOST: '',
       SMTP_USER: '',
       SMTP_PASS: '',
+      PASSWORD_RESET_HMAC_SECRET: testResetSecret,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -198,8 +200,66 @@ try {
   });
   assert.equal(expiredSelection.status, 401, 'expired role-choice tickets must be rejected');
 
+  // Password reset: unknown emails must not create accounts.
+  const unknownReset = await request(baseUrl, '/api/auth/forgot-password', {
+    method: 'POST',
+    body: { email: 'not-registered@example.invalid' },
+  });
+  assert.equal(unknownReset.status, 404);
+  assert.equal(unknownReset.data.code, 'EMAIL_NOT_REGISTERED');
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM users WHERE email=?').get('not-registered@example.invalid').count, 0);
+  const unknownResetSecond = await request(baseUrl, '/api/auth/forgot-password', {
+    method: 'POST',
+    body: { email: 'not-registered@example.invalid' },
+  });
+  const unknownResetThird = await request(baseUrl, '/api/auth/forgot-password', {
+    method: 'POST',
+    body: { email: 'not-registered@example.invalid' },
+  });
+  const unknownResetThrottled = await request(baseUrl, '/api/auth/forgot-password', {
+    method: 'POST',
+    body: { email: 'not-registered@example.invalid' },
+  });
+  assert.equal(unknownResetSecond.status, 404);
+  assert.equal(unknownResetThird.status, 404);
+  assert.equal(unknownResetThrottled.status, 429, 'password reset requests must be throttled per email');
+
+  // Successful reset must invalidate every previously issued session for that account.
+  const resetLoginA = await request(baseUrl, '/api/auth/login', {
+    method: 'POST',
+    body: { identifier: 'auth_test_user', password: userPassword },
+  });
+  const resetLoginB = await request(baseUrl, '/api/auth/login', {
+    method: 'POST',
+    body: { identifier: 'auth_test_user', password: userPassword },
+  });
+  assert.equal(resetLoginA.status, 200);
+  assert.equal(resetLoginB.status, 200);
+  const resetCode = '482961';
+  db.prepare(`INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at)
+    VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,
+    expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at`)
+    .run('auth-test-user@example.invalid', crypto.createHmac('sha256', testResetSecret).update(resetCode).digest('hex'),
+      new Date(Date.now() + 10 * 60_000).toISOString(), 0, new Date().toISOString());
+  const passwordReset = await request(baseUrl, '/api/auth/reset-password', {
+    method: 'POST',
+    body: { email: 'auth-test-user@example.invalid', code: resetCode, newPassword: 'New-Password-After-Reset-2026' },
+  });
+  assert.equal(passwordReset.status, 200);
+  assert.equal((await request(baseUrl, '/api/auth/me', { token: resetLoginA.data.token })).status, 401);
+  assert.equal((await request(baseUrl, '/api/auth/me', { token: resetLoginB.data.token })).status, 401);
+  assert.equal((await request(baseUrl, '/api/auth/login', {
+    method: 'POST',
+    body: { identifier: 'auth_test_user', password: userPassword },
+  })).status, 401);
+  const loginWithNewPassword = await request(baseUrl, '/api/auth/login', {
+    method: 'POST',
+    body: { identifier: 'auth_test_user', password: 'New-Password-After-Reset-2026' },
+  });
+  assert.equal(loginWithNewPassword.status, 200);
+
   db.close();
-  console.log('Owner-role runtime integration tests passed: reserved registration, role-choice isolation/expiry/replay, owner-only APIs, admin assignment/removal, and role spoofing.');
+  console.log('Auth runtime integration tests passed: owner-role isolation, unknown-email non-creation, reset throttling, HMAC reset-code verification, password update, and session revocation.');
 } catch (error) {
   console.error(error);
   process.exitCode = 1;

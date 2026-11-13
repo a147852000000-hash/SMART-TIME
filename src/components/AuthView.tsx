@@ -22,6 +22,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
   const [guestBusy, setGuestBusy] = useState(false);
   const [error, setError] = useState('');
   const [resetSent, setResetSent] = useState(false);
+  const [showRegisterPrompt, setShowRegisterPrompt] = useState(false);
   const [roleChoiceTicket, setRoleChoiceTicket] = useState('');
   const [showRoleChoice, setShowRoleChoice] = useState(false);
   const [emailExistsInRailway, setEmailExistsInRailway] = useState(false);
@@ -39,7 +40,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
       setGuestBusy(false);
     }
   };
-  const switchMode = (next: Mode) => { setMode(next); clearError(); setCode(''); setResetSent(false); };
+  const switchMode = (next: Mode) => { setMode(next); clearError(); setCode(''); setResetSent(false); setShowRegisterPrompt(false); };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setError(''); setBusy(true);
@@ -63,12 +64,12 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
           setCode('');
           if (d.emailSent === true) {
             setResetSent(true);
+            setShowRegisterPrompt(false);
             setError('تم إرسال كود استعادة كلمة المرور إلى بريدك الإلكتروني');
           } else {
-            // Do not show a code-entry form unless the backend confirms email submission.
-            // Keep the response neutral so the UI does not reveal whether an account exists.
             setResetSent(false);
-            setError(d.message || 'لو البريد الإلكتروني مرتبط بحساب، هيوصلك كود استعادة كلمة المرور.');
+            setShowRegisterPrompt(true);
+            setError(d.message || 'هذا البريد الإلكتروني غير مسجل. أنشئ حسابًا جديدًا للمتابعة.');
           }
           return;
         }
@@ -88,7 +89,9 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
     } catch (err:any) {
       const message = err?.message || 'تعذر تنفيذ العملية.';
       if (mode === 'forgot' && message.includes('غير مسجل')) {
-        setError('لو البريد الإلكتروني مرتبط بحساب، هيوصلك كود استعادة كلمة المرور.');
+        setResetSent(false);
+        setShowRegisterPrompt(true);
+        setError(message);
       } else {
         if (mode === 'register' && /مسجل بالفعل|already exists/i.test(message)) {
           setEmailExistsInRailway(true);
@@ -183,6 +186,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
             ) : null}
 
             {error && <div role="alert" className={`rounded-xl p-3 text-sm font-medium ${error.includes('تم ') ? 'border border-emerald-200 bg-emerald-50 text-emerald-700' : 'border border-red-200 bg-red-50 text-red-700'}`}>{error}</div>}
+            {mode === 'forgot' && showRegisterPrompt && <button type="button" onClick={()=>switchMode('register')} className="w-full rounded-xl border border-amber-200 bg-amber-50 py-3 text-sm font-semibold text-amber-900">إنشاء حساب جديد</button>}
 
             <button disabled={busy || (mode === 'register' && emailExistsInRailway)} className="flex h-10 sm:h-[72px] w-full items-center justify-center rounded-full bg-[#090909] px-4 font-semibold text-[14px] sm:text-[24px] text-[#D6AD52] shadow-[0_8px_20px_rgba(0,0,0,0.08)] transition hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C5A059] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
               {busy?'Please wait…':mode==='register'?'Create account':mode==='forgot'?(resetSent?'Reset password':'Send reset code'):'Sign In'}

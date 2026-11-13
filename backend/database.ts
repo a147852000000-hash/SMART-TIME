@@ -252,6 +252,7 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS phone_otps (phone TEXT PRIMARY KEY, co
 try { db.exec('ALTER TABLE phone_otps ADD COLUMN remote_provider TEXT'); } catch {}
 try { db.exec('ALTER TABLE phone_otps ADD COLUMN remote_verification_id TEXT'); } catch {}
 try { db.exec(`CREATE TABLE IF NOT EXISTS password_resets (email TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires_at TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)`); } catch {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS password_reset_rate_limits (scope_key TEXT PRIMARY KEY, window_started_at TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0)`); } catch {}
 
 // Safe migrations for conversations
 try { db.exec('ALTER TABLE conversations ADD COLUMN title TEXT'); } catch {}
