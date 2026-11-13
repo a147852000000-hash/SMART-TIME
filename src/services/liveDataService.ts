@@ -1,4 +1,5 @@
 import { apiUrl } from './apiConfig';
+import { authHeaders } from './authService';
 
 export interface LiveMarketData {
   source: string;
@@ -37,7 +38,10 @@ export async function fetchLiveMarket(signal?: AbortSignal): Promise<LiveMarketD
 
 export async function fetchLiveNews(language: 'ar' | 'en'): Promise<LiveNewsArticle[]> {
   try {
-    const res = await fetch(apiUrl(`/api/live/news?lang=${language}&country=eg&category=general&max=10`));
+    // B-7: the GNews branch is reserved for signed-in sessions; anonymous
+    // callers get the free RSS fallback server-side. authHeaders() is empty
+    // for guests, so this is safe either way.
+    const res = await fetch(apiUrl(`/api/live/news?lang=${language}&country=eg&category=general&max=10`), { headers: { ...authHeaders() } });
     if (!res.ok) return [];
     const data = await res.json();
     return data.articles || [];
@@ -48,7 +52,7 @@ export async function fetchLiveNews(language: 'ar' | 'en'): Promise<LiveNewsArti
 
 export async function fetchLiveSports(): Promise<LiveSportsMatch[]> {
   try {
-    const res = await fetch(apiUrl('/api/live/sports?live=all'));
+    const res = await fetch(apiUrl('/api/live/sports?live=all'), { headers: { ...authHeaders() } });
     if (!res.ok) return [];
     const data = await res.json();
     return data.matches || [];
