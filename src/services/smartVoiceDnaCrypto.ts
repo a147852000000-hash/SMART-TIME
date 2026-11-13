@@ -91,7 +91,10 @@ export async function createEncryptedVoiceDnaPackage(input: { audio: Blob; recip
   const contentKey = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt","decrypt"]);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, contentKey, new Uint8Array(await input.audio.arrayBuffer()));
-  const wrappedKey = await crypto.subtle.wrapKey("raw", contentKey, recipientKey, { name: "RSA-OAEP" });
+  // The OAEP digest must be explicit on BOTH wrap and unwrap sides: some
+  // engines default a missing hash to SHA-1, which produces a wrapped key
+  // the SHA-256 unwrap below can never open (sender/recipient mismatch).
+  const wrappedKey = await crypto.subtle.wrapKey("raw", contentKey, recipientKey, { name: "RSA-OAEP", hash: "SHA-256" } as any);
   return { wrappedKey: toBase64(new Uint8Array(wrappedKey)), iv: toBase64(iv), ciphertext: toBase64(new Uint8Array(ciphertext)), mimeType: input.audio.type || "audio/webm" };
 }
 export async function uploadEncryptedVoiceDnaPackage(input: { profileId: string; shareId: string; recipientUserId: string; audio: Blob }): Promise<void> {
