@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { printCurrentPage, openPrintWindow } from '../../utils/printExport';
 import {
   ArrowRight,
   ArrowLeft,
@@ -286,7 +287,7 @@ export const IncomeAndCertificatesSection: React.FC<IncomeAndCertificatesSection
   };
 
   const exportCurrentAccount = (type: 'csv' | 'print') => {
-    if (type === 'print') { window.print(); return; }
+    if (type === 'print') { printCurrentPage(); return; } // [FIX batch8]
     const rows = currentAccountTransactions.map(x => [x.type === 'current_withdrawal' ? 'سحب' : 'إيداع', x.source, x.amount, x.date]);
     const csv = '\uFEFF' + [['النوع','الوصف','القيمة','التاريخ'], ...rows].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`current-account-${selectedMonth}.csv`; a.click(); URL.revokeObjectURL(url);
@@ -371,7 +372,7 @@ export const IncomeAndCertificatesSection: React.FC<IncomeAndCertificatesSection
       a.click();
       URL.revokeObjectURL(url);
     } else {
-      window.print();
+      printCurrentPage(); // [FIX batch8]
     }
   };
 

@@ -17,6 +17,7 @@ import {
 import { formatMoney, isDateInMonth } from '../../services/financeCalculations';
 import { Language, VehicleAccidentRecord } from '../../types';
 import { VehicleCameraModal } from '../VehicleCameraModal';
+import { printCurrentPage, openPrintWindow, downloadBlobAware } from '../../utils/printExport';
 import { financeService } from '../../services/financeService';
 
 export interface VehicleFuelRecord {
@@ -320,15 +321,9 @@ export const VehicleExpensesSection: React.FC<VehicleExpensesSectionProps> = ({
   };
 
   const downloadBlob = (content: BlobPart, type: string, filename: string) => {
-    const blob = new Blob([content], { type });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    // [FIX batch8] داخل التطبيق: رسالة واضحة بدل الفشل الصامت (WebView لا ينزّل Blobs بعد).
+    downloadBlobAware(content, type, filename,
+      'تصدير الملفات داخل التطبيق غير مدعوم بعد — استخدم المتصفح أو انتظر تحديث قادم.');
   };
 
   const escapeHtml = (value: unknown) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -352,14 +347,15 @@ export const VehicleExpensesSection: React.FC<VehicleExpensesSectionProps> = ({
   const exportPdf = (kind: 'fuel' | 'maintenance' | 'oils') => {
     const data = getExportData(kind);
     const table = `<table><thead><tr>${data.headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${data.rows.map((row) => `<tr>${row.map((v) => `<td>${escapeHtml(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-    const win = window.open('', '_blank', 'width=1000,height=800');
-    if (!win) { window.alert(isAr ? 'اسمح بفتح النوافذ المنبثقة ثم أعد المحاولة.' : 'Please allow popups and try again.'); return; }
-    win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(data.title)}</title><style>@page{size:A4 landscape;margin:12mm}body{font-family:Arial,sans-serif;direction:rtl;color:#111}h1{text-align:center;font-size:20px}p{font-size:11px;text-align:center;color:#555}table{border-collapse:collapse;width:100%;font-size:10px}th,td{border:1px solid #555;padding:5px;text-align:right}th{font-weight:bold;background:#eee}</style></head><body><h1>${escapeHtml(data.title)} - SMART TIME v25.7</h1><p>الشهر: ${escapeHtml(selectedMonth)}</p>${table}<script>window.onload=function(){setTimeout(function(){window.print()},300)};<\/script></body></html>`);
-    win.document.close();
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(data.title)}</title><style>@page{size:A4 landscape;margin:12mm}body{font-family:Arial,sans-serif;direction:rtl;color:#111}h1{text-align:center;font-size:20px}p{font-size:11px;text-align:center;color:#555}table{border-collapse:collapse;width:100%;font-size:10px}th,td{border:1px solid #555;padding:5px;text-align:right}th{font-weight:bold;background:#eee}</style></head><body><h1>${escapeHtml(data.title)} - SMART TIME v25.7</h1><p>الشهر: ${escapeHtml(selectedMonth)}</p>${table}<script>window.onload=function(){setTimeout(function(){window.print()},300)};<\/script></body></html>`;
+    // [FIX batch8] WebView الأندرويد لا يدعم النوافذ المنبثقة — openPrintWindow يتعامل مع ذلك.
+    if (!openPrintWindow(html)) {
+      window.alert(isAr ? 'تعذر فتح نافذة الطباعة.' : 'Could not open the print window.');
+    }
     setExportMenuOpen(false);
   };
 
-  const printSection = () => window.print();
+  const printSection = () => printCurrentPage(); // [FIX batch8]
 
   const pageTitle = screen === 'fuel' ? 'الوقود' : screen === 'maintenance' ? 'الصيانة' : screen === 'oils' ? 'تغيير الزيوت' : 'سيارتي';
 

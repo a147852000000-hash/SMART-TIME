@@ -75,7 +75,9 @@ try {
   }
 
   const trial = await request("/api/trial/session");
-  if (trial.response.status !== 200 || !trial.body?.token || trial.body?.user?.id !== "smart-time-trial-user") {
+  // [FIX batch8] Guests are per-device sandbox accounts now (trial_<hash>) —
+  // the legacy shared "smart-time-trial-user" id is never issued again.
+  if (trial.response.status !== 200 || !trial.body?.token || !String(trial.body?.user?.id || "").startsWith("trial_") || trial.body?.user?.id === "smart-time-trial-user") {
     fail(`/api/trial/session failed: ${trial.response.status} ${trial.raw}`);
   }
 

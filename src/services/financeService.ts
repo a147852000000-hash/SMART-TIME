@@ -1,5 +1,6 @@
 import type { ExpenseType } from "../contracts/financeContract";
 import { apiUrl } from "./apiConfig";
+import { authHeaders } from "./authService"; // [FIX batch8] كل طلبات المالية تحمل الهوية
 
 export interface FinanceOverview {
   source: "smart-time-finance-sqlite";
@@ -14,8 +15,7 @@ export interface FinanceOverview {
 
 export async function fetchCanonicalFinanceOverview(): Promise<FinanceOverview> {
   const response = await fetch(apiUrl("/api/finance/overview"), {
-    credentials: "include",
-    headers: { Accept: "application/json" },
+    headers: { Accept: "application/json", ...authHeaders() },
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(String(payload?.error || "تعذر قراءة بيانات التمويل."));
@@ -50,10 +50,12 @@ interface FinanceMutationPayload {
 }
 
 async function financeMutation(path: string, method: string, body?: unknown): Promise<FinanceMutationPayload> {
-  const response = await fetch(path, {
+  // [FIX batch8] كان يستدعي المسار الخام بلا ترويسة Authorization — كل عمليات
+  // الحفظ/التعديل/الحذف كانت ترجع 401 (انهيار "الحفظ") وكنت تكسر داخل الـ APK
+  // لأن المسار النسبي يصيب أصل التطبيق المحلي بدل السيرفر.
+  const response = await fetch(apiUrl(path), {
     method,
-    credentials: "include",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    headers: { "Content-Type": "application/json", Accept: "application/json", ...authHeaders() },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   const payload = await response.json().catch(() => ({}));

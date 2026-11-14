@@ -72,7 +72,6 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
 
   // Odometer detected value
   const [detectedOdometer, setDetectedOdometer] = useState<string>('');
-  const [isProcessingOcr, setIsProcessingOcr] = useState<boolean>(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -266,13 +265,9 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
     stopCamera();
 
     if (mode === 'odometer') {
-      // Simulate intelligent OCR extraction
-      setIsProcessingOcr(true);
-      setTimeout(() => {
-        const randKm = Math.floor(45000 + Math.random() * 3500);
-        setDetectedOdometer(randKm.toString());
-        setIsProcessingOcr(false);
-      }, 800);
+      // [FIX batch8] No fake OCR: the app must never invent a reading.
+      // The photo is evidence; the user types the real number themselves.
+      setDetectedOdometer('');
     }
   };
 
@@ -308,11 +303,9 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
       ctx.font = '18px monospace';
       ctx.fillText(new Date().toLocaleString('ar-EG'), 320, 270);
 
-      if (modeType === 'odometer') {
-        ctx.fillStyle = '#22c55e';
-        ctx.font = 'bold 42px monospace';
-        ctx.fillText('46,850 KM', 320, 330);
-      }
+      ctx.fillStyle = '#22c55e';
+      ctx.font = 'bold 26px monospace';
+      ctx.fillText(modeType === 'odometer' ? 'صورة عينة — اكتب القراءة يدوياً' : 'صورة عينة توثيقية', 320, 330);
       return canvas.toDataURL('image/jpeg', 0.85);
     }
     return '';
@@ -328,12 +321,8 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
         setCapturedPhotoUrl(result);
         stopCamera();
         if (mode === 'odometer') {
-          setIsProcessingOcr(true);
-          setTimeout(() => {
-            const randKm = Math.floor(45000 + Math.random() * 3500);
-            setDetectedOdometer(randKm.toString());
-            setIsProcessingOcr(false);
-          }, 800);
+          // [FIX batch8] نفس المبدأ: لا قراءة وهمية — الإدخال اليدوي بعد التصوير.
+          setDetectedOdometer('');
         }
       };
       reader.readAsDataURL(file);
@@ -439,8 +428,8 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
                     ? 'التقاط صورة للحادث مع عداد زمني للتصوير وحفظها تلقائياً'
                     : 'Capture accident damage with timer and save to accident log'
                   : isAr
-                  ? 'التقاط صورة للعداد وقراءة الكيلومترات تلقائياً'
-                  : 'Scan odometer and extract kilometers'}
+                  ? 'التقاط صورة للعداد ثم اكتب القراءة يدوياً — الصورة دليل موثّق'
+                  : 'Capture the odometer, then type the reading — photo stays as proof'}
               </p>
             </div>
           </div>
@@ -857,19 +846,13 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
                   <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                     <h4 className="font-black text-sm text-accent-500 flex items-center gap-2">
                       <Gauge className="w-4 h-4" />
-                      <span>{isAr ? 'نتيجة فحص وقراءة العداد' : 'Odometer Reading Result'}</span>
+                      <span>{isAr ? 'قراءة العداد من الصورة' : 'Odometer Reading From Photo'}</span>
                     </h4>
-                    {isProcessingOcr && (
-                      <span className="text-xs text-cyan-400 animate-pulse flex items-center gap-1">
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>{isAr ? 'جاري استخراج الأرقام...' : 'Extracting numbers...'}</span>
-                      </span>
-                    )}
                   </div>
 
                   <div>
                     <label className="text-xs font-bold text-slate-300 block mb-1">
-                      {isAr ? 'قراءة العداد الحالية (كيلومتر):' : 'Detected Odometer (KM):'}
+                      {isAr ? 'اكتب القراءة من الصورة (كيلومتر):' : 'Type the reading from the photo (KM):'}
                     </label>
                     <div className="relative">
                       <input
@@ -885,8 +868,8 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
                     </div>
                     <p className="text-[11px] text-slate-400 mt-1">
                       {isAr
-                        ? 'يمكنك تعديل الرقم يدوياً في حال كانت قراءة الكاميرا تحتاج لضبط.'
-                        : 'You can adjust the number manually if needed.'}
+                        ? 'التطبيق لا يخمّن الأرقام — اقرأ العداد من الصورة واكتبه بدقة.'
+                        : 'The app never guesses numbers — read the odometer and type it exactly.'}
                     </p>
                   </div>
 

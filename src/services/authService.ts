@@ -64,7 +64,8 @@ function applyUserToProfile(user: AuthUser): UserProfile {
 }
 
 export async function startTrialSession(): Promise<AuthSession> {
-  const res = await fetch(apiUrl('/api/trial/session'));
+  // [FIX batch8] يدعم عزل الزوار على الخادم: حساب تجريبي لكل جهاز.
+  const res = await fetch(apiUrl(`/api/trial/session?deviceId=${encodeURIComponent(getDeviceId())}`));
   const raw = await res.text();
   let data: any = {};
   try {

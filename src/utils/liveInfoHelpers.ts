@@ -890,7 +890,7 @@ export async function searchCryptosOnline(query: string): Promise<CryptoMarketIt
             nameEn: c.name,
             symbol: sym,
             priceUsd: known?.priceUsd || (c.market_cap_rank ? Math.max(0.01, +(1000 / (c.market_cap_rank * 2)).toFixed(3)) : 1.25),
-            change24h: known?.change24h || +(Math.random() * 6 - 2).toFixed(2),
+            change24h: known?.change24h ?? 0, // [FIX batch8] لا بيانات سعر عشوائية وهمية
             iconColor: '#f59e0b',
             iconSymbol: '🪙',
           };

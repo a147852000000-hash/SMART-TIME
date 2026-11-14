@@ -24,6 +24,10 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
   const [guestBusy, setGuestBusy] = useState(false);
   const [error, setError] = useState('');
   const [resetSent, setResetSent] = useState(false);
+  // [FIX batch8] وضع المعاينة (SANDBOX_DEMO_AUTH على السيرفر): كود الاستعادة
+  // يظهر على الشاشة بدل البريد + زر إنشاء حساب سريع عند بريد غير مسجل.
+  const [resetDevCode, setResetDevCode] = useState('');
+  const [emailNotRegistered, setEmailNotRegistered] = useState(false);
   const [roleChoiceTicket, setRoleChoiceTicket] = useState('');
   const [showRoleChoice, setShowRoleChoice] = useState(false);
   const [emailExistsInRailway, setEmailExistsInRailway] = useState(false);
@@ -81,7 +85,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
       setGuestBusy(false);
     }
   };
-  const switchMode = (next: Mode) => { setMode(next); clearError(); setCode(''); setResetSent(false); };
+  const switchMode = (next: Mode) => { setMode(next); clearError(); setCode(''); setResetSent(false); setResetDevCode(''); setEmailNotRegistered(false); };
 
   // Google Identity Services official button (free) — rendered only when the
   // deployment ships VITE_GOOGLE_CLIENT_ID; otherwise the legacy stub message
@@ -156,13 +160,25 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
       if (mode === 'forgot') {
         if (!resetSent) {
           const d:any = await forgotPassword(email.trim());
-          if (!d.ok && !d.emailSent) {
+          if (!d.ok && !d.emailSent && !d.sandbox) {
             throw new Error(d.message || 'تعذر إرسال رمز الاستعادة حاليًا. حاول لاحقًا.');
           }
           setCode('');
           if (d.emailSent === true) {
+            setEmailNotRegistered(false); setResetDevCode('');
             setResetSent(true);
             setError('تم إرسال كود استعادة كلمة المرور إلى بريدك الإلكتروني');
+          } else if (d.sandbox && d.devCode) {
+            // [FIX batch8] وضع المعاينة: الكود يظهر مباشرة ويُعبّأ تلقائيًا.
+            setEmailNotRegistered(false);
+            setResetDevCode(String(d.devCode));
+            setCode(String(d.devCode));
+            setResetSent(true);
+            setError(d.message || 'وضع المعاينة: استخدم الكود الظاهر مع كلمة مرور جديدة.');
+          } else if (d.sandbox && d.registered === false) {
+            setResetSent(false); setResetDevCode('');
+            setEmailNotRegistered(true);
+            setError(d.message || 'هذا البريد غير مسجل في نسخة المعاينة هذه.');
           } else {
             // Do not show a code-entry form unless the backend confirms email submission.
             // Keep the response neutral so the UI does not reveal whether an account exists.
@@ -172,7 +188,7 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
           return;
         }
         await resetPassword(email.trim(), code.trim(), password, challengeToken);
-        setMode('login'); setCode(''); setPassword(''); setResetSent(false);
+        setMode('login'); setCode(''); setPassword(''); setResetSent(false); setResetDevCode('');
         setError('تم تغيير كلمة المرور بنجاح. يمكنك تسجيل الدخول الآن.'); return;
       }
       if (!email.trim()) throw new Error('أدخل بريدك الإلكتروني.');
@@ -186,15 +202,13 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
       onAuthenticated();
     } catch (err:any) {
       const message = err?.message || 'تعذر تنفيذ العملية.';
-      if (mode === 'forgot' && message.includes('غير مسجل')) {
-        setError('لو البريد الإلكتروني مرتبط بحساب، هيوصلك كود استعادة كلمة المرور.');
+      // [FIX batch8] رسائل السيرفر تُعرض كما هي — في وضع المعاينة تشرح أن
+      // البريد غير مسجل في نسخة المعاينة، وفي الإنتاج تبقى الرسالة المحايدة.
+      if (mode === 'register' && /مسجل بالفعل|already exists/i.test(message)) {
+        setEmailExistsInRailway(true);
+        setError('هذا البريد مسجل بالفعل، يرجى تسجيل الدخول');
       } else {
-        if (mode === 'register' && /مسجل بالفعل|already exists/i.test(message)) {
-          setEmailExistsInRailway(true);
-          setError('هذا البريد مسجل بالفعل، يرجى تسجيل الدخول');
-        } else {
-          setError(message);
-        }
+        setError(message);
       }
     }
     finally {
@@ -287,6 +301,17 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
               </label>
             ) : null}
 
+            {resetDevCode && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-center">
+                <div className="text-sm font-semibold text-emerald-900">وضع المعاينة — كود الاستعادة (بدل البريد)</div>
+                <div className="mt-1 text-3xl font-black tracking-[.35em] text-emerald-700" dir="ltr">{resetDevCode}</div>
+                <div className="mt-1 text-[11px] text-emerald-700">تم تعبئة الكود تلقائيًا — اكتب كلمة المرور الجديدة ثم اضغط «Reset password».</div>
+              </div>
+            )}
+            {emailNotRegistered && (
+              <button type="button" onClick={()=>switchMode('register')} className="w-full rounded-xl border border-amber-200 bg-amber-50 py-3 text-sm font-semibold text-amber-900 transition hover:bg-amber-100">إنشاء حساب جديد بهذا البريد — Create account</button>
+            )}
+
             {error && <div role="alert" className={`rounded-xl p-3 text-sm font-medium ${error.includes('تم ') ? 'border border-emerald-200 bg-emerald-50 text-emerald-700' : 'border border-red-200 bg-red-50 text-red-700'}`}>{error}</div>}
 
             {captchaConfigured && (
@@ -326,14 +351,15 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
                   {googleConfigured ? (
                     <div ref={googleContainerRef} className="flex justify-center min-h-[40px] sm:min-h-[50px] items-center" aria-busy={googleBusy} />
                   ) : (
-                    <button type="button" onClick={()=>setError('Google sign-in is not configured on this deployment yet.')} className="flex min-h-[36px] sm:min-h-[68px] w-full items-center justify-center gap-3 rounded-[14px] border border-[#D4AF37]/50 bg-white px-4 py-1 sm:py-3 text-[12px] sm:text-[20px] shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#C5A059]/40">
+                    // [FIX batch8] غير مُفعّل = زر معطّل بتوضيح السبب بدل رسالة خطأ عند الضغط.
+                    <button type="button" disabled aria-disabled="true" title="تسجيل الدخول بجوجل غير مُفعّل على هذا الخادم بعد — يُفعّل مجانًا بإضافة GOOGLE_CLIENT_ID إلى إعدادات الخادم (الدليل في دليل النشر)." className="flex min-h-[36px] sm:min-h-[68px] w-full items-center justify-center gap-3 rounded-[14px] border border-[#D4AF37]/30 bg-gray-50 px-4 py-1 sm:py-3 text-[12px] sm:text-[20px] opacity-60 cursor-not-allowed">
                       <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24">
                         <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                         <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                         <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18c-.72 1.44-1.13 3.07-1.13 4.93s.41 3.49 1.13 4.93l3.66-2.84z"/>
                         <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                       </svg>
-                      <span className="font-medium text-gray-800">Continue with Google</span>
+                      <span className="font-medium text-gray-500">Continue with Google — غير مُفعّل على هذا الخادم</span>
                     </button>
                   )}
                 </div>

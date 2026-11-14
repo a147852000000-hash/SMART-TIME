@@ -9,7 +9,7 @@ import { db, seedDefaultChatRooms } from "./backend/database.js";
 import { getCache, setCache } from "./backend/cache.js";
 import { getServiceStatuses, seedServiceStatuses, setServiceStatus } from "./backend/serviceStatus.js";
 import { chatRouter, setupChatWebSocket } from "./backend/chatServer.js";
-import { createCanonicalExpense, deleteCanonicalExpense, getCanonicalExpense, FINANCE_EXPENSE_TYPES, type FinanceExpenseType } from "./backend/ai/finance/financeRepository.js";
+import { createCanonicalExpense, deleteCanonicalExpense, getCanonicalExpense, updateCanonicalExpense, FINANCE_EXPENSE_TYPES, type FinanceExpenseType } from "./backend/ai/finance/financeRepository.js";
 import { getAiCanonicalState } from "./backend/ai/finance/aiCanonicalProjection.js";
 import { acknowledgeEventReminder, listPendingEventReminders, queueDueEventReminders } from "./backend/ai/calendar/reminderScheduler.js";
 import { estimateProviderPrice, type RideProvider, type RideCategory } from "./src/services/ridePriceEstimator.js";
@@ -95,6 +95,11 @@ app.use((req, res, next) => {
 
   if (allowed && origin) {
     res.setHeader("Access-Control-Allow-Origin", origin);
+    // [FIX batch8] The WebView inside the Android APK is a distinct origin
+    // (https://localhost) and several services send credentials: "include".
+    // Without this header the browser discards every cross-origin response
+    // (TypeError: Failed to fetch) — the reported "حفظ الصيانة" crash.
+    res.setHeader("Access-Control-Allow-Credentials", "true");
     res.setHeader("Vary", "Origin");
   }
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -104,6 +109,19 @@ app.use((req, res, next) => {
 });
 seedServiceStatuses();
 seedDefaultChatRooms();
+
+// [FIX batch8] تنظيف حسابات الزوار الفارغة عند الإقلاع — الزائر الذي دخل قبل
+// إضافة البيانات التجريبية يحصل على حساب جديد مُهيّأ ببيانات عرض. الحسابات
+// التي بها بيانات محفوظة فعلية لا تُمس مطلقًا.
+try {
+  const emptyTrials = db.prepare("SELECT id FROM users WHERE substr(id,1,6)='trial_' AND id<>'smart-time-trial-user' AND NOT EXISTS (SELECT 1 FROM finance_expenses e WHERE e.user_id = users.id)").all() as any[];
+  for (const t of emptyTrials) {
+    db.prepare('DELETE FROM sessions WHERE user_id=?').run(t.id);
+    db.prepare('DELETE FROM finance_monthly_income WHERE user_id=?').run(t.id);
+    db.prepare('DELETE FROM users WHERE id=?').run(t.id);
+  }
+  if (emptyTrials.length) console.log(`[trial] pruned ${emptyTrials.length} empty guest account(s)`);
+} catch (e:any) { console.warn('[trial] prune skipped:', e?.message); }
 // Passkey (fingerprint login) tables — created idempotently at boot.
 ensureWebauthnTables();
 app.use(express.json({ limit: "50mb" }));
@@ -117,6 +135,23 @@ app.use("/api/chat", chatRouter);
 
 const TRIAL_MODE = String(process.env.TRIAL_MODE || 'false').trim().toLowerCase() === 'true';
 const TRIAL_USER_ID = 'smart-time-trial-user';
+// [FIX batch8] SANDBOX_DEMO_AUTH — علم خاص ببيئات المعاينة/الساندبوكس فقط:
+// لا يوجد بريد SMTP هناك، فيظهر كود الاستعادة على الشاشة مباشرة ويوضح رسائل
+// الدخول أن قاعدة البيانات مستقلة. لا يُضبط أبدًا على الخادم الحقيقي حتى لو
+// TRIAL_MODE=true عليه — سلوك الإنتاج الأمني يبقى كما هو تمامًا.
+const SANDBOX_DEMO_AUTH = String(process.env.SANDBOX_DEMO_AUTH || '').trim().toLowerCase() === 'true';
+// [FIX batch8] Guest isolation — previously every guest shared ONE account
+// (TRIAL_USER_ID), so anything a guest saved was visible to every other
+// guest (and to nobody's own device twice). Guests now get a per-device
+// sandbox account derived from a hashed device key. The legacy shared row
+// stays in the table for backwards compatibility but no new sessions are
+// issued for it.
+function isTrialUserId(id: unknown): boolean {
+  return typeof id === 'string' && (id === TRIAL_USER_ID || id.startsWith('trial_'));
+}
+function trialUserIdForDevice(deviceKey: string): string {
+  return `trial_${crypto.createHash("sha256").update(deviceKey).digest("hex").slice(0, 20)}`;
+}
 const AUTH_SESSION_DAYS = 30;
 const PASSWORD_RESET_MINUTES = 15;
 const PROGRAM_OWNER_EMAIL = 'eng.mamdouh2009@gmail.com';
@@ -330,20 +365,57 @@ async function sendPasswordResetEmail(email:string, code:string){
 }
 
 
-app.get('/api/trial/session', (req,res) => {
+// [FIX batch8] بيانات عرض جاهزة لحساب الزائر الجديد — «الزائر يجد بيانات» بدل
+// شاشة فارغة، وبتها يستطيع تجربة الحفظ والطباعة فورًا. تُزرع مرة واحدة فقط
+// عند إنشاء الحساب، ولا تعيد الزراعة أبدًا إذا حذف الزائر بياناته.
+function seedTrialDemoData(trialId: string): void {
+  try {
+    const existing = db.prepare('SELECT COUNT(*) AS n FROM finance_expenses WHERE user_id=?').get(trialId) as any;
+    if (Number(existing?.n || 0) > 0) return;
+    const nowMs = Date.now();
+    const d = (offsetDays: number) => new Date(nowMs - offsetDays * 86400000).toISOString().slice(0, 10);
+    const month = d(0).slice(0, 7);
+    const iso = new Date(nowMs).toISOString();
+    db.prepare(`INSERT INTO finance_monthly_income (id,user_id,month,salary,bonuses,other_income,other_income_note,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,month) DO NOTHING`)
+      .run(`inc_${trialId.slice(6, 30)}_${month}`, trialId, month, 12000, 1500, 800, 'أرباح مشروع صغير (تجريبي)', iso, iso);
+    const demo: Array<[string, number, FinanceExpenseType, string, number, string]> = [
+      ['إيجار الشهر', 3500, 'house', 'إيجار', 1, 'cash'],
+      ['فاتورة كهرباء المنزل', 380, 'house', 'كهرباء', 3, 'cash'],
+      ['بنزين سيارة — أسبوع', 650, 'vehicle_fuel', 'وقود', 2, 'cash'],
+      ['تغيير زيت وميكانيكا', 850, 'vehicle_maint', 'ميكانيكا', 6, 'cash'],
+      ['زيت محرك', 420, 'vehicle_oil', 'زيوت', 10, 'cash'],
+      ['استشارة طبية وتحاليل', 250, 'medical', 'عيادة', 4, 'cash'],
+      ['مصاريف شخصية', 500, 'personal', 'شخصي', 5, 'cash'],
+      ['كتب ودراسات الأبناء', 300, 'student', 'تعليم', 7, 'cash'],
+      ['قرطاسية مكتب العمل', 180, 'work', 'عمل', 8, 'cash'],
+    ];
+    for (const [title, amount, type, category, off, pay] of demo) {
+      createCanonicalExpense(trialId, { type, title, amount, category, date: d(off), paymentMethod: pay, notes: 'بيانات عرض تجريبية للزائر' });
+    }
+  } catch (e:any) { console.warn('[trial] demo seed failed:', (e as any)?.message); }
+}
+
+app.get('/api/trial/session', rateLimitGuard('trial', 30, 60, (req) => [clientIp(req)]), (req,res) => {
   if (!TRIAL_MODE) return res.status(404).json({ error: 'Trial mode is disabled' });
   try {
     const now = new Date().toISOString();
-    let row = db.prepare('SELECT * FROM users WHERE id=?').get(TRIAL_USER_ID) as any;
+    // [FIX batch8] Per-device guest sandbox: data never crosses devices.
+    const deviceId = String(req.query.deviceId || req.headers['x-device-id'] || '').trim().slice(0, 200);
+    const deviceKey = deviceId.length >= 8 ? `dev:${deviceId}` : `ip:${clientIp(req) || 'unknown'}`;
+    const trialId = trialUserIdForDevice(deviceKey);
+    let row = db.prepare('SELECT * FROM users WHERE id=?').get(trialId) as any;
     if (!row) {
-      const email = 'trial@smart-time.local';
-      const username = 'smart_time_trial';
+      const h = trialId.slice('trial_'.length);
+      const email = `trial-${h}@smart-time.local`;
+      const username = `trial_${h}`.slice(0, 30);
       db.prepare(
         "INSERT INTO users (id,email,username,password_hash,display_name,created_at,phone,phone_verified,activation_status) VALUES (?,?,?,?,?,?,?,?,?)"
-      ).run(TRIAL_USER_ID, email, username, hashPassword(crypto.randomBytes(24).toString('hex')), 'SMART TIME', now, null, 0, 'active');
-      row = db.prepare('SELECT * FROM users WHERE id=?').get(TRIAL_USER_ID) as any;
+      ).run(trialId, email, username, hashPassword(crypto.randomBytes(24).toString('hex')), 'SMART TIME', now, null, 0, 'active');
+      seedTrialDemoData(trialId);
+      row = db.prepare('SELECT * FROM users WHERE id=?').get(trialId) as any;
     }
-    const token = createSession(TRIAL_USER_ID);
+    const token = createSession(trialId);
     res.json({ token, user: publicUser({ ...row, name: row.display_name, phoneVerified: false, activation_status: 'active' }) });
   } catch (e:any) {
     res.status(500).json({ error: e.message || 'تعذر بدء النسخة التجريبية' });
@@ -431,7 +503,10 @@ app.post('/api/auth/login', turnstileGuard, rateLimitGuard('login', 10, 15, (req
   const identifier = String(req.body?.identifier || req.body?.email || '').trim();
   const normalized = identifier.includes('@') ? identifier.toLowerCase() : normalizeUsername(identifier);
   return [normalized || 'unknown', clientIp(req)];
-}),(req,res)=>{try{const identifier=String(req.body.identifier||req.body.email||'').trim(),normalizedEmail=identifier.toLowerCase(),normalizedUsername=normalizeUsername(identifier),password=String(req.body.password||'');let row:any=null;if(identifier.includes('@')) row=db.prepare('SELECT * FROM users WHERE email=?').get(normalizedEmail) as any;else row=db.prepare('SELECT * FROM users WHERE username=?').get(normalizedUsername) as any;if(!row||!verifyPassword(password,row.password_hash))return res.status(401).json({error:'بيانات الدخول غير صحيحة. تأكد من البريد أو اسم المستخدم وكلمة المرور.'});if(resolvedAccountRole(row)==='owner'){const roleChoiceTicket=createSession(row.id,'role_choice',5/1440);return res.json({requiresRoleChoice:true,availableRoles:['owner','user'],roleChoiceTicket});}const role=resolvedAccountRole(row);const user={...row,name:row.display_name,phoneVerified:row.phone_verified,session_role:role};res.json({token:createSession(row.id,role),user:publicUser(user)});}catch(e:any){res.status(500).json({error:e.message||'تعذر تسجيل الدخول'});}});
+}),(req,res)=>{try{const identifier=String(req.body.identifier||req.body.email||'').trim(),normalizedEmail=identifier.toLowerCase(),normalizedUsername=normalizeUsername(identifier),password=String(req.body.password||'');let row:any=null;if(identifier.includes('@')) row=db.prepare('SELECT * FROM users WHERE email=?').get(normalizedEmail) as any;else row=db.prepare('SELECT * FROM users WHERE username=?').get(normalizedUsername) as any;if(!row||!verifyPassword(password,row.password_hash)){
+      if(SANDBOX_DEMO_AUTH&&!row&&identifier.includes('@'))return res.status(401).json({error:'هذا البريد غير مسجل في نسخة المعاينة هذه (قاعدة بياناتها مستقلة عن الخادم الرئيسي). أنشئ حسابًا جديدًا من «Sign up» أو ادخل كزائر.'});
+      return res.status(401).json({error:'بيانات الدخول غير صحيحة. تأكد من البريد أو اسم المستخدم وكلمة المرور.'});
+    }if(resolvedAccountRole(row)==='owner'){const roleChoiceTicket=createSession(row.id,'role_choice',5/1440);return res.json({requiresRoleChoice:true,availableRoles:['owner','user'],roleChoiceTicket});}const role=resolvedAccountRole(row);const user={...row,name:row.display_name,phoneVerified:row.phone_verified,session_role:role};res.json({token:createSession(row.id,role),user:publicUser(user)});}catch(e:any){res.status(500).json({error:e.message||'تعذر تسجيل الدخول'});}});
 app.post('/api/auth/select-role',(req,res)=>{try{const bodyTicket=String(req.body?.roleChoiceTicket||'');const ticket=authUser(req,true,bodyTicket);if(!ticket||ticket.session_role!=='role_choice')return res.status(401).json({error:'انتهت صلاحية اختيار نوع الدخول. سجّل الدخول مرة أخرى.'});const role=String(req.body.role||'');if(role!=='owner'&&role!=='user')return res.status(400).json({error:'اختيار نوع الدخول غير صالح.'});if(resolvedAccountRole(ticket)!=='owner')return res.status(403).json({error:'هذا الاختيار مخصص لحساب المالك.'});const expires=new Date(Date.now()+AUTH_SESSION_DAYS*86400000).toISOString();db.prepare('UPDATE sessions SET session_role=?,expires_at=? WHERE id=?').run(role,expires,ticket.session_id);const user={...ticket,session_role:role};res.json({token:ticket.session_id,user:publicUser(user)});}catch(e:any){res.status(500).json({error:e.message||'تعذر اختيار نوع الدخول'});}});
 app.get('/api/auth/me',(req,res)=>{const user=authUser(req);if(!user||user.session_role==='role_choice')return res.status(401).json({error:'جلسة الدخول منتهية'});res.json({user:publicUser(user)});});
 app.get('/api/owner/admins',(req,res)=>{const actor=authUser(req);if(!actor||sessionAccountRole(actor)!=='owner')return res.status(403).json({error:'هذا القسم مخصص للمالك فقط.'});const view=String(req.query.view||'users');if(view==='admins'){const admins=db.prepare("SELECT id,email,username,display_name as name,role,activation_status FROM users WHERE role='admin' ORDER BY created_at DESC").all();return res.json({admins});}const users=db.prepare("SELECT id,email,username,display_name as name,role,activation_status FROM users WHERE lower(email)<>? AND role IN ('user','owner') ORDER BY created_at DESC").all(PROGRAM_OWNER_EMAIL);return res.json({users});});
@@ -517,7 +592,7 @@ const passkeyProtoHeader = (req: express.Request) => String((req.headers as any)
 app.post('/api/auth/passkey/register/options', (req,res)=>{
   const user = authUser(req);
   if (!user || user.session_role === 'role_choice') return res.status(401).json({ error: 'يجب تسجيل الدخول أولاً' });
-  if (String(user.id) === TRIAL_USER_ID) return res.status(403).json({ error: 'حساب الزائر لا يمكنه تفعيل الدخول بالبصمة. سجّل حسابًا حقيقيًا أولًا.' });
+  if (isTrialUserId(user.id)) return res.status(403).json({ error: 'حساب الزائر لا يمكنه تفعيل الدخول بالبصمة. سجّل حسابًا حقيقيًا أولًا.' });
   const rpId = rpIdForHost(passkeyHostHeader(req));
   const challenge = randomChallenge();
   storeChallenge(`register:${user.id}`, 'register', challenge);
@@ -543,7 +618,7 @@ app.post('/api/auth/passkey/register/options', (req,res)=>{
 app.post('/api/auth/passkey/register/verify', (req,res)=>{
   const user = authUser(req);
   if (!user || user.session_role === 'role_choice') return res.status(401).json({ error: 'يجب تسجيل الدخول أولاً' });
-  if (String(user.id) === TRIAL_USER_ID) return res.status(403).json({ error: 'حساب الزائر لا يمكنه تفعيل الدخول بالبصمة.' });
+  if (isTrialUserId(user.id)) return res.status(403).json({ error: 'حساب الزائر لا يمكنه تفعيل الدخول بالبصمة.' });
   const cred = req.body?.credential;
   if (!cred?.response?.clientDataJSON || !cred?.response?.attestationObject) return res.status(400).json({ error: 'بيانات تسجيل البصمة مفقودة.' });
   const result = verifyRegistration({
@@ -612,7 +687,23 @@ app.delete('/api/auth/passkeys/:id', (req,res)=>{
   if (!removed) return res.status(404).json({ error: 'بصمة غير موجودة على هذا الحساب.' });
   res.json({ ok: true });
 });
-app.post('/api/auth/forgot-password',turnstileGuard,async(req,res)=>{try{const email=String(req.body.email||'').trim().toLowerCase();const row=db.prepare('SELECT id FROM users WHERE email=?').get(email) as any;if(!row)return res.json({ok:true,emailSent:false,message:'إذا كان البريد مسجلاً فستصلك تعليمات الاستعادة.'});const code=String(crypto.randomInt(100000,1000000)),expires=new Date(Date.now()+PASSWORD_RESET_MINUTES*60000).toISOString();db.prepare(`INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at`).run(email,otpHash(code),expires,0,new Date().toISOString());try{const info=await sendPasswordResetEmail(email,code);res.json({ok:true,emailSent:true,provider:info.provider});}catch(mailErr:any){db.prepare('DELETE FROM password_resets WHERE email=?').run(email);res.status(503).json({error:mailErr.message||'تعذر إرسال رسالة إعادة تعيين كلمة المرور.'});}}catch(e:any){res.status(500).json({error:e.message||'تعذر بدء استعادة كلمة المرور'});}});
+app.post('/api/auth/forgot-password',turnstileGuard,async(req,res)=>{try{
+  const email=String(req.body.email||'').trim().toLowerCase();
+  const row=db.prepare('SELECT id FROM users WHERE email=?').get(email) as any;
+  if(!row){
+    // [FIX batch8] في الساندبوكس نوضح أن البريد غير مسجل حتى لا يظن المستخدم أن الكود ضاع.
+    if (SANDBOX_DEMO_AUTH) return res.json({ok:true,emailSent:false,registered:false,sandbox:true,message:'هذا البريد غير مسجل في نسخة المعاينة هذه. أنشئ حسابًا جديدًا (Create account) ثم سجّل الدخول به.'});
+    return res.json({ok:true,emailSent:false,message:'إذا كان البريد مسجلاً فستصلك تعليمات الاستعادة.'});
+  }
+  const code=String(crypto.randomInt(100000,1000000)),expires=new Date(Date.now()+PASSWORD_RESET_MINUTES*60000).toISOString();
+  db.prepare(`INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at`).run(email,otpHash(code),expires,0,new Date().toISOString());
+  // [FIX batch8] في الساندبوكس فقط (SANDBOX_DEMO_AUTH=true): لا بريد متاح،
+  // فيظهر الكود على الشاشة لإكمال الاستعادة. الخادم الحقيقي لا يضبط هذا العلم
+  // أبدًا، فكود الاستعادة هناك يُرسل بالبريد فقط ولا يظهر في أي استجابة.
+  if (SANDBOX_DEMO_AUTH) return res.json({ok:true,emailSent:false,registered:true,sandbox:true,devCode:code,message:'وضع المعاينة: لا يمكن إرسال بريد من هنا — استخدم الكود الظاهر على الشاشة (صالح 15 دقيقة).'});
+  try{const info=await sendPasswordResetEmail(email,code);res.json({ok:true,emailSent:true,provider:info.provider});}
+  catch(mailErr:any){db.prepare('DELETE FROM password_resets WHERE email=?').run(email);res.status(503).json({error:mailErr.message||'تعذر إرسال رسالة إعادة تعيين كلمة المرور.'});}
+}catch(e:any){res.status(500).json({error:e.message||'تعذر بدء استعادة كلمة المرور'});}});
 app.post('/api/auth/reset-password',(req,res)=>{try{const email=String(req.body.email||'').trim().toLowerCase(),code=String(req.body.code||'').trim(),newPassword=String(req.body.newPassword||'');if(newPassword.length<8)return res.status(400).json({error:'كلمة المرور يجب أن تكون 8 أحرف على الأقل'});const reset=db.prepare('SELECT * FROM password_resets WHERE email=?').get(email) as any;if(!reset||new Date(reset.expires_at).getTime()<Date.now())return res.status(400).json({error:'رمز الاستعادة منتهي أو غير موجود'});if(reset.attempts>=5)return res.status(429).json({error:'تم تجاوز عدد المحاولات.'});db.prepare('UPDATE password_resets SET attempts=attempts+1 WHERE email=?').run(email);if(otpHash(code)!==reset.code_hash)return res.status(400).json({error:'رمز الاستعادة غير صحيح'});db.prepare('UPDATE users SET password_hash=? WHERE email=?').run(hashPassword(newPassword),email);db.prepare('DELETE FROM password_resets WHERE email=?').run(email);res.json({ok:true});}catch(e:any){res.status(500).json({error:e.message||'تعذر تغيير كلمة المرور'});}});
 app.post('/api/auth/logout',(req,res)=>{const h=String(req.headers.authorization||''),token=h.startsWith('Bearer ')?h.slice(7).trim():'';if(token)db.prepare('DELETE FROM sessions WHERE id=?').run(token);res.json({ok:true});});
 app.post('/api/auth/chat/request-otp', rateLimitGuard('phone-otp', 5, 60, (req) => [normalizePhone(req.body?.phone) || 'unknown', clientIp(req)]),async(req,res)=>{try{const user=authUser(req);if(!user)return res.status(401).json({error:'يجب تسجيل الدخول بالبريد أولاً'});const phone=normalizePhone(req.body.phone);if(phone.length<8)return res.status(400).json({error:'رقم الهاتف غير صحيح'});const taken=db.prepare('SELECT id FROM users WHERE phone=? AND id<>?').get(phone,user.id) as any;if(taken)return res.status(409).json({error:'رقم الهاتف مرتبط بحساب آخر'});try{const otpResult=await requestPhoneOtp(phone);res.json({ok:true,expiresAt:otpResult.expires,devCode:otpResult.devCode,smsProvider:otpResult.provider});}catch(err:any){return res.status(503).json({error:err.message||'تعذر إرسال SMS'});}}catch(e:any){res.status(500).json({error:e.message||'تعذر إرسال رمز التحقق'});}});
@@ -1991,10 +2082,26 @@ app.get("/api/live/sports", async (req, res) => {
   }
 });
 
-// [FIX phase3] Canonical finance expense mutations — the endpoints the phase-5
+// [FIX batch8] Canonical finance expense mutations — the endpoints the phase-5
 // docs, the frontend financeService, and scripts/test-phase3-api.mjs expect.
 // Protected like every other user-data route; writes go through the canonical
 // repository (ownership enforced inside it).
+// [FIX batch8] توحيد أسماء الحقول بين قاعدة البيانات (snake_case) وعقد الواجهة
+// (camelCase): كانت الواجهة تفلتر على expense.type بينما الـAPI يرجع الصف الخام
+// expense_type — فتظهر كل بطاقات المصروفات صفرًا مع وجود بيانات فعلية.
+function mapCanonicalExpenseRow(row: any): any {
+  if (!row || typeof row !== "object") return row;
+  return {
+    ...row,
+    type: row.type ?? row.expense_type,
+    paymentMethod: row.paymentMethod ?? row.payment_method,
+    receiptUrl: row.receiptUrl ?? row.receipt_url,
+    createdAt: row.createdAt ?? row.created_at,
+    updatedAt: row.updatedAt ?? row.updated_at,
+    userId: row.userId ?? row.user_id,
+  };
+}
+
 app.post("/api/finance/expenses", (req, res) => {
   const user = authUser(req);
   if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
@@ -2014,11 +2121,42 @@ app.post("/api/finance/expenses", (req, res) => {
       notes: body.notes == null ? null : String(body.notes),
     });
     const record = getCanonicalExpense(user.id, result.id);
-    res.status(201).json({ ok: true, persisted: result.persisted, record });
+    res.status(201).json({ ok: true, persisted: result.persisted, record: mapCanonicalExpenseRow(record) });
   } catch (e: any) {
     const message = e instanceof Error ? e.message : "تعذر حفظ المصروف.";
     const badRequest = /Invalid|required|is invalid|userId is required/.test(message);
     res.status(badRequest ? 400 : 500).json({ error: message });
+  }
+});
+
+app.patch("/api/finance/expenses/:expenseId", (req, res) => {
+  // [FIX batch8] كان تعديل أي مصروف من الواجهة يفشل دائمًا: الواجهة تستدعي
+  // PATCH والسيرفر لا يملك هذا المسار أصلًا (يرجع 404 Unknown API endpoint).
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  try {
+    const body = req.body || {};
+    const patch: any = {};
+    if (body.type !== undefined) {
+      const requestedType = String(body.type || "personal").trim();
+      patch.type = (FINANCE_EXPENSE_TYPES as readonly string[]).includes(requestedType)
+        ? (requestedType as FinanceExpenseType)
+        : "personal";
+    }
+    if (body.title !== undefined) patch.title = String(body.title).trim();
+    if (body.amount !== undefined) patch.amount = Number(body.amount);
+    if (body.category !== undefined) patch.category = String(body.category).trim();
+    if (body.date !== undefined) patch.date = String(body.date).trim();
+    if (body.paymentMethod !== undefined) patch.paymentMethod = String(body.paymentMethod).trim();
+    if (body.receiptUrl !== undefined) patch.receiptUrl = body.receiptUrl ? String(body.receiptUrl) : undefined;
+    if (body.notes !== undefined) patch.notes = body.notes == null ? null : String(body.notes);
+    const record = updateCanonicalExpense(user.id, String(req.params.expenseId || ""), patch);
+    res.json({ ok: true, persisted: true, record: mapCanonicalExpenseRow(record) });
+  } catch (e: any) {
+    const message = e instanceof Error ? e.message : "تعذر تعديل المصروف.";
+    const badRequest = /Invalid|required|is invalid|userId is required/.test(message);
+    const notFound = /not found/i.test(message);
+    res.status(notFound ? 404 : badRequest ? 400 : 500).json({ error: message });
   }
 });
 
@@ -2092,7 +2230,7 @@ app.get("/api/finance/overview", (req, res) => {
     const educationExpenses = db.prepare("SELECT * FROM finance_education_expenses WHERE user_id = ? ORDER BY date DESC").all(userId);
     res.json({
       source: "smart-time-finance-sqlite",
-      expenses,
+      expenses: expenses.map(mapCanonicalExpenseRow),
       monthlyIncome,
       bankCertificates,
       fuelRecords,
