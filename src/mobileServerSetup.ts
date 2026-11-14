@@ -9,7 +9,7 @@
  *
  * على الويب العادي الوحدة no-op تماماً: الصفحة same-origin ولا شيء يتغير.
  */
-import { setRuntimeApiUrl, RUNTIME_API_KEY } from './services/apiConfig';
+import { setRuntimeApiUrl, RUNTIME_API_KEY, BAKED_API_URL } from './services/apiConfig';
 
 const NATIVE_FLAG = 'smart_time_server_setup_overlay';
 
@@ -159,14 +159,37 @@ function mountResetButton(): void {
   document.body.appendChild(gear);
 }
 
+/**
+ * داخل الغلاف الأصلي نعطّل الـ service-worker المسجل من الأصل المحلي:
+ * يبقي تحديثات التطبيق نظيفة (لا كاش قديم يطغى على نسخة أحدث من الأصول).
+ */
+function disableServiceWorkerInNative(): void {
+  try {
+    if (!('serviceWorker' in navigator)) return;
+    void navigator.serviceWorker.getRegistrations()
+      .then((regs) => regs.forEach((reg) => reg.unregister()))
+      .catch(() => undefined);
+    const original = navigator.serviceWorker.register.bind(navigator.serviceWorker);
+    (navigator.serviceWorker as unknown as { register: unknown }).register =
+      (...args: Parameters<ServiceWorkerContainer['register']>) =>
+        (original as (...a: unknown[]) => Promise<ServiceWorkerRegistration>)(...args)
+          .then((reg) => { void reg?.unregister?.().catch(() => undefined); return reg; })
+          .catch(() => null);
+  } catch { /* تجاهل بأمان */ }
+}
+
 /** تُنتظر قبل تشغيل تطبيق React (انظر main.tsx). */
 export function ensureServerConfig(): Promise<void> {
   try {
     if (typeof window === 'undefined' || !isNativeShell()) return Promise.resolve();
+    disableServiceWorkerInNative();
     mountResetButton();
     const saved = readSavedServer();
     const forced = window.location.hash === '#server-setup';
-    if (saved && isHttpUrl(saved) && !forced) return Promise.resolve();
+    // بدون أي عِرقلة: لو العنوان مثبت وقت البناء يشتغل التطبيق فوراً —
+    // الشاشة تظهر فقط لمن لا يملك عنواناً مثبتاً ولا محفوظاً.
+    if (saved && isHttpUrl(saved)) return Promise.resolve();
+    if (BAKED_API_URL && !forced) return Promise.resolve();
     return new Promise<void>((resolve) => {
       showSetupDialog(!saved, () => resolve());
     });

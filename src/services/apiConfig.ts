@@ -20,6 +20,9 @@ function readRuntimeOverride(): string {
 
 const RAW_BASE = readRuntimeOverride() || (import.meta.env.VITE_API_URL || '').trim();
 
+// العنوان المثبت وقت البناء (مثلاً داخل الـ APK) — يُستخدم لإخفاء شاشة الإعداد نهائياً.
+export const BAKED_API_URL = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
+
 // نتأكد إن الرابط متسجل من غير / في الآخر عشان مايحصلش // مزدوجة
 export const API_BASE_URL = RAW_BASE.replace(/\/+$/, '');
 export const RUNTIME_API_KEY = RUNTIME_OVERRIDE_KEY;
