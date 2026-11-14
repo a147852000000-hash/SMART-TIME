@@ -2,6 +2,10 @@ import { UserRepository } from './repositories/userRepository';
 import { UserProfile } from '../types';
 import { apiUrl } from './apiConfig';
 import { StorageAdapter } from './storageAdapter';
+import { performPasskeyLogin, enrollPasskey, listAccountPasskeys, removeAccountPasskey, fingerprintLoginAvailable, type PasskeyLoginServerResult } from './passkeyService';
+
+export { fingerprintLoginAvailable };
+export { listAccountPasskeys, removeAccountPasskey };
 
 export interface AuthUser {
   id: string;
@@ -113,6 +117,36 @@ export async function loginWithPhone(phone: string, code: string, turnstileToken
   const data = await request('/api/auth/phone-login', { phone, code, turnstileToken: turnstileToken || '' });
   const session: AuthSession = { token: data.token, user: data.user };
   saveSession(session); applyUserToProfile(session.user); return session;
+}
+
+// ---------- Google sign-in (free Google Identity Services) ----------
+
+export async function loginWithGoogle(idToken: string): Promise<AuthSession | { requiresRoleChoice: true; availableRoles: string[]; roleChoiceTicket: string }> {
+  const res = await fetch(apiUrl('/api/auth/google'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ credential: idToken }),
+  });
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'فشل تسجيل الدخول بجوجل.');
+  if (data.requiresRoleChoice) return data;
+  if (!data.token || !data.user) throw new Error('لم يتم إنشاء جلسة بعد تسجيل الدخول بجوجل.');
+  const session: AuthSession = { token: data.token, user: data.user };
+  saveSession(session); applyUserToProfile(session.user); return session;
+}
+
+// ---------- Passkey (fingerprint) login ----------
+
+export async function loginWithPasskey(): Promise<AuthSession | { requiresRoleChoice: true; availableRoles: string[]; roleChoiceTicket: string }> {
+  const data: PasskeyLoginServerResult = await performPasskeyLogin();
+  if (data.requiresRoleChoice) return { requiresRoleChoice: true, availableRoles: data.availableRoles || ['owner','user'], roleChoiceTicket: data.roleChoiceTicket || '' };
+  if (!data.token || !data.user) throw new Error('لم يتم إنشاء جلسة بعد الدخول بالبصمة.');
+  const session: AuthSession = { token: data.token, user: data.user };
+  saveSession(session); applyUserToProfile(session.user); return session;
+}
+
+export async function enablePasskeyOnThisDevice(deviceName?: string) {
+  return enrollPasskey(deviceName);
 }
 
 const API_BASE = 'https://smart-time-ai.duckdns.org';

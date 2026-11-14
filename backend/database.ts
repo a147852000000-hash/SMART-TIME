@@ -253,6 +253,13 @@ try { db.exec('ALTER TABLE phone_otps ADD COLUMN remote_provider TEXT'); } catch
 try { db.exec('ALTER TABLE phone_otps ADD COLUMN remote_verification_id TEXT'); } catch {}
 try { db.exec(`CREATE TABLE IF NOT EXISTS password_resets (email TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires_at TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)`); } catch {}
 
+// Google sign-in linking: google_id is unique when present (a Google account
+// can be linked to at most one local account). Password stays NOT NULL —
+// Google-only users get an unguessable random hash and can still use
+// forgot-password to set a real password later.
+try { db.exec('ALTER TABLE users ADD COLUMN google_id TEXT'); } catch {}
+try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id) WHERE google_id IS NOT NULL'); } catch {}
+
 // Safe migrations for conversations
 try { db.exec('ALTER TABLE conversations ADD COLUMN title TEXT'); } catch {}
 try { db.exec('ALTER TABLE conversations ADD COLUMN description TEXT'); } catch {}

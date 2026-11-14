@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Eye, EyeOff, LockKeyhole, Mail, UserRound } from 'lucide-react';
-import { forgotPassword, loginWithIdentifier, registerWithEmail, resetPassword, selectLoginRole } from '../services/authService';
+import { Eye, EyeOff, Fingerprint, LockKeyhole, Mail, UserRound } from 'lucide-react';
+import { forgotPassword, loginWithIdentifier, loginWithGoogle, loginWithPasskey, registerWithEmail, resetPassword, selectLoginRole } from '../services/authService';
+import { googleSignInConfigured, renderGoogleSignInButton } from '../services/googleAuthService';
 import { isTurnstileWidgetConfigured, renderTurnstile, resetTurnstile } from '../services/turnstileService';
 
 interface Props {
@@ -26,6 +27,20 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
   const [roleChoiceTicket, setRoleChoiceTicket] = useState('');
   const [showRoleChoice, setShowRoleChoice] = useState(false);
   const [emailExistsInRailway, setEmailExistsInRailway] = useState(false);
+  const [passkeyAvailable, setPasskeyAvailable] = useState(false);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const googleContainerRef = useRef<HTMLDivElement | null>(null);
+  const googleConfigured = googleSignInConfigured();
+
+  // Detect the platform authenticator (fingerprint sensor) once per mount.
+  useEffect(() => {
+    let cancelled = false;
+    import('../services/authService').then(({ fingerprintLoginAvailable }) =>
+      fingerprintLoginAvailable().then((available) => { if (!cancelled) setPasskeyAvailable(available); })
+    ).catch(() => { if (!cancelled) setPasskeyAvailable(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   // B-2: the Turnstile widget is only wired when the deployment ships a site
   // key (VITE_TURNSTILE_SITE_KEY). The token is sent with every auth request
@@ -67,6 +82,60 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
     }
   };
   const switchMode = (next: Mode) => { setMode(next); clearError(); setCode(''); setResetSent(false); };
+
+  // Google Identity Services official button (free) — rendered only when the
+  // deployment ships VITE_GOOGLE_CLIENT_ID; otherwise the legacy stub message
+  // below keeps working unchanged.
+  useEffect(() => {
+    if (!googleConfigured || mode !== 'login' || !googleContainerRef.current) return;
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+    renderGoogleSignInButton(googleContainerRef.current, (idToken) => {
+      if (!cancelled) void handleGoogleCredential(idToken);
+    })
+      .then((fn) => { cleanup = fn; })
+      .catch((err) => { if (!cancelled) setError(err?.message || 'تعذر تحميل خدمة جوجل.'); });
+    return () => { cancelled = true; cleanup?.(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleConfigured, mode]);
+
+  const handleGoogleCredential = async (idToken: string) => {
+    if (googleBusy || busy) return;
+    setGoogleBusy(true);
+    clearError();
+    try {
+      const result = await loginWithGoogle(idToken);
+      if ('requiresRoleChoice' in result && result.requiresRoleChoice) {
+        setRoleChoiceTicket(result.roleChoiceTicket || '');
+        setShowRoleChoice(true);
+        return;
+      }
+      onAuthenticated();
+    } catch (err: any) {
+      setError(err?.message || 'فشل تسجيل الدخول بجوجل.');
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
+
+  const handlePasskeyLogin = async () => {
+    if (passkeyBusy || busy) return;
+    setPasskeyBusy(true);
+    clearError();
+    try {
+      const result = await loginWithPasskey();
+      if ('requiresRoleChoice' in result && result.requiresRoleChoice) {
+        setRoleChoiceTicket(result.roleChoiceTicket || '');
+        setShowRoleChoice(true);
+        return;
+      }
+      onAuthenticated();
+    } catch (err: any) {
+      setError(err?.message || 'تعذر الدخول بالبصمة.');
+    } finally {
+      setPasskeyBusy(false);
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setError(''); setBusy(true);
@@ -241,22 +310,32 @@ export const AuthView: React.FC<Props> = ({ onAuthenticated, onGuest, loginNotic
                   </p>
                 </div>
 
-                {/* Divider + Google BETWEEN Sign up and Guest */}
+                {/* Divider + fingerprint + Google BETWEEN Sign up and Guest */}
                 <div className="pt-0 sm:pt-2">
                   <div className="mb-1 flex items-center gap-2 text-[11px] sm:mb-4 sm:gap-3 sm:text-sm text-gray-500">
                     <span className="h-px flex-1 bg-[#D4AF37]/40"/>
                     <span>or continue with</span>
                     <span className="h-px flex-1 bg-[#D4AF37]/40"/>
                   </div>
-                  <button type="button" onClick={()=>setError('Google sign-in is not configured on this deployment yet.')} className="flex min-h-[36px] sm:min-h-[68px] w-full items-center justify-center gap-3 rounded-[14px] border border-[#D4AF37]/50 bg-white px-4 py-1 sm:py-3 text-[12px] sm:text-[20px] shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#C5A059]/40">
-                    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24">
-                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18c-.72 1.44-1.13 3.07-1.13 4.93s.41 3.49 1.13 4.93l3.66-2.84z"/>
-                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                    </svg>
-                    <span className="font-medium text-gray-800">Continue with Google</span>
-                  </button>
+                  {passkeyAvailable && (
+                    <button type="button" onClick={() => { void handlePasskeyLogin(); }} disabled={passkeyBusy || busy} aria-busy={passkeyBusy} className="mb-2 sm:mb-3 flex min-h-[36px] sm:min-h-[68px] w-full items-center justify-center gap-3 rounded-[14px] border border-[#D4AF37]/50 bg-white px-4 py-1 sm:py-3 text-[12px] sm:text-[20px] shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#C5A059]/40 disabled:cursor-wait disabled:opacity-60">
+                      <Fingerprint className="h-5 w-5 shrink-0 text-[#C5A059]"/>
+                      <span className="font-medium text-gray-800">{passkeyBusy ? 'جارٍ التحقق بالبصمة…' : 'الدخول بالبصمة — Fingerprint'}</span>
+                    </button>
+                  )}
+                  {googleConfigured ? (
+                    <div ref={googleContainerRef} className="flex justify-center min-h-[40px] sm:min-h-[50px] items-center" aria-busy={googleBusy} />
+                  ) : (
+                    <button type="button" onClick={()=>setError('Google sign-in is not configured on this deployment yet.')} className="flex min-h-[36px] sm:min-h-[68px] w-full items-center justify-center gap-3 rounded-[14px] border border-[#D4AF37]/50 bg-white px-4 py-1 sm:py-3 text-[12px] sm:text-[20px] shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#C5A059]/40">
+                      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18c-.72 1.44-1.13 3.07-1.13 4.93s.41 3.49 1.13 4.93l3.66-2.84z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                      </svg>
+                      <span className="font-medium text-gray-800">Continue with Google</span>
+                    </button>
+                  )}
                 </div>
 
                 {/* Guest directly after Google - no second divider */}

@@ -18,6 +18,12 @@ import { isLocalSmartAiConfigured } from "./backend/ai/localInference.js";
 import { createHttpVoiceDnaProvider, DisabledVoiceDnaProvider } from "./backend/voice/voiceDnaProvider.js";
 import { sendPasswordResetEmail as sendPasswordResetEmailWithProvider } from "./backend/auth/passwordResetEmail.js";
 import { isTurnstileEnforced, verifyTurnstileToken } from "./backend/auth/turnstile.js";
+import { verifyGoogleIdToken } from "./backend/auth/google.js";
+import {
+  ensureWebauthnTables, storeChallenge, takeChallenge, randomChallenge,
+  verifyRegistration, verifyAssertion, listUserCredentials, deleteUserCredential,
+  rpIdForHost, toB64u, fromB64u,
+} from "./backend/auth/webauthn.js";
 
 dotenv.config();
 
@@ -98,6 +104,8 @@ app.use((req, res, next) => {
 });
 seedServiceStatuses();
 seedDefaultChatRooms();
+// Passkey (fingerprint login) tables — created idempotently at boot.
+ensureWebauthnTables();
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
@@ -442,6 +450,168 @@ app.post('/api/auth/owner/activate',(req,res)=>{
 });
 app.post('/api/auth/phone-login/request-otp', turnstileGuard, rateLimitGuard('phone-otp', 5, 60, (req) => [normalizePhone(req.body?.phone) || 'unknown', clientIp(req)]),async(req,res)=>{try{const phone=normalizePhone(req.body.phone);if(phone.length<8)return res.status(400).json({error:'رقم الهاتف غير صحيح'});const row=db.prepare('SELECT id FROM users WHERE phone=? AND phone_verified=1').get(phone) as any;if(!row)return res.status(404).json({error:'هذا الرقم غير مرتبط بحساب موثق.'});try{const otpResult=await requestPhoneOtp(phone);res.json({ok:true,expiresAt:otpResult.expires,devCode:otpResult.devCode,smsProvider:otpResult.provider});}catch(err:any){return res.status(503).json({error:err.message||'تعذر إرسال SMS'});}}catch(e:any){res.status(500).json({error:e.message||'تعذر إرسال رمز SMS'});}});
 app.post('/api/auth/phone-login',async(req,res)=>{try{const phone=normalizePhone(req.body.phone),code=String(req.body.code||'').trim();const check=await checkPhoneOtp(phone,code);if(!check.ok)return res.status(check.status).json({error:check.error});const row=db.prepare('SELECT * FROM users WHERE phone=? AND phone_verified=1').get(phone) as any;if(!row)return res.status(404).json({error:'هذا الرقم غير مرتبط بحساب موثق.'});db.prepare('DELETE FROM phone_otps WHERE phone=?').run(phone);res.json({token:createSession(row.id),user:publicUser({...row,name:row.display_name,phoneVerified:row.phone_verified})});}catch(e:any){res.status(500).json({error:e.message||'تعذر تسجيل الدخول بالهاتف'});}});
+
+// ---------- Google Sign-In (free Google Identity Services, no quota) ----------
+// The client obtains an ID token via accounts.google.com/gsi/client; this
+// endpoint verifies the signature against Google's JWKS, then finds/links or
+// creates the local account. GOOGLE_CLIENT_ID unset -> 503 (deployment keeps
+// working exactly as before; the frontend hides the button too).
+const GOOGLE_CLIENT_ID = String(process.env.GOOGLE_CLIENT_ID || '').trim();
+
+app.post('/api/auth/google', rateLimitGuard('login', 10, 15, (req) => [clientIp(req)]), async (req,res)=>{
+  try {
+    if (!GOOGLE_CLIENT_ID) return res.status(503).json({ error: 'تسجيل الدخول بجوجل غير مفعل على هذا الخادم.', code: 'GOOGLE_NOT_CONFIGURED' });
+    const credential = String(req.body?.credential || '').trim();
+    if (!credential) return res.status(400).json({ error: 'رمز جوجل مفقود.' });
+    let profile;
+    try { profile = await verifyGoogleIdToken(credential, { clientId: GOOGLE_CLIENT_ID }); }
+    catch (err: any) { return res.status(401).json({ error: err?.message || 'فشل التحقق من حساب جوجل.' }); }
+    let row = db.prepare('SELECT * FROM users WHERE google_id=?').get(profile.sub) as any;
+    if (!row) {
+      const byEmail = db.prepare('SELECT * FROM users WHERE email=?').get(profile.email) as any;
+      if (byEmail) {
+        // Link the Google identity to the existing email account (the ID token
+        // already proves control of that mailbox: email_verified=true).
+        if (byEmail.google_id && byEmail.google_id !== profile.sub) return res.status(409).json({ error: 'هذا البريد مرتبط بحساب جوجل آخر.' });
+        db.prepare('UPDATE users SET google_id=? WHERE id=?').run(profile.sub, byEmail.id);
+        row = db.prepare('SELECT * FROM users WHERE id=?').get(byEmail.id) as any;
+      } else {
+        // Brand-new account via Google: unguessable random password hash so
+        // password login stays impossible until the user sets a real password
+        // through forgot-password. Account is active immediately.
+        const id = `usr_${crypto.randomUUID()}`;
+        const rawBase = profile.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_.-]/g, '').slice(0, 20);
+        let base = rawBase.length >= 3 ? rawBase : `gt${rawBase}`;
+        while (base.length < 3) base = `${base}g`;
+        let username = base;
+        for (let attempt = 0; attempt < 25 && db.prepare('SELECT id FROM users WHERE username=?').get(username); attempt++) {
+          username = `${base}-${crypto.randomInt(1000, 9999)}`;
+        }
+        if (db.prepare('SELECT id FROM users WHERE username=?').get(username)) username = `${base}-${crypto.randomInt(100000, 999999)}`;
+        const now = new Date().toISOString();
+        db.prepare("INSERT INTO users (id,email,username,password_hash,display_name,created_at,phone,phone_verified,activation_status,google_id) VALUES (?,?,?,?,?,?,?,?,?,?)")
+          .run(id, profile.email, username, hashPassword(crypto.randomBytes(32).toString('hex')), profile.name || username, now, null, 0, 'active', profile.sub);
+        row = db.prepare('SELECT * FROM users WHERE id=?').get(id) as any;
+      }
+    }
+    // Mirror /api/auth/login owner role-choice flow exactly.
+    if (resolvedAccountRole(row) === 'owner') {
+      const roleChoiceTicket = createSession(row.id, 'role_choice', 5/1440);
+      return res.json({ requiresRoleChoice: true, availableRoles: ['owner','user'], roleChoiceTicket });
+    }
+    const role = resolvedAccountRole(row);
+    const user = { ...row, name: row.display_name, phoneVerified: row.phone_verified, session_role: role };
+    res.json({ token: createSession(row.id, role), user: publicUser(user) });
+  } catch (e: any) { res.status(500).json({ error: e.message || 'تعذر تسجيل الدخول بجوجل' }); }
+});
+
+// ---------- Passkey / fingerprint login (WebAuthn platform authenticator) ----------
+// Free forever: the biometric matching happens on the user's own device
+// (Android fingerprint / Windows Hello / Touch ID); this server only verifies
+// signatures with node:crypto. Passkeys belong to real registered accounts —
+// guest/trial sessions cannot enroll one.
+
+const passkeyHostHeader = (req: express.Request) => String((req.headers as any)['x-forwarded-host'] || req.headers.host || '');
+const passkeyProtoHeader = (req: express.Request) => String((req.headers as any)['x-forwarded-proto'] || '');
+
+app.post('/api/auth/passkey/register/options', (req,res)=>{
+  const user = authUser(req);
+  if (!user || user.session_role === 'role_choice') return res.status(401).json({ error: 'يجب تسجيل الدخول أولاً' });
+  if (String(user.id) === TRIAL_USER_ID) return res.status(403).json({ error: 'حساب الزائر لا يمكنه تفعيل الدخول بالبصمة. سجّل حسابًا حقيقيًا أولًا.' });
+  const rpId = rpIdForHost(passkeyHostHeader(req));
+  const challenge = randomChallenge();
+  storeChallenge(`register:${user.id}`, 'register', challenge);
+  res.json({
+    rp: { id: rpId, name: 'SmartTime' },
+    user: {
+      id: toB64u(Buffer.from(String(user.id), 'utf8')),
+      name: String(user.email || user.username || user.id),
+      displayName: String(user.name || user.email || user.id),
+    },
+    challenge,
+    pubKeyCredParams: [
+      { type: 'public-key', alg: -7 },    // ES256
+      { type: 'public-key', alg: -257 },  // RS256
+      { type: 'public-key', alg: -8 },    // EdDSA
+    ],
+    authenticatorSelection: { residentKey: 'required', requireResidentKey: true, userVerification: 'required' },
+    timeout: 120000,
+    attestation: 'none',
+  });
+});
+
+app.post('/api/auth/passkey/register/verify', (req,res)=>{
+  const user = authUser(req);
+  if (!user || user.session_role === 'role_choice') return res.status(401).json({ error: 'يجب تسجيل الدخول أولاً' });
+  if (String(user.id) === TRIAL_USER_ID) return res.status(403).json({ error: 'حساب الزائر لا يمكنه تفعيل الدخول بالبصمة.' });
+  const cred = req.body?.credential;
+  if (!cred?.response?.clientDataJSON || !cred?.response?.attestationObject) return res.status(400).json({ error: 'بيانات تسجيل البصمة مفقودة.' });
+  const result = verifyRegistration({
+    userId: String(user.id),
+    hostHeader: passkeyHostHeader(req),
+    protoHeader: passkeyProtoHeader(req),
+    expectedChallengeId: `register:${user.id}`,
+    credentialIdB64u: String(cred.id || ''),
+    rawIdB64u: String(cred.rawId || ''),
+    clientDataJSON: fromB64u(String(cred.response.clientDataJSON)),
+    attestationObject: fromB64u(String(cred.response.attestationObject)),
+    transports: Array.isArray(cred.transports) ? cred.transports.join(',') : String(cred.transports || ''),
+    deviceName: String(req.body?.deviceName || ''),
+  });
+  if (!result.ok) return res.status(400).json({ error: result.error || 'تعذر تسجيل البصمة.' });
+  res.json({ ok: true, credentialId: result.credentialId, deviceName: result.deviceName, message: 'تم تفعيل الدخول بالبصمة على هذا الجهاز.' });
+});
+
+app.post('/api/auth/passkey/login/options', rateLimitGuard('passkey-login', 20, 15, (req) => [clientIp(req)]), (req,res)=>{
+  const rpId = rpIdForHost(passkeyHostHeader(req));
+  const challenge = randomChallenge();
+  const challengeId = `login:${crypto.randomBytes(16).toString('hex')}`;
+  storeChallenge(challengeId, 'login', challenge);
+  res.json({ rpId, challenge, challengeId, timeout: 120000, userVerification: 'required' });
+});
+
+app.post('/api/auth/passkey/login/verify', rateLimitGuard('passkey-login', 20, 15, (req) => [clientIp(req)]), (req,res)=>{
+  try {
+    const cred = req.body?.credential;
+    const challengeId = String(req.body?.challengeId || '');
+    if (!cred?.response?.clientDataJSON || !cred?.response?.authenticatorData || !cred?.response?.signature || !challengeId) {
+      return res.status(400).json({ error: 'بيانات الدخول بالبصمة مفقودة.' });
+    }
+    const result = verifyAssertion({
+      hostHeader: passkeyHostHeader(req),
+      protoHeader: passkeyProtoHeader(req),
+      expectedChallengeId: challengeId,
+      credentialIdB64u: String(cred.id || ''),
+      clientDataJSON: fromB64u(String(cred.response.clientDataJSON)),
+      authenticatorData: fromB64u(String(cred.response.authenticatorData)),
+      signature: fromB64u(String(cred.response.signature)),
+    });
+    if (!result.ok || !result.userId) return res.status(401).json({ error: result.error || 'فشل التحقق من البصمة.' });
+    const row = db.prepare('SELECT * FROM users WHERE id=?').get(result.userId) as any;
+    if (!row) return res.status(404).json({ error: 'الحساب المرتبط بالبصمة غير موجود.' });
+    if (resolvedAccountRole(row) === 'owner') {
+      const roleChoiceTicket = createSession(row.id, 'role_choice', 5/1440);
+      return res.json({ requiresRoleChoice: true, availableRoles: ['owner','user'], roleChoiceTicket });
+    }
+    const role = resolvedAccountRole(row);
+    const user = { ...row, name: row.display_name, phoneVerified: row.phone_verified, session_role: role };
+    res.json({ token: createSession(row.id, role), user: publicUser(user) });
+  } catch (e: any) { res.status(500).json({ error: e.message || 'تعذر الدخول بالبصمة' }); }
+});
+
+app.get('/api/auth/passkeys', (req,res)=>{
+  const user = authUser(req);
+  if (!user || user.session_role === 'role_choice') return res.status(401).json({ error: 'يجب تسجيل الدخول أولاً' });
+  res.json({ passkeys: listUserCredentials(String(user.id)) });
+});
+
+app.delete('/api/auth/passkeys/:id', (req,res)=>{
+  const user = authUser(req);
+  if (!user || user.session_role === 'role_choice') return res.status(401).json({ error: 'يجب تسجيل الدخول أولاً' });
+  const removed = deleteUserCredential(String(user.id), String(req.params.id || ''));
+  if (!removed) return res.status(404).json({ error: 'بصمة غير موجودة على هذا الحساب.' });
+  res.json({ ok: true });
+});
 app.post('/api/auth/forgot-password',turnstileGuard,async(req,res)=>{try{const email=String(req.body.email||'').trim().toLowerCase();const row=db.prepare('SELECT id FROM users WHERE email=?').get(email) as any;if(!row)return res.json({ok:true,emailSent:false,message:'إذا كان البريد مسجلاً فستصلك تعليمات الاستعادة.'});const code=String(crypto.randomInt(100000,1000000)),expires=new Date(Date.now()+PASSWORD_RESET_MINUTES*60000).toISOString();db.prepare(`INSERT INTO password_resets(email,code_hash,expires_at,attempts,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,expires_at=excluded.expires_at,attempts=0,created_at=excluded.created_at`).run(email,otpHash(code),expires,0,new Date().toISOString());try{const info=await sendPasswordResetEmail(email,code);res.json({ok:true,emailSent:true,provider:info.provider});}catch(mailErr:any){db.prepare('DELETE FROM password_resets WHERE email=?').run(email);res.status(503).json({error:mailErr.message||'تعذر إرسال رسالة إعادة تعيين كلمة المرور.'});}}catch(e:any){res.status(500).json({error:e.message||'تعذر بدء استعادة كلمة المرور'});}});
 app.post('/api/auth/reset-password',(req,res)=>{try{const email=String(req.body.email||'').trim().toLowerCase(),code=String(req.body.code||'').trim(),newPassword=String(req.body.newPassword||'');if(newPassword.length<8)return res.status(400).json({error:'كلمة المرور يجب أن تكون 8 أحرف على الأقل'});const reset=db.prepare('SELECT * FROM password_resets WHERE email=?').get(email) as any;if(!reset||new Date(reset.expires_at).getTime()<Date.now())return res.status(400).json({error:'رمز الاستعادة منتهي أو غير موجود'});if(reset.attempts>=5)return res.status(429).json({error:'تم تجاوز عدد المحاولات.'});db.prepare('UPDATE password_resets SET attempts=attempts+1 WHERE email=?').run(email);if(otpHash(code)!==reset.code_hash)return res.status(400).json({error:'رمز الاستعادة غير صحيح'});db.prepare('UPDATE users SET password_hash=? WHERE email=?').run(hashPassword(newPassword),email);db.prepare('DELETE FROM password_resets WHERE email=?').run(email);res.json({ok:true});}catch(e:any){res.status(500).json({error:e.message||'تعذر تغيير كلمة المرور'});}});
 app.post('/api/auth/logout',(req,res)=>{const h=String(req.headers.authorization||''),token=h.startsWith('Bearer ')?h.slice(7).trim():'';if(token)db.prepare('DELETE FROM sessions WHERE id=?').run(token);res.json({ok:true});});
