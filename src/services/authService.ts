@@ -150,8 +150,6 @@ export async function enablePasskeyOnThisDevice(deviceName?: string) {
   return enrollPasskey(deviceName);
 }
 
-const API_BASE = 'https://smart-time-ai.duckdns.org';
-
 export async function forgotPassword(email: string) {
   const normalizedEmail = email.trim();
   if (!normalizedEmail) throw new Error('أدخل بريدك الإلكتروني.');
@@ -240,8 +238,10 @@ export async function logout() {
 
 
 /**
- * Best-effort mirror registration to the Oracle API so forgot-password can find
- * accounts created through the primary app registration flow.
+ * [FIX batch9] كان يسجل على رابط أوراكل الثابت حتى لو كان التطبيق موصولًا بسيرفر
+ * آخر — الآن يتبع نفس عنوان الـ API المضبوط عبر apiUrl() مثل بقية خدمات المصادقة.
+ * Best-effort mirror registration so forgot-password can find accounts created
+ * through the primary app registration flow.
  */
 export async function register(email: string, name: string, password: string) {
   const normalizedEmail = email.trim().toLowerCase();
@@ -251,7 +251,7 @@ export async function register(email: string, name: string, password: string) {
     .slice(0, 30);
   const username = usernameBase.length >= 3 ? usernameBase : `usr_${usernameBase}`;
 
-  const response = await fetch(`${API_BASE}/api/auth/register`, {
+  const response = await fetch(apiUrl('/api/auth/register'), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email: normalizedEmail, name: name.trim(), password, username }),
