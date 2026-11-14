@@ -94,7 +94,7 @@ fi
 # 4) كتابة ملف البيئة .env (القيم التي مُرِّرت للسكريبت أو placeholders)
 # -----------------------------------------------------------------------------
 log "4/8 كتابة ${APP_DIR}/.env"
-ENV_KEYS=(GROQ_API_KEY TURNSTILE_SECRET_KEY RESEND_API_KEY SMTP_HOST SMTP_PORT
+ENV_KEYS=(GROQ_API_KEY TURNSTILE_SECRET_KEY GOOGLE_CLIENT_ID RESEND_API_KEY SMTP_HOST SMTP_PORT
           SMTP_SECURE SMTP_USER SMTP_PASS SMTP_FROM EMAIL_PROVIDER EMAIL_FROM
           TOMTOM_API_KEY GNEWS_API_KEY RAPIDAPI_KEY API_FOOTBALL_KEY
           MESSAGECENTRAL_CUSTOMER_ID MESSAGECENTRAL_KEY SMS_PROVIDER
@@ -115,9 +115,11 @@ warn "أكمل قيم المفاتيح الفارغة في ${APP_DIR}/.env (خا
 # 5) بناء الواجهة (متغيرات VITE تُدمج وقت البناء) + بناء السيرفر
 # -----------------------------------------------------------------------------
 log "5/8 البناء (npm ci + build)"
-if [[ -n "${VITE_TURNSTILE_SITE_KEY:-}" ]]; then
-  echo "VITE_TURNSTILE_SITE_KEY=${VITE_TURNSTILE_SITE_KEY}" > "$APP_DIR/.env.local"
-  warn "VITE_TURNSTILE_SITE_KEY كُتب في .env.local — أعد البناء إذا غيّرته"
+if [[ -n "${VITE_TURNSTILE_SITE_KEY:-}" || -n "${VITE_GOOGLE_CLIENT_ID:-}" ]]; then
+  : > "$APP_DIR/.env.local"
+  [[ -n "${VITE_TURNSTILE_SITE_KEY:-}" ]] && echo "VITE_TURNSTILE_SITE_KEY=${VITE_TURNSTILE_SITE_KEY}" >> "$APP_DIR/.env.local"
+  [[ -n "${VITE_GOOGLE_CLIENT_ID:-}" ]] && echo "VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}" >> "$APP_DIR/.env.local"
+  warn "متغيرات الواجهة (Turnstile/Google) كُتبت في .env.local — أعد البناء إذا غيّرتها"
 else
   rm -f "$APP_DIR/.env.local"
 fi

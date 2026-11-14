@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { enablePasskeyOnThisDevice, listAccountPasskeys, removeAccountPasskey, fingerprintLoginAvailable } from '../services/authService';
 import {
   Settings,
   X,
@@ -7,6 +8,7 @@ import {
   RotateCcw,
   User,
   Shield,
+  Fingerprint,
   Palette,
   Globe,
   DollarSign,
@@ -256,9 +258,29 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
   // Card Studio Modal State
   const [isCardCustomizerOpen, setIsCardCustomizerOpen] = useState(false);
 
+  // Fingerprint (passkey) enrollment state — only for real registered accounts.
+  const isGuestAccount = String(userProfile.email || '').toLowerCase() === 'trial@smart-time.local' || !userProfile.email;
+  const [passkeySupported, setPasskeySupported] = useState(false);
+  const [passkeyList, setPasskeyList] = useState<Array<{ id: string; deviceName?: string | null; createdAt: string; alg: string }>>([]);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+
   // مرجع إدخال ملف الصورة وتحميلها من الهاتف
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Load passkey availability + enrolled devices whenever the modal opens.
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    fingerprintLoginAvailable().then((available) => {
+      if (cancelled || !available) return;
+      setPasskeySupported(true);
+      listAccountPasskeys()
+        .then((list) => { if (!cancelled) setPasskeyList(list); })
+        .catch(() => { /* guest or offline — the enroll button handles messaging */ });
+    }).catch(() => { /* platform without WebAuthn */ });
+    return () => { cancelled = true; };
+  }, [isOpen]);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   // حساب العمر والبرج التلقائي الدقيق من تاريخ الميلاد
@@ -712,6 +734,72 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
                   <span>{isAr ? 'تسجيل الخروج من الحساب' : 'Log out of account'}</span>
                 </button>
               </div>
+
+              {/* الدخول بالبصمة (Passkey) — للأجهزة المدعومة فقط وللحسابات الحقيقية */}
+              {passkeySupported && !isGuestAccount && (
+                <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-accent-500/10 text-accent-600 dark:text-accent-400 flex items-center justify-center">
+                      <Fingerprint className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-sm text-slate-900 dark:text-white">{isAr ? 'الدخول بالبصمة' : 'Fingerprint Login'}</h3>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">{isAr ? 'فعّل الدخول بالبصمة أو قفل الشاشة على هذا الجهاز — بدون كتابة كلمة المرور، وبياناتك البيومترية لا تغادر جهازك أبدًا.' : 'Enable fingerprint / screen-lock sign-in on this device. Biometrics never leave your device.'}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={passkeyBusy}
+                    onClick={async () => {
+                      if (passkeyBusy) return;
+                      setPasskeyBusy(true);
+                      try {
+                        const result = await enablePasskeyOnThisDevice();
+                        showToast(result?.message || (isAr ? 'تم تفعيل الدخول بالبصمة على هذا الجهاز.' : 'Fingerprint login enabled on this device.'));
+                        setPasskeyList(await listAccountPasskeys());
+                      } catch (err: any) {
+                        showToast(err?.message || (isAr ? 'تعذر تفعيل البصمة.' : 'Could not enable fingerprint login.'));
+                      } finally {
+                        setPasskeyBusy(false);
+                      }
+                    }}
+                    className="w-full py-3 rounded-xl bg-accent-500 text-slate-950 font-black text-xs hover:bg-accent-600 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    <Fingerprint className="w-4 h-4" />
+                    <span>{isAr ? 'تفعيل الدخول بالبصمة على هذا الجهاز' : 'Enable fingerprint sign-in on this device'}</span>
+                  </button>
+                  {passkeyList.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300">{isAr ? 'الأجهزة المسجلة:' : 'Enrolled devices:'}</p>
+                      {passkeyList.map((pk) => (
+                        <div key={pk.id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2">
+                          <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 truncate">{pk.deviceName || pk.id.slice(0, 14) + '…'} · {new Date(pk.createdAt).toLocaleDateString(isAr ? 'ar-EG' : 'en-GB')}</span>
+                          <button
+                            type="button"
+                            disabled={passkeyBusy}
+                            onClick={async () => {
+                              if (passkeyBusy) return;
+                              setPasskeyBusy(true);
+                              try {
+                                await removeAccountPasskey(pk.id);
+                                setPasskeyList(await listAccountPasskeys());
+                                showToast(isAr ? 'تم إلغاء تسجيل هذا الجهاز.' : 'Device removed.');
+                              } catch (err: any) {
+                                showToast(err?.message || (isAr ? 'تعذر حذف البصمة.' : 'Could not remove passkey.'));
+                              } finally {
+                                setPasskeyBusy(false);
+                              }
+                            }}
+                            className="text-[11px] font-black text-rose-600 dark:text-rose-400 hover:underline disabled:opacity-50"
+                          >
+                            {isAr ? 'إزالة' : 'Remove'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* 1. اختيار صورة المستخدم من هاتفه أو من النماذج الجاهزة */}
               <div
