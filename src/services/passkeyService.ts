@@ -5,7 +5,7 @@
  * All base64url <-> bytes conversion lives here so authService and the UI
  * components stay simple. No third-party packages, no network services.
  */
-import { apiUrl } from './apiConfig';
+import { apiUrl, API_BASE_URL } from './apiConfig';
 import { authHeaders } from './authService';
 
 // ---------- base64url helpers ----------
@@ -35,6 +35,16 @@ export function webauthnAvailable(): boolean {
 
 export async function fingerprintLoginAvailable(): Promise<boolean> {
   if (availabilityCache !== null) return availabilityCache;
+  // Cross-origin mode (Capacitor APK talking to a remote server): the backend
+  // derives the WebAuthn rp-id from the request Host header, while the WebView
+  // origin stays https://localhost — the ceremony would fail closed at verify.
+  // Hide fingerprint auth in that mode instead of showing a broken button.
+  try {
+    if (API_BASE_URL && typeof window !== 'undefined' && window.location.origin !== API_BASE_URL) {
+      availabilityCache = false;
+      return false;
+    }
+  } catch { /* ignore */ }
   try {
     if (!webauthnAvailable() || typeof window.PublicKeyCredential!.isUserVerifyingPlatformAuthenticatorAvailable !== 'function') {
       availabilityCache = false;
