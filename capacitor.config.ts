@@ -6,7 +6,8 @@ import type { CapacitorConfig } from '@capacitor/cli';
  * - androidScheme https: أصل التطبيق يصبح https://localhost (CORS الموجود في
  *   server.ts يسمح به أصلاً، و WebAuthn يحتاج سياق آمن).
  * - cleartext + allowMixedContent: يسمح بـ http:// للسيرفرات المحلية/اللان.
- * - الواجهة تعمل من dist/client وتتصل بأي سيرفر يختاره المستخدم أول تشغيل.
+ * - نسخة v1.1: العنوان يُثبت وقت البناء عبر VITE_API_URL فالتطبيق يعمل من
+ *   أول فتح بدون أي إعداد — وشاشة الإعداد تبقى متاحة عبر زر ⚙ للصيانة فقط.
  */
 const config: CapacitorConfig = {
   appId: 'app.smarttime.free',
@@ -15,6 +16,8 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: 'https',
     cleartext: true,
+  },
+  android: {
     allowMixedContent: true,
   },
 };
