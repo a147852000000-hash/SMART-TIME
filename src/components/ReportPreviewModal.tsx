@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { printCurrentPage, openPrintWindow } from '../utils/printExport';
 import {
   FileText,
   X,
@@ -273,7 +274,7 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
 
   // Print Window
   const handlePrint = () => {
-    window.print();
+    printCurrentPage(); // [FIX batch8]
   };
 
   const currentStudent = students.find((s) => s.id === selectedStudentId);

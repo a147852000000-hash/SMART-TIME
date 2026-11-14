@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { printCurrentPage, openPrintWindow } from '../../utils/printExport';
 import {
   ArrowRight,
   ArrowLeft,
@@ -218,8 +219,8 @@ export const HouseExpensesSection: React.FC<HouseExpensesSectionProps> = ({
   const exportMedical = (mode: 'excel' | 'print') => {
     const rows = currentMonthMedical.map(e => [e.date, e.familyMember, e.facilityType, e.facilityName || '', e.conditionDescription, e.doctorDiagnosis || '', e.examinationCost, e.medicationCost, (e.examinationCost || 0) + (e.medicationCost || 0), e.notes || '']);
     if (mode === 'print') {
-      const w = window.open('', '_blank'); if (!w) return;
-      w.document.write(`<html dir="rtl"><head><title>المصروفات الطبية</title><meta charset="utf-8"><style>body{font-family:Arial;padding:24px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;text-align:right}</style></head><body><h2>القسم الطبي - المصروفات الطبية</h2><table><tr><th>التاريخ</th><th>الفرد</th><th>الجهة</th><th>الحالة</th><th>التشخيص</th><th>الكشف</th><th>الأدوية</th><th>الإجمالي</th></tr>${rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]} ${r[3]}</td><td>${r[4]}</td><td>${r[5]}</td><td>${r[6]}</td><td>${r[7]}</td><td>${r[8]}</td></tr>`).join('')}</table><script>window.print()</script></body></html>`); w.document.close(); return;
+      // [FIX batch8] WebView لا يدعم النوافذ المنبثقة/الطباعة — openPrintWindow يدير ذلك.
+      if (!openPrintWindow(`<html dir="rtl"><head><title>المصروفات الطبية</title><meta charset="utf-8"><style>body{font-family:Arial;padding:24px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;text-align:right}</style></head><body><h2>القسم الطبي - المصروفات الطبية</h2><table><tr><th>التاريخ</th><th>الفرد</th><th>الجهة</th><th>الحالة</th><th>التشخيص</th><th>الكشف</th><th>الأدوية</th><th>الإجمالي</th></tr>${rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]} ${r[3]}</td><td>${r[4]}</td><td>${r[5]}</td><td>${r[6]}</td><td>${r[7]}</td><td>${r[8]}</td></tr>`).join('')}</table><script>window.print()</script></body></html>`)) return;
     }
     const csv='\uFEFF'+[['التاريخ','فرد الأسرة','نوع الجهة','الجهة','توصيف الحالة','تشخيص الدكتور','تكلفة الكشف','تكلفة الأدوية','الإجمالي','ملاحظات'],...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
     const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'})); const a=document.createElement('a'); a.href=url; a.download=`medical-expenses-${selectedMonth}.csv`; a.click(); URL.revokeObjectURL(url);

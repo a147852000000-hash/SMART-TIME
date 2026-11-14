@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { printCurrentPage, openPrintWindow } from '../../utils/printExport';
 import { ArrowRight, ArrowLeft, BookOpen, GraduationCap, UserPlus, Plus, Trash2, Edit2, Printer, FileSpreadsheet, X, User } from 'lucide-react';
 import { formatMoney, isDateInMonth } from '../../services/financeCalculations';
 import { Language, StudentProfile, StudentExpenseRecord } from '../../types';
@@ -99,8 +100,8 @@ export const EducationExpensesSection: React.FC<EducationExpensesSectionProps> =
 
   const exportStudentPrint = (student: StudentProfile) => {
     const rows = expenses.filter(e => e.studentId === student.id);
-    const w = window.open('', '_blank'); if (!w) return;
-    w.document.write(`<html dir="rtl"><head><meta charset="utf-8"><title>${student.name}</title><style>body{font-family:Arial;padding:24px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px}</style></head><body><h2>ملف الطالب: ${student.name}</h2><p>المرحلة: ${student.stage} — العمر: ${student.age} — الرقم القومي: ${student.nationalId}</p><table><tr><th>النوع</th><th>البيان</th><th>المبلغ</th><th>التاريخ</th></tr>${rows.map(e => `<tr><td>${EXPENSE_TYPES.find(x => x.value === e.subCategory)?.label || e.subCategory}</td><td>${e.title}</td><td>${e.amount} ${currency}</td><td>${e.date}</td></tr>`).join('')}</table><script>window.print()</script></body></html>`); w.document.close();
+    // [FIX batch8]
+    openPrintWindow(`<html dir="rtl"><head><meta charset="utf-8"><title>${student.name}</title><style>body{font-family:Arial;padding:24px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px}</style></head><body><h2>ملف الطالب: ${student.name}</h2><p>المرحلة: ${student.stage} — العمر: ${student.age} — الرقم القومي: ${student.nationalId}</p><table><tr><th>النوع</th><th>البيان</th><th>المبلغ</th><th>التاريخ</th></tr>${rows.map(e => `<tr><td>${EXPENSE_TYPES.find(x => x.value === e.subCategory)?.label || e.subCategory}</td><td>${e.title}</td><td>${e.amount} ${currency}</td><td>${e.date}</td></tr>`).join('')}</table><script>window.print()</script></body></html>`);
   };
 
   if (screen === 'student' && selectedStudent) {

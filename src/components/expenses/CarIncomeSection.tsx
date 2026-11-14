@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { printCurrentPage, openPrintWindow } from '../../utils/printExport';
 import {
   Car,
   Plus,
@@ -920,7 +921,7 @@ export const CarIncomeSection: React.FC<CarIncomeSectionProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => window.print()}
+                  onClick={() => printCurrentPage()} // [FIX batch8]
                   className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 text-xs font-black flex items-center gap-1.5 transition active:scale-95"
                   title={isAr ? 'طباعة ومعاينة PDF' : 'Print / PDF'}
                 >

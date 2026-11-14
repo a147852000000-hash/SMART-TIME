@@ -1,5 +1,6 @@
 import type { Expense } from "../types";
 import { apiUrl } from "./apiConfig";
+import { authHeaders } from "./authService"; // [FIX batch8]
 
 export interface ExpenseImportResponse {
   source: "smart-time-finance-sqlite";
@@ -14,8 +15,7 @@ export interface ExpenseImportResponse {
 export async function importCanonicalExpenses(expenses: Expense[]): Promise<ExpenseImportResponse> {
   const response = await fetch(apiUrl("/api/finance/expenses/import"), {
     method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    headers: { "Content-Type": "application/json", Accept: "application/json", ...authHeaders() },
     body: JSON.stringify({ expenses }),
   });
   const payload = await response.json().catch(() => ({}));
