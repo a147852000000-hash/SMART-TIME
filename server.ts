@@ -5,7 +5,7 @@ import path from "path";
 import dotenv from "dotenv";
 import crypto from "node:crypto";
 import { Buffer } from "node:buffer";
-import { db, seedDefaultChatRooms } from "./backend/database.js";
+import { db, seedDefaultChatRooms, DB_PATH } from "./backend/database.js";
 import { getCache, setCache } from "./backend/cache.js";
 import { getServiceStatuses, seedServiceStatuses, setServiceStatus } from "./backend/serviceStatus.js";
 import { chatRouter, setupChatWebSocket } from "./backend/chatServer.js";
@@ -505,6 +505,7 @@ app.post('/api/auth/login', turnstileGuard, rateLimitGuard('login', 10, 15, (req
   return [normalized || 'unknown', clientIp(req)];
 }),(req,res)=>{try{const identifier=String(req.body.identifier||req.body.email||'').trim(),normalizedEmail=identifier.toLowerCase(),normalizedUsername=normalizeUsername(identifier),password=String(req.body.password||'');let row:any=null;if(identifier.includes('@')) row=db.prepare('SELECT * FROM users WHERE email=?').get(normalizedEmail) as any;else row=db.prepare('SELECT * FROM users WHERE username=?').get(normalizedUsername) as any;if(!row||!verifyPassword(password,row.password_hash)){
       if(SANDBOX_DEMO_AUTH&&!row&&identifier.includes('@'))return res.status(401).json({error:'هذا البريد غير مسجل في نسخة المعاينة هذه (قاعدة بياناتها مستقلة عن الخادم الرئيسي). أنشئ حسابًا جديدًا من «Sign up» أو ادخل كزائر.'});
+      if(SANDBOX_DEMO_AUTH&&row&&identifier.includes('@'))return res.status(401).json({error:'البريد مسجل لكن كلمة المرور غير صحيحة. اضغط «Forgot password?» — في وضع المعاينة سيظهر كود الاستعادة على الشاشة مباشرة.'});
       return res.status(401).json({error:'بيانات الدخول غير صحيحة. تأكد من البريد أو اسم المستخدم وكلمة المرور.'});
     }if(resolvedAccountRole(row)==='owner'){const roleChoiceTicket=createSession(row.id,'role_choice',5/1440);return res.json({requiresRoleChoice:true,availableRoles:['owner','user'],roleChoiceTicket});}const role=resolvedAccountRole(row);const user={...row,name:row.display_name,phoneVerified:row.phone_verified,session_role:role};res.json({token:createSession(row.id,role),user:publicUser(user)});}catch(e:any){res.status(500).json({error:e.message||'تعذر تسجيل الدخول'});}});
 app.post('/api/auth/select-role',(req,res)=>{try{const bodyTicket=String(req.body?.roleChoiceTicket||'');const ticket=authUser(req,true,bodyTicket);if(!ticket||ticket.session_role!=='role_choice')return res.status(401).json({error:'انتهت صلاحية اختيار نوع الدخول. سجّل الدخول مرة أخرى.'});const role=String(req.body.role||'');if(role!=='owner'&&role!=='user')return res.status(400).json({error:'اختيار نوع الدخول غير صالح.'});if(resolvedAccountRole(ticket)!=='owner')return res.status(403).json({error:'هذا الاختيار مخصص لحساب المالك.'});const expires=new Date(Date.now()+AUTH_SESSION_DAYS*86400000).toISOString();db.prepare('UPDATE sessions SET session_role=?,expires_at=? WHERE id=?').run(role,expires,ticket.session_id);const user={...ticket,session_role:role};res.json({token:ticket.session_id,user:publicUser(user)});}catch(e:any){res.status(500).json({error:e.message||'تعذر اختيار نوع الدخول'});}});
@@ -2200,6 +2201,118 @@ app.post("/api/ai/reminders/:reminderId/ack", (req, res) => {
   }
 });
 
+// [FIX batch9] Canonical daily-task CRUD — the exact endpoints
+// src/services/aiService.ts already calls (POST /api/ai/tasks,
+// PATCH /api/ai/tasks/:id, DELETE /api/ai/tasks/:id, POST /api/ai/tasks/import).
+// Previously these hit the 404 catch-all, so pressing "save" on a new task
+// silently failed (user-reported: "adding anything crashes on save").
+// Every route is auth-gated and scoped to the signed-in user's rows only.
+type AiTaskRow = {
+  id: string; user_id: string; title: string; completed: number;
+  priority: string; category: string; due_date: string | null;
+  due_time: string | null; note: string | null; created_at: string; completed_at: string | null;
+};
+
+function mapAiTask(row: AiTaskRow) {
+  return {
+    id: String(row.id),
+    title: String(row.title),
+    completed: Number(row.completed) === 1,
+    priority: String(row.priority || "medium"),
+    category: String(row.category || "general"),
+    dueDate: row.due_date || undefined,
+    dueTime: row.due_time || undefined,
+    noteId: row.note || undefined,
+    createdAt: String(row.created_at),
+    completedAt: row.completed_at || undefined,
+  };
+}
+
+function upsertAiTask(userId: string, task: any): AiTaskRow | null {
+  const title = String(task?.title || "").trim();
+  if (!title) return null;
+  const id = String(task?.id || `task_${crypto.randomUUID()}`).slice(0, 80);
+  const now = new Date().toISOString();
+  const createdAt = String(task?.createdAt || now);
+  const completed = task?.completed === true || task?.completed === 1 ? 1 : 0;
+  const priority = String(task?.priority || "medium").slice(0, 24);
+  const category = String(task?.category || "general").slice(0, 40);
+  const dueDate = task?.dueDate ? String(task.dueDate).slice(0, 32) : null;
+  const dueTime = task?.dueTime ? String(task.dueTime).slice(0, 32) : null;
+  const note = task?.noteId ? String(task.noteId).slice(0, 120) : null;
+  const completedAt = completed ? String(task?.completedAt || now) : null;
+  db.prepare(`
+    INSERT INTO ai_tasks (id, user_id, title, completed, priority, category, due_date, due_time, note, created_at, completed_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      title=excluded.title, completed=excluded.completed, priority=excluded.priority,
+      category=excluded.category, due_date=excluded.due_date, due_time=excluded.due_time,
+      note=excluded.note, completed_at=excluded.completed_at
+    WHERE ai_tasks.user_id = excluded.user_id
+  `).run(id, userId, title, completed, priority, category, dueDate, dueTime, note, createdAt, completedAt);
+  return db.prepare("SELECT * FROM ai_tasks WHERE id=? AND user_id=?").get(id, userId) as AiTaskRow;
+}
+
+app.post("/api/ai/tasks", (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  try {
+    const row = upsertAiTask(user.id, req.body);
+    if (!row) return res.status(400).json({ error: "عنوان المهمة مطلوب." });
+    res.json(mapAiTask(row));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || "تعذر إنشاء المهمة." });
+  }
+});
+
+app.patch("/api/ai/tasks/:id", (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  try {
+    const existing = db.prepare("SELECT * FROM ai_tasks WHERE id=? AND user_id=?").get(String(req.params.id || ""), user.id) as AiTaskRow | undefined;
+    if (!existing) return res.status(404).json({ error: "المهمة غير موجودة." });
+    const merged = { ...mapAiTask(existing), ...(req.body || {}) };
+    const row = upsertAiTask(user.id, merged);
+    if (!row) return res.status(400).json({ error: "عنوان المهمة مطلوب." });
+    res.json(mapAiTask(row));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || "تعذر تحديث المهمة." });
+  }
+});
+
+app.delete("/api/ai/tasks/:id", (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  try {
+    const info = db.prepare("DELETE FROM ai_tasks WHERE id=? AND user_id=?").run(String(req.params.id || ""), user.id);
+    if (!info.changes) return res.status(404).json({ error: "المهمة غير موجودة." });
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || "تعذر حذف المهمة." });
+  }
+});
+
+app.post("/api/ai/tasks/import", (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  try {
+    const tasks = Array.isArray(req.body?.tasks) ? req.body.tasks.slice(0, 500) : [];
+    let imported = 0;
+    for (const task of tasks) {
+      const row = upsertAiTask(user.id, task);
+      if (row) imported += 1;
+    }
+    res.json({ imported });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || "تعذر استيراد المهام." });
+  }
+});
+
+function listAiTasks(userId: string) {
+  const rows = db.prepare("SELECT * FROM ai_tasks WHERE user_id=? ORDER BY created_at DESC LIMIT 500").all(userId) as AiTaskRow[];
+  return rows.map(mapAiTask);
+}
+
 // [FIX phase3] AI state projection over the canonical finance tables — the
 // read adapter asserted by scripts/test-phase3-api.mjs (create -> read-back ->
 // delete) and consumed by the AI surfaces.
@@ -2207,7 +2320,11 @@ app.get("/api/ai/state", (req, res) => {
   const user = authUser(req);
   if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
   try {
-    res.json(getAiCanonicalState(user.id));
+    // [FIX batch9] include the canonical daily tasks the frontend expects
+    // (SmartAiState.tasks) — previously missing, so the task list always
+    // looked empty after a page reload even when rows existed.
+    const state = getAiCanonicalState(user.id) as unknown as Record<string, unknown>;
+    res.json({ ...state, tasks: listAiTasks(user.id) });
   } catch (e: any) {
     res.status(500).json({ error: e.message || "تعذر قراءة حالة الذكاء الاصطناعي." });
   }
@@ -2246,6 +2363,59 @@ app.get("/api/finance/overview", (req, res) => {
 // ----------------------------------------------------
 // 6. Vite Integration
 // ----------------------------------------------------
+// [DATA SAFETY] Daily rolling SQLite backup (100% free, local disk only).
+// Uses SQLite's VACUUM INTO which produces a consistent compact snapshot even
+// with WAL active. Keeps the newest 7 snapshots in data/backups/ next to the
+// live database. Runs at boot when the newest snapshot is older than 24h, then
+// re-checks every 6 hours — never any external service, never any cost.
+const BACKUP_KEEP = 7;
+const BACKUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const BACKUP_MIN_GAP_MS = 24 * 60 * 60 * 1000;
+
+function runSqliteBackupIfNeeded(): void {
+  try {
+    const backupDir = path.join(path.dirname(DB_PATH), "backups");
+    fs.mkdirSync(backupDir, { recursive: true });
+    const existing = fs.readdirSync(backupDir)
+      .filter((f) => /^smart-time-backup-\d{4}-\d{2}-\d{2}\.db$/.test(f))
+      .sort()
+      .reverse();
+    const newest = existing[0];
+    if (newest) {
+      const newestPath = path.join(backupDir, newest);
+      try {
+        if (Date.now() - fs.statSync(newestPath).mtimeMs < BACKUP_MIN_GAP_MS) return;
+      } catch { /* stat failed -> take a fresh backup */ }
+    }
+    const stamp = new Date().toISOString().slice(0, 10);
+    const target = path.join(backupDir, `smart-time-backup-${stamp}.db`);
+    if (existing.includes(`smart-time-backup-${stamp}.db`)) {
+      // Today's snapshot already exists — refresh it in place (same-day re-copy).
+      fs.rmSync(target, { force: true });
+    }
+    // VACUUM INTO does not accept bound parameters; the target path is built
+    // locally from trusted components (DB_PATH dir + a fixed file name).
+    db.exec(`VACUUM INTO '${target.replace(/'/g, "''")}'`);
+    console.log(`[DATA SAFETY] SQLite backup created: ${target}`);
+    // Prune older snapshots beyond the newest BACKUP_KEEP files.
+    const after = fs.readdirSync(backupDir)
+      .filter((f) => /^smart-time-backup-\d{4}-\d{2}-\d{2}\.db$/.test(f))
+      .sort()
+      .reverse();
+    for (const stale of after.slice(BACKUP_KEEP)) {
+      try { fs.rmSync(path.join(backupDir, stale), { force: true }); } catch { /* best effort */ }
+    }
+  } catch (err: any) {
+    console.warn("[DATA SAFETY] SQLite backup skipped:", err?.message || err);
+  }
+}
+
+function scheduleSqliteBackups(): void {
+  runSqliteBackupIfNeeded();
+  const timer = setInterval(runSqliteBackupIfNeeded, BACKUP_INTERVAL_MS);
+  timer.unref?.();
+}
+
 async function startServer() {
   // [FIX] Unknown /api paths must answer 404 JSON instead of falling through
   // to the SPA fallback, which served index.html with HTTP 200 and made
@@ -2285,6 +2455,7 @@ async function startServer() {
     setServiceStatus("backend", "LIVE", "express", `Listening on port ${PORT}`);
     setServiceStatus("chat_realtime", "LIVE", "websocket", "Realtime chat WebSocket ready on /ws/chat");
     console.log(`[SMART TIME V8] Server & Chat WebSocket running on http://0.0.0.0:${PORT}`);
+    scheduleSqliteBackups();
   });
 }
 

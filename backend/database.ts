@@ -8,6 +8,9 @@ const railwayVolumePath = process.env.RAILWAY_VOLUME_MOUNT_PATH?.trim();
 const configuredDbPath = process.env.SMART_TIME_DB_PATH?.trim();
 const dataDir = railwayVolumePath ? path.resolve(railwayVolumePath) : defaultDataDir;
 const dbPath = configuredDbPath ? path.resolve(configuredDbPath) : path.join(dataDir, 'smart-time.db');
+// Exported for the daily backup scheduler in server.ts (keeps a small rolling
+// snapshot next to the live database — pure local disk, zero external cost).
+export const DB_PATH = dbPath;
 
 fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
