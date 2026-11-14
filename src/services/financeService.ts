@@ -1,4 +1,5 @@
 import type { ExpenseType } from "../contracts/financeContract";
+import { apiUrl } from "./apiConfig";
 
 export interface FinanceOverview {
   source: "smart-time-finance-sqlite";
@@ -12,7 +13,7 @@ export interface FinanceOverview {
 }
 
 export async function fetchCanonicalFinanceOverview(): Promise<FinanceOverview> {
-  const response = await fetch("/api/finance/overview", {
+  const response = await fetch(apiUrl("/api/finance/overview"), {
     credentials: "include",
     headers: { Accept: "application/json" },
   });

@@ -4,6 +4,7 @@ node_modules/
 .env.*.local
 data/
 package-lock.json
+dist/
 
 # Local ML training artifacts
 infra/smart-ai/training/output/
