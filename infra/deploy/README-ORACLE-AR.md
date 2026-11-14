@@ -87,3 +87,32 @@ sudo systemctl disable --now smart-time
 ## الأمان قبل البدء الفعلي
 - مفاتيح المزودين تُكتب في `/opt/smart-time/.env` فقط (صلاحية 600) — لا مفتاح داخل الكود.
 - بعد النشر: أعد توليد توكن GitHub المستخدم في السحب واحذف أي توكن تمت مشاركته في محادثة.
+
+## تفعيل تسجيل الدخول بجوجل (مجاني بالكامل — بدون أي دفع أو حصص)
+
+1. افتح [console.cloud.google.com](https://console.cloud.google.com) بحساب جوجل → أنشئ مشروعًا جديدًا (مجاني).
+2. من **APIs & Services → OAuth consent screen**: اختر External → اكتب اسم التطبيق وبريدك → Save. أضف بريدك في Test users أثناء وضع Testing.
+3. من **Credentials → Create credentials → OAuth client ID**: النوع **Web application**:
+   - Authorized JavaScript origins: `https://smart-time-ai.duckdns.org`
+   - لا حاجة لأي redirect URI ولا أي مفاتيح سرّية (نتحقق من الرمز بالتوقيع فقط).
+4. انسخ **Client ID** (ينتهي بـ `.apps.googleusercontent.com`) ثم على الخادم:
+```bash
+cd /opt/smart-time
+sudo git pull origin main && sudo npm ci && sudo npm run build
+echo "GOOGLE_CLIENT_ID=ضع-المعرف-هنا" | sudo tee -a .env
+echo "VITE_GOOGLE_CLIENT_ID=ضع-المعرف-هنا" | sudo tee .env.local
+sudo npm run build   # إعادة البناء بعد كتابة .env.local حتى يُدمج المعرف في الواجهة
+sudo chown -R smarttime:smarttime /opt/smart-time
+sudo systemctl restart smart-time
+```
+5. اختبر: زر "Continue with Google" سيظهر بدل رسالة "not configured".
+
+> ملاحظة: لا تُعد تشغيل سكربت `oracle-deploy.sh` كاملًا إلا إذا مررت **كل** المفاتيح مرة أخرى (السكربت يعيد كتابة `.env` من البداية وقد يفرّغ مفاتيح البريد).
+
+## تفعيل الدخول بالبصمة (Passkey — مجاني، بدون أي إعداد)
+
+- يعمل تلقائيًا بعد التحديث لآخر main — لا يحتاج أي مفاتيح أو خدمات خارجية.
+- الشرط الوحيد: الموقع يعمل عبر HTTPS (مُحقق بالفعل بشهادة Let's Encrypt).
+- المستخدم المسجل يفعّلها من **الإعدادات → البيانات الشخصية → الدخول بالبصمة → تفعيل الدخول بالبصمة على هذا الجهاز**، وبعدها يظهر زر "الدخول بالبصمة" في شاشة الدخول على ذلك الجهاز (بصمة أندرويد / Windows Hello).
+- حساب الزائر (Guest) لا يمكنه تفعيل البصمة — البصمة مرتبطة بحساب مسجل وموثق فقط.
+- البيانات البيومترية لا تغادر جهاز المستخدم أبدًا؛ الخادم يخزّن مفتاحًا عامًا فقط.
