@@ -17,6 +17,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { TripLocation, LocationPickerMode } from './types';
+import type { Language } from '../../types';
 import { MapLocationPicker } from './MapLocationPicker';
 import { TextSearchLocationPicker } from './TextSearchLocationPicker';
 import { VoiceLocationPicker } from './VoiceLocationPicker';
@@ -31,7 +32,7 @@ interface LocationPickerModalProps {
   onAddStopRequest?: (location: TripLocation) => void;
   onDeleteStop?: () => void;
   isEditingStop?: boolean;
-  language?: 'ar' | 'en';
+  language?: Language;
 }
 
 type PickerTab = 'menu' | 'map' | 'text' | 'voice';

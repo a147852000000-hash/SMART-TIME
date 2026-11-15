@@ -212,7 +212,8 @@ export interface CryptoMarketItem {
   symbol: string;
   priceUsd: number;
   change24h: number;
-  iconColor: string;
+  /** Optional: API search results may not carry it; UI falls back. */
+  iconColor?: string;
   iconSymbol?: string;
 }
 

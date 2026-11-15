@@ -347,9 +347,13 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
       id: accidentId,
       vehicleId: vehicleId || 'default_veh',
       title: accidentTitle || (isAr ? 'حادث سير مروري' : 'Traffic Accident'),
+      // [field-align-fix] write both legacy and newer photo field names so display never breaks
       photoUrl: capturedPhotoUrl,
+      photoDataUrl: capturedPhotoUrl,
       date: accidentDate,
       time: accidentTime,
+      // [field-align-fix] newer combined datetime consumed by editor/display
+      dateTime: [accidentDate, accidentTime].filter(Boolean).join('T'),
       location: accidentLocation,
       estimatedDamage: damageVal,
       notes: accidentNotes,

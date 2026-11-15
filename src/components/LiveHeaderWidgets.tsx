@@ -154,7 +154,7 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
   useEffect(() => {
     let mounted = true;
     const refreshMarket = async () => { const data = await fetchLiveMarket(); if (mounted && data) setLiveMarket(data); };
-    const refreshNews = async () => { const data = await fetchLiveNews(language); if (mounted && data.length) setLiveNews(data); };
+    const refreshNews = async () => { const data = await fetchLiveNews(language === 'fr' ? 'en' : language); if (mounted && data.length) setLiveNews(data); };
     const refreshSports = async () => { const data = await fetchLiveSports(); if (mounted && data.length) setLiveSports(data); };
     const refreshWeather = async () => { const data = await fetchLiveWeather(user.city || 'Cairo'); if (mounted && data) setLiveWeather(data); };
     refreshMarket(); refreshNews(); refreshSports(); refreshWeather();

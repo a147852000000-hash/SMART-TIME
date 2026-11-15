@@ -532,13 +532,8 @@ export default function App() {
             <ExpensesView
               language={language}
               currency={userProfile.currency}
-              expenses={expenses}
               userProfile={userProfile}
               onBackToHome={() => handleNavigateSafe('dashboard')}
-              onUpdateExpenses={(updated) => {
-                setExpenses(updated);
-                ExpensesRepository.saveExpenses(updated);
-              }}
             />
           )}
 
@@ -701,6 +696,7 @@ export default function App() {
           expenses={expenses}
           vehicles={vehicles}
           lessons={lessons}
+          onNavigate={(view) => handleNavigateSafe(view)}
         />
 
         {/* Voice Search Modal */}

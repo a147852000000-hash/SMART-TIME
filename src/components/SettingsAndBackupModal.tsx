@@ -45,6 +45,7 @@ import {
 } from 'lucide-react';
 import { PhonePermissionsManager } from './PhonePermissionsManager';
 import { CardCustomizerModal } from './CardCustomizerModal';
+import { ALL_SECTIONS } from './DashboardView';
 import {
   UserProfile,
   Language,
@@ -2446,6 +2447,7 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
         isOpen={isCardCustomizerOpen}
         onClose={() => setIsCardCustomizerOpen(false)}
         language={language}
+        sections={ALL_SECTIONS.map((s) => ({ id: s.id, titleAr: s.titleAr, titleEn: s.titleEn, emoji: s.emoji }))}
       />
     </div>
   );

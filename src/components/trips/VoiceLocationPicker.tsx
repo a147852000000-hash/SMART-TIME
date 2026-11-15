@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, MicOff, Loader2, Check, RefreshCw, MapPin, AlertCircle } from 'lucide-react';
 import { TripLocation, LocationPickerMode } from './types';
+import type { Language } from '../../types';
 import { apiUrl } from '../../services/apiConfig';
 
 interface VoiceLocationPickerProps {
   mode: LocationPickerMode;
   onSelect: (location: TripLocation) => void;
-  language?: 'ar' | 'en';
+  language?: Language;
 }
 
 export const VoiceLocationPicker: React.FC<VoiceLocationPickerProps> = ({

@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, MicOff, Loader2, Check, Sparkles, X, MapPin, RefreshCw, AlertCircle, Car } from 'lucide-react';
 import { TripLocation } from './types';
+import type { Language } from '../../types';
 import { apiUrl } from '../../services/apiConfig';
 
 interface VoiceTripModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirmTrip: (pickup: TripLocation, dropoff: TripLocation) => void;
-  language?: 'ar' | 'en';
+  language?: Language;
 }
 
 export const VoiceTripModal: React.FC<VoiceTripModalProps> = ({

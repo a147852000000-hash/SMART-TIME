@@ -13,7 +13,7 @@ export const LiveNewsPanel: React.FC<LiveNewsPanelProps> = ({ language, compact 
 
   const refresh = async () => {
     setLoading(true);
-    const data = await fetchLiveNews(language);
+    const data = await fetchLiveNews(language === 'fr' ? 'en' : language);
     if (data.length) { setArticles(data); setUpdatedAt(new Date()); }
     setLoading(false);
   };

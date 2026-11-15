@@ -538,8 +538,8 @@ export const VehiclesView: React.FC<VehiclesViewProps> = ({
                       className="bg-white dark:bg-slate-850 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm flex flex-col justify-between"
                     >
                       <div className="relative h-44 bg-slate-900">
-                        {acc.photoDataUrl ? (
-                          <img src={acc.photoDataUrl} alt={acc.title} className="w-full h-full object-cover" />
+                        {(acc.photoDataUrl || acc.photoUrl) ? (
+                          <img src={acc.photoDataUrl || acc.photoUrl} alt={acc.title} className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-slate-500">
                             <Camera className="w-8 h-8" />
@@ -552,7 +552,7 @@ export const VehiclesView: React.FC<VehiclesViewProps> = ({
                           </span>
                         )}
                         <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/70 text-slate-300 text-[10px] font-mono">
-                          {acc.dateTime}
+                          {acc.dateTime || [acc.date, acc.time].filter(Boolean).join(' ')}
                         </span>
                       </div>
 

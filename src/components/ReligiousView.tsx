@@ -721,7 +721,9 @@ export const ReligiousView: React.FC<ReligiousViewProps> = ({
                               <div className="font-bold text-sm text-slate-900 dark:text-white font-arabic flex items-center gap-1.5">
                                 <span>سورة {surah.name}</span>
                                 {hasLastStop && (
-                                  <Bookmark className="w-3.5 h-3.5 text-accent-500 fill-current" title="موضع آخر وقف محفوظ هنا" />
+                                  <span title="موضع آخر وقف محفوظ هنا" className="inline-flex">
+                                    <Bookmark className="w-3.5 h-3.5 text-accent-500 fill-current" />
+                                  </span>
                                 )}
                               </div>
                               <div className="text-[10px] text-slate-400">{surah.englishName} • {surah.type}</div>

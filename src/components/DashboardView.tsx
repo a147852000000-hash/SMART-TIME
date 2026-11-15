@@ -73,7 +73,8 @@ interface SectionCard {
   darkGradient: string;
 }
 
-const ALL_SECTIONS: SectionCard[] = [
+// Shared with SettingsAndBackupModal so the Card Studio lists the real dashboard cards.
+export const ALL_SECTIONS: SectionCard[] = [
   {
     id: 'expenses',
     titleAr: 'المصاريف والدخل',

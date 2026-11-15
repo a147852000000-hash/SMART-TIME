@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, MapPin, Loader2, X, Compass, CheckCircle2 } from 'lucide-react';
 import { TripLocation, LocationPickerMode } from './types';
+import type { Language } from '../../types';
 import { apiUrl } from '../../services/apiConfig';
 
 interface TextSearchLocationPickerProps {
   mode: LocationPickerMode;
   onSelect: (location: TripLocation) => void;
-  language?: 'ar' | 'en';
+  language?: Language;
 }
 
 export const TextSearchLocationPicker: React.FC<TextSearchLocationPickerProps> = ({

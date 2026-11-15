@@ -399,11 +399,11 @@ export const SportsView: React.FC<SportsViewProps> = ({ user }) => {
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            {[
+            {([
               ['8,432', 'خطوات اليوم', Footprints],
               ['750', 'سعر حراري', Activity],
               ['72 bpm', 'نبضات القلب', Heart],
-            ].map(([value, label, Icon]) => (
+            ] as Array<[string, string, React.ComponentType<{ className?: string }>]>).map(([value, label, Icon]) => (
               <div
                 key={String(label)}
                 className="rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 text-center"

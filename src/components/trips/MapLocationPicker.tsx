@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import type { Language } from '../../types';
 import { apiUrl } from '../../services/apiConfig';
 import { Crosshair, Check, Loader2, Plus, Trash2, CheckCircle2, GripVertical } from 'lucide-react';
 import { TripLocation, LocationPickerMode } from './types';
@@ -14,7 +15,7 @@ interface MapLocationPickerProps {
   isEditingStop?: boolean;
   onCancel?: () => void;
   onLocationStateChange?: (state: { address: string; lat: number; lng: number; isGeocoding: boolean }) => void;
-  language?: 'ar' | 'en';
+  language?: Language;
 }
 
 const pickupDivIcon = L.divIcon({

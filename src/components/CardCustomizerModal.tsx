@@ -29,7 +29,9 @@ interface CardCustomizerModalProps {
   isOpen: boolean;
   onClose: () => void;
   language: Language;
-  sections: Array<{ id: string; titleAr: string; titleEn: string; emoji?: string }>;
+  /** Optional: list of dashboard cards for the Show/Hide section.
+   *  Kept optional with an internal safe fallback so a missing prop can never crash the studio. */
+  sections?: Array<{ id: string; titleAr: string; titleEn: string; emoji?: string }>;
 }
 
 export const CardCustomizerModal: React.FC<CardCustomizerModalProps> = ({
@@ -40,6 +42,8 @@ export const CardCustomizerModal: React.FC<CardCustomizerModalProps> = ({
 }) => {
   const isAr = language === 'ar';
   const { preferences, updatePreferences, applyPreset, resetToDefaults } = useCardPreferences();
+  // [crash-fix] guard: never map over an undefined sections prop
+  const safeSections = Array.isArray(sections) ? sections : [];
 
   const [activeTab, setActiveTab] = useState<'presets' | 'styles' | 'finetune'>('presets');
   const [localPrefs, setLocalPrefs] = useState<CardPreferences>(preferences);
@@ -490,7 +494,7 @@ export const CardCustomizerModal: React.FC<CardCustomizerModalProps> = ({
                   <span className="text-amber-500 font-mono text-[11px]">{(localPrefs.hiddenCardIds || []).length}</span>
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                  {sections.map((section) => {
+                  {safeSections.map((section) => {
                     const hidden = (localPrefs.hiddenCardIds || []).includes(section.id);
                     return (
                       <button

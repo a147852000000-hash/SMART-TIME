@@ -3,6 +3,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MapPin, Navigation, Crosshair, Route, Loader2, Layers, Maximize2, PlusCircle, ExternalLink } from 'lucide-react';
 import { TripLocation } from './types';
+import type { Language } from '../../types';
 import { apiUrl } from '../../services/apiConfig';
 
 interface TripsMapProps {
@@ -20,7 +21,7 @@ interface TripsMapProps {
   onCurrentLocation?: (location: TripLocation) => void;
   onOpenGoogleMaps?: () => void;
   onRouteCalculated?: (info: { distanceKm: number; durationMins: number }) => void;
-  language?: 'ar' | 'en';
+  language?: Language;
 }
 
 const pickupIcon = L.divIcon({

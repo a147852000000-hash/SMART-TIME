@@ -27,6 +27,7 @@ export interface TickerPreferences {
   showSilver: boolean;
   showZodiac: boolean;
   showEgyptianLeague: boolean;
+  showFavoriteTeam?: boolean;
   showCrypto: boolean;
   showCurrencies: boolean;
   showWeather: boolean;
@@ -360,9 +361,16 @@ export interface VehicleAccidentRecord {
   id: string;
   vehicleId?: string;
   title: string;
-  photoUrl: string;
-  date: string;
-  time: string;
+  /** Legacy field written by VehicleCameraModal (holds a data URL). */
+  photoUrl?: string;
+  /** Newer field name read by VehiclesView (holds a data URL). */
+  photoDataUrl?: string;
+  /** Legacy separate date/time written by VehicleCameraModal. */
+  date?: string;
+  time?: string;
+  /** Newer combined datetime used by the editor and display. */
+  dateTime?: string;
+  savedToVault?: boolean;
   location?: string;
   estimatedDamage?: number;
   notes?: string;

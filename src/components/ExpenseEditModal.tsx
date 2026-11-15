@@ -232,7 +232,7 @@ export const ExpenseEditModal: React.FC<ExpenseEditModalProps> = ({
         setAccidentLocation(editItem.item.location || '');
         setAccidentDamage(editItem.item.estimatedDamage ? editItem.item.estimatedDamage.toString() : '');
         setAccidentNotes(editItem.item.notes || '');
-        setAccidentDateTime(editItem.item.dateTime || new Date().toISOString().slice(0, 16));
+        setAccidentDateTime(editItem.item.dateTime || [editItem.item.date, editItem.item.time].filter(Boolean).join('T') || new Date().toISOString().slice(0, 16));
         setAccidentVault(!!editItem.item.savedToVault);
         break;
 
@@ -348,6 +348,9 @@ export const ExpenseEditModal: React.FC<ExpenseEditModalProps> = ({
             estimatedDamage: dmg,
             notes: accidentNotes,
             dateTime: accidentDateTime,
+            // [field-align-fix] keep legacy date/time in sync with dateTime
+            date: accidentDateTime.split('T')[0],
+            time: accidentDateTime.split('T')[1] || accidentDateTime,
             savedToVault: accidentVault,
           },
         });

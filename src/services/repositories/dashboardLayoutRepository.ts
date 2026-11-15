@@ -135,7 +135,7 @@ const STORAGE_KEY = 'smart_time_dashboard_layout_settings_v1';
 export class DashboardLayoutRepository {
   static getSettings(): DashboardLayoutSettings {
     const raw = StorageAdapter.getItem(STORAGE_KEY, DEFAULT_DASHBOARD_SETTINGS);
-    if (!raw || !raw.modules) {
+    if (!raw || !Array.isArray(raw.modules)) {
       return DEFAULT_DASHBOARD_SETTINGS;
     }
 
