@@ -2112,6 +2112,11 @@ const NEWS_CATEGORY_FEEDS: Record<string, { ar: string; en: string }> = {
     ar: `https://news.google.com/rss/search?q=${encodeURIComponent("الشرق الأوسط when:2d")}&hl=ar&gl=EG&ceid=EG:ar`,
     en: `https://news.google.com/rss/search?q=${encodeURIComponent("middle east when:2d")}&hl=en-US&gl=US&ceid=US:en`,
   },
+  // [football-free] تصنيف رياضة عام — مصدر Google News RSS المجاني نفسه بدون أي مفتاح
+  sports: {
+    ar: `https://news.google.com/rss/search?q=${encodeURIComponent("رياضة مصر when:2d")}&hl=ar&gl=EG&ceid=EG:ar`,
+    en: `https://news.google.com/rss/search?q=${encodeURIComponent("sports when:2d")}&hl=en-US&gl=US&ceid=US:en`,
+  },
 };
 
 async function fetchGoogleNewsRss(lang: string, category: string = "general") {
@@ -2122,7 +2127,8 @@ async function fetchGoogleNewsRss(lang: string, category: string = "general") {
     return r.text();
   });
   const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
-  const articles = items.slice(0, 15).map((m) => {
+  // [ticker-count] 30 مقالة بدل 15 — يسمح بإعداد «عدد الأخبار المعروضة في الشريط» حتى 20 خبر لكل تصنيف
+  const articles = items.slice(0, 30).map((m) => {
     const block = m[1];
     // [FIX B-5] This RegExp is built from a template literal, so "\s" and "\S"
     // lose their backslashes to string escaping and degrade into the character
@@ -2293,6 +2299,352 @@ app.get("/api/live/sports", async (req, res) => {
     const stale = getCache<any>(sportsCacheKey, true);
     if (stale) return res.json({ ...stale.value, status: "FALLBACK", stale: true });
     return res.json({ source: "thesportsdb", configured: true, fetchedAt: new Date().toISOString(), matches: [], error: (error as Error)?.message });
+  }
+});
+
+// ==================== [football-free] بيانات كرة القدم المجانية ====================
+// مصادر 100% مجانية بدون مفاتيح ولا حصص مدفوعة (الالتزام بالحدود المجانية):
+//   • الدوري المصري (ترتيب + نتائج + مباريات قادمة): TheSportsDB v1 بالمفتاح التجريبي المجاني
+//   • تصفيات كأس العالم – أفريقيا وكأس أمم أفريقيا: ESPN public API (بدون مفتاح)
+//   • أخبار أي فريق أو منتخب: Google News RSS المجاني
+// كل الردود تُخزَّن مؤقتًا في SQLite مع رد احتياطي "آخر بيانات ناجحة" عند فشل المزود.
+const TSD_FREE_BASE = "https://www.thesportsdb.com/api/v1/json/123";
+const EGYPT_LEAGUE_ID = 4829; // Egyptian Premier League (تم التحقق منه فعليًا)
+const ESPN_LEAGUE_CODES: Record<string, string> = {
+  wcq: "fifa.worldq.caf", // تصفيات كأس العالم 2026 – أفريقيا (9 مجموعات كاملة)
+  afcon: "caf.nations",   // كأس أمم أفريقيا 2025 (6 مجموعات كاملة)
+};
+
+// خريطة أسماء الفرق الإنجليزية → العربية (أندية مصرية + منتخبات أفريقية وعالمية)
+const AR_TEAM_NAMES: Record<string, string> = {
+  // أندية الدوري المصري (أسماء TheSportsDB الفعلية + المتغيرات الشائعة)
+  "al ahly": "الأهلي", "alahly": "الأهلي", "al ahly sc": "الأهلي",
+  "zamalek": "الزمالك", "zamalek sc": "الزمالك",
+  "pyramids": "بيراميدز", "pyramids fc": "بيراميدز",
+  "ceramica cleopatra": "سيراميكا كليوباترا", "ceramica cleopatra fc": "سيراميكا كليوباترا",
+  "al ittihad alexandria": "الاتحاد السكندري", "ittihad alexandria": "الاتحاد السكندري",
+  "al ittihad al sakandary": "الاتحاد السكندري",
+  "smouha": "سموحة", "smouha sc": "سموحة",
+  "al masry": "المصري البورسعيدي", "al masry club": "المصري البورسعيدي",
+  "ismaily": "الإسماعيلي", "al ismaily": "الإسماعيلي", "el ismaily": "الإسماعيلي",
+  "modern sport": "مودرن سبورت", "modern sport fc": "مودرن سبورت", "future fc": "فوتشر",
+  "ghazl el mahalla": "غزل المحلة", "ghazl el mehallah": "غزل المحلة",
+  "tala'ea el gaish": "طلائع الجيش", "tala ea el gaish": "طلائع الجيش", "el gaish": "طلائع الجيش",
+  "petrojet": "بتروجت", "petrojet fc": "بتروجت",
+  "national bank of egypt": "البنك الأهلي", "national bank egypt": "البنك الأهلي",
+  "zed": "زد إف سي", "zed fc": "زد إف سي",
+  "asyut petroleum": "أسيوط بتروليمو", "assyut petroleum": "أسيوط بتروليمو",
+  "abou qir fertilizers": "أبو قير للأسمدة",
+  "el gouna": "الجونة", "el gouna fc": "الجونة",
+  "enppi": "إنبي", "enppi club": "إنبي",
+  "misr el maqasah": "مصر للمقاصة", "misr lel makkasa": "مصر للمقاصة",
+  "haras el hodood": "حراس الحدود", "el entag el harby": "انتاج الحربي",
+  "al masri": "المصري البورسعيدي",
+  "masr": "مصر", "egypt": "مصر", "egypt national team": "منتخب مصر",
+  // منتخبات أفريقية ووطنية (أسماء ESPN الفعلية)
+  "burkina faso": "بوركينا فاسو", "djibouti": "جيبوتي", "senegal": "السنغال",
+  "congo dr": "جمهورية الكونغو الديمقراطية", "dr congo": "جمهورية الكونغو الديمقراطية",
+  "sudan": "السودان", "mali": "مالي", "morocco": "المغرب", "zambia": "زامبيا",
+  "comoros": "جزر القمر", "south africa": "جنوب أفريقيا", "angola": "أنغولا",
+  "zimbabwe": "زيمبابوي", "nigeria": "نيجيريا", "ivory coast": "ساحل العاج",
+  "cote d ivoire": "ساحل العاج", "cameroon": "الكاميرون", "ghana": "غانا",
+  "algeria": "الجزائر", "tunisia": "تونس", "gabon": "الغابون", "uganda": "أوغندا",
+  "tanzania": "تنزانيا", "kenya": "كينيا", "benin": "بنين", "rwanda": "رواندا",
+  "ethiopia": "إثيوبيا", "guinea": "غينيا", "guinea bissau": "غينيا بيساو",
+  "gambia": "غامبيا", "mauritania": "موريتانيا", "madagascar": "مدغشقر",
+  "mozambique": "موزمبيق", "namibia": "ناميبيا", "botswana": "بوتسوانا",
+  "lesotho": "ليسوتو", "eswatini": "إسواتيني", "liberia": "ليبيريا",
+  "sierra leone": "سيراليون", "togo": "توغو", "equatorial guinea": "غينيا الاستوائية",
+  "cape verde": "الرأس الأخضر", "cape verde islands": "الرأس الأخضر",
+  "seychelles": "سيشل", "chad": "تشاد", "mauritius": "موريشيوس", "somalia": "الصومال",
+  "south sudan": "جنوب السودان", "sao tome and principe": "ساو تومي وبرينسيبي",
+  "libya": "ليبيا", "eritrea": "إريتريا", "central african republic": "أفريقيا الوسطى",
+  "burundi": "بوروندي", "malawi": "مالاوي", "niger": "النيجر",
+};
+// خريطة أسماء البطولات الإنجليزية → العربية
+const AR_LEAGUE_NAMES: Record<string, string> = {
+  "Egyptian Premier League": "الدوري المصري الممتاز",
+  "Egypt League Cup": "كأس الرابطة المصرية",
+  "Egyptian Premier League, Relegation Round": "الدوري المصري – بطاقة الهبوط",
+  "Egyptian Premier League, Championship Round": "الدوري المصري – مرحلة البطولة",
+  "African Cup of Nations": "كأس أمم أفريقيا",
+  "African Cup of Nations Qualifying": "تصفيات كأس أمم أفريقيا",
+  "CAF Champions League": "دوري أبطال أفريقيا",
+  "CAF Confederation Cup": "كأس الكونفدرالية الأفريقية",
+  "FIFA World Cup": "كأس العالم",
+  "FIFA World Cup, Qualification CAF": "تصفيات كأس العالم – أفريقيا",
+  "FIFA World Cup Qualifiers Africa": "تصفيات كأس العالم – أفريقيا",
+  "Arab Club Champions Cup": "كأس العرب للأندية",
+};
+function arabicTeamName(name?: string): string | undefined {
+  if (!name) return undefined;
+  const raw = String(name).trim();
+  const key = raw.toLowerCase().replace(/[^a-z\u0600-\u06ff0-9' ]/g, " ").replace(/\s+/g, " ").trim();
+  return AR_TEAM_NAMES[key] || AR_TEAM_NAMES[raw] || undefined;
+}
+function arabicLeagueName(name?: string): string | undefined {
+  if (!name) return undefined;
+  const raw = String(name).trim();
+  return AR_LEAGUE_NAMES[raw] || undefined;
+}
+// موسم الدوري الجاري بصيغة TheSportsDB "2026-2027" (يوليو وما بعده = موسم جديد)
+function currentSportsSeason(): string {
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  return now.getUTCMonth() >= 6 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
+}
+// إثراء حدث TheSportsDbEvent بأسماء عربية للفرق والبطولة مع الإبقاء على اللاتينية للمرجعية
+function arabizeTheSportsDbEvent(e: any) {
+  const base = mapTheSportsDbEvent(e);
+  if (!base) return null;
+  return {
+    ...base,
+    teams: {
+      home: { name: arabicTeamName(base.teams?.home?.name) || base.teams?.home?.name, latinName: base.teams?.home?.name, logo: base.teams?.home?.logo },
+      away: { name: arabicTeamName(base.teams?.away?.name) || base.teams?.away?.name, latinName: base.teams?.away?.name, logo: base.teams?.away?.logo },
+    },
+    league: { ...base.league, name: arabicLeagueName(base.league?.name) || base.league?.name },
+    venue: e.strVenue ? (AR_TEAM_NAMES[e.strVenue.toLowerCase()] || e.strVenue) : undefined,
+  };
+}
+// تحويل صف ترتيب TheSportsDB إلى عقد موحد بأسماء عربية
+function mapTheSportsDbStandingRow(r: any) {
+  if (!r) return null;
+  const latin = String(r.strTeam || "");
+  return {
+    id: String(r.idTeam || ""),
+    rank: Number(r.intRank) || 0,
+    team: arabicTeamName(latin) || latin,
+    latinName: latin,
+    played: Number(r.intPlayed) || 0,
+    won: Number(r.intWin) || 0,
+    drawn: Number(r.intDraw) || 0,
+    lost: Number(r.intLoss) || 0,
+    goalsFor: Number(r.intGoalsFor) || 0,
+    goalsAgainst: Number(r.intGoalsAgainst) || 0,
+    goalDiff: Number(r.intGoalDifference) || 0,
+    points: Number(r.intPoints) || 0,
+  };
+}
+// قراءة إحصائيات صف ترتيب ESPN بأسماء حقولها الفعلية
+function espnStat(entry: any, names: string[]): number {
+  const stats = entry?.stats || [];
+  for (const n of names) {
+    const s = stats.find((x: any) => x?.name === n);
+    if (s && s.value != null && !Number.isNaN(Number(s.value))) return Number(s.value);
+  }
+  return 0;
+}
+function mapEspnStandingEntry(entry: any, index: number) {
+  if (!entry?.team) return null;
+  const latin = String(entry.team.displayName || "");
+  return {
+    id: String(entry.team.id || ""),
+    rank: espnStat(entry, ["rank"]) || index + 1,
+    team: arabicTeamName(latin) || latin,
+    latinName: latin,
+    played: espnStat(entry, ["gamesPlayed"]),
+    won: espnStat(entry, ["wins"]),
+    drawn: espnStat(entry, ["ties", "draws"]),
+    lost: espnStat(entry, ["losses"]),
+    goalsFor: espnStat(entry, ["pointsFor"]),
+    goalsAgainst: espnStat(entry, ["pointsAgainst"]),
+    goalDiff: espnStat(entry, ["pointDifferential", "goalDifferential"]),
+    points: espnStat(entry, ["points"]),
+  };
+}
+// ملخص مباراة لفريق واحد (القادمة / الأخيرة) من TheSportsDB
+function summarizeTeamEvent(e: any, kind: "next" | "last") {
+  const m = arabizeTheSportsDbEvent(e);
+  if (!m) return null;
+  return {
+    kind,
+    id: m.fixture?.id,
+    date: m.fixture?.date || null,
+    dateEvent: e?.dateEvent || null,
+    status: m.fixture?.status?.short || null,
+    home: m.teams?.home?.name || "—",
+    away: m.teams?.away?.name || "—",
+    homeLogo: m.teams?.home?.logo,
+    awayLogo: m.teams?.away?.logo,
+    homeScore: m.goals?.home ?? null,
+    awayScore: m.goals?.away ?? null,
+    league: m.league?.name || "",
+  };
+}
+// تحقق آمن من اسم الفريق/الاستعلام (حروف عربية ولاتينية وأرقام ومسافات فقط)
+function isValidTeamQuery(name: string): boolean {
+  return /^[\p{L}\p{N} .'\-]{2,48}$/u.test(name.trim());
+}
+// خريطة عكسية: الاسم العربي → مصطلح البحث الإنجليزي في TheSportsDB (البحث لا يفهم العربية)
+const REVERSE_TEAM_MAP: Record<string, string> = (() => {
+  const rev: Record<string, string> = {};
+  for (const [en, ar] of Object.entries(AR_TEAM_NAMES)) {
+    const k = String(ar).trim();
+    if (!rev[k]) rev[k] = en;
+  }
+  // أسماء خاصة تحتاج مصطلح بحث أدق من أول مفتاح
+  rev["منتخب مصر"] = "Egypt";
+  rev["المنتخب المصري"] = "Egypt";
+  rev["مصر"] = "Egypt";
+  return rev;
+})();
+function englishTeamForSearch(name: string): string {
+  const raw = String(name || "").trim();
+  return REVERSE_TEAM_MAP[raw] || REVERSE_TEAM_MAP[raw.replace(/ال\s*/u, "")] || raw;
+}
+// استعلام Google News RSS بنص حر (لأخبار الفريق المفضل أو المنتخب) مع كاش SQLite
+const teamNewsInFlight: Map<string, Promise<any>> = new Map();
+async function fetchTeamNewsCached(teamRaw: string) {
+  const team = teamRaw.trim();
+  const key = `team-news:v1:${team.toLowerCase()}`;
+  const fresh = getCache<any>(key);
+  if (fresh) return { ...fresh.value, cache: "HIT" };
+  const existing = teamNewsInFlight.get(key);
+  if (existing) return existing;
+  const job = (async () => {
+    const articles = await fetchGoogleNewsQuery(`${team} when:2d`, "ar");
+    const payload = { source: "google-news-rss", query: team, fetchedAt: new Date().toISOString(), articles };
+    setCache(key, payload, 10 * 60_000);
+    return payload;
+  })().finally(() => teamNewsInFlight.delete(key));
+  teamNewsInFlight.set(key, job);
+  return job;
+}
+// نفس محلل RSS لكن باستعلام حر بدل تصنيف محدد — يعيد تسمية المصدر كما في fetchGoogleNewsRss
+async function fetchGoogleNewsQuery(query: string, lang: string = "ar") {
+  const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=ar&gl=EG&ceid=EG:ar`;
+  const xml = await fetch(url, { signal: AbortSignal.timeout(12000) }).then(async r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status} from Google News`);
+    return r.text();
+  });
+  const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
+  return items.slice(0, 30).map((m) => {
+    const block = m[1];
+    const get = (tag: string) => stripXml(block.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`))?.[1] || "");
+    return { title: get("title"), description: "", url: get("link"), publishedAt: get("pubDate"), source: { name: get("source") } };
+  }).filter((a) => a.title && a.url);
+}
+
+// ترتيب ونتائج ومباريات البطولات: egypt=الدوري المصري (ترتيب حي) | wcq=تصفيات كأس العالم أفريقيا | afcon=كأس أمم أفريقيا
+app.get("/api/live/football/league", async (req, res) => {
+  const league = String(req.query.name || "egypt").trim().toLowerCase();
+  if (!["egypt", "wcq", "afcon"].includes(league)) {
+    return res.status(400).json({ error: "مسموح فقط بـ: egypt أو wcq أو afcon" });
+  }
+  const cacheKey = `football:league:v1:${league}`;
+  const fresh = getCache<any>(cacheKey);
+  if (fresh) return res.json({ ...fresh.value, cache: "HIT" });
+  try {
+    let payload: any;
+    if (league === "egypt") {
+      const season = currentSportsSeason();
+      // ثلاثة طلبات على TheSportsDB المجاني — مسموح بها معًا (حد المفتاح 30 طلب/دقيقة)
+      const [table, seasonEvents, nextLeague] = await Promise.all([
+        fetchJson(`${TSD_FREE_BASE}/lookuptable.php?l=${EGYPT_LEAGUE_ID}&s=${season}`),
+        fetchJson(`${TSD_FREE_BASE}/eventsseason.php?id=${EGYPT_LEAGUE_ID}&s=${season}`),
+        fetchJson(`${TSD_FREE_BASE}/eventsnextleague.php?id=${EGYPT_LEAGUE_ID}`).catch(() => ({ events: [] })),
+      ]);
+      const standings = (table?.table || []).map(mapTheSportsDbStandingRow).filter(Boolean);
+      const events = Array.isArray(seasonEvents?.events) ? seasonEvents.events : [];
+      const today = new Date().toISOString().slice(0, 10);
+      const isFinished = (e: any) => ["FT", "MATCH FINISHED", "AET", "PEN"].includes(String(e?.strStatus || "").toUpperCase());
+      const recent = events.filter(isFinished)
+        .sort((a: any, b: any) => String(b.dateEvent || "").localeCompare(String(a.dateEvent || "")))
+        .slice(0, 12).map((e: any) => arabizeTheSportsDbEvent(e)).filter(Boolean);
+      const nextList = Array.isArray(nextLeague?.events) ? nextLeague.events : [];
+      const upcomingFromSeason = events.filter((e: any) => !isFinished(e) && String(e.dateEvent || "") >= today);
+      const seen = new Set<string>();
+      const upcoming = [...nextList, ...upcomingFromSeason]
+        .filter((e: any) => { const id = String(e?.idEvent || `${e?.dateEvent}-${e?.strHomeTeam}`); if (seen.has(id)) return false; seen.add(id); return true; })
+        .sort((a: any, b: any) => String(a.dateEvent || "").localeCompare(String(b.dateEvent || "")))
+        .slice(0, 12).map((e: any) => arabizeTheSportsDbEvent(e)).filter(Boolean);
+      payload = { source: "thesportsdb", league, season, fetchedAt: new Date().toISOString(), standings, recent, upcoming, status: standings.length ? "LIVE" : "EMPTY" };
+    } else {
+      const data = await fetchJson(`https://site.api.espn.com/apis/v2/sports/soccer/${ESPN_LEAGUE_CODES[league]}/standings`);
+      const children = Array.isArray(data?.children) ? data.children : [];
+      const groups = children.map((g: any) => {
+        const rawName = String(g?.name || "");
+        // "…- Group A" → "المجموعة A"
+        const gr = rawName.match(/Group\s+([A-Z0-9]+)\s*$/);
+        return {
+          name: gr ? `المجموعة ${gr[1]}` : (arabicLeagueName(rawName) || rawName),
+          rawName,
+          teams: (g?.standings?.entries || []).map((e: any, i: number) => mapEspnStandingEntry(e, i)).filter(Boolean),
+        };
+      }).filter((g: any) => g.teams.length > 0);
+      payload = { source: "espn", league, fetchedAt: new Date().toISOString(), groups, status: groups.length ? "LIVE" : "EMPTY" };
+    }
+    setCache(cacheKey, payload, 30 * 60_000);
+    setServiceStatus("football", "LIVE", payload.source, `${league}: ${payload.status}`);
+    return res.json({ ...payload, cache: "MISS" });
+  } catch (error) {
+    const stale = getCache<any>(cacheKey, true);
+    if (stale) { setServiceStatus("football", "FALLBACK", "cache", (error as Error)?.message); return res.json({ ...stale.value, status: "FALLBACK", stale: true }); }
+    setServiceStatus("football", "OFFLINE", "football", (error as Error)?.message);
+    return res.status(502).json({ source: "football", league, error: (error as Error)?.message });
+  }
+});
+
+// ملخص فريق/منتخب: المباراة القادمة + آخر نتيجة (بحث مجاني في TheSportsDB)
+const footballTeamInFlight: Map<string, Promise<any>> = new Map();
+app.get("/api/live/football/team", async (req, res) => {
+  const name = String(req.query.name || "").trim();
+  if (!isValidTeamQuery(name)) return res.status(400).json({ error: "اسم الفريق غير صالح" });
+  const cacheKey = `football:team:v1:${name.toLowerCase()}`;
+  const fresh = getCache<any>(cacheKey);
+  if (fresh) return res.json({ ...fresh.value, cache: "HIT" });
+  const existing = footballTeamInFlight.get(cacheKey);
+  if (existing) return existing;
+  const job = (async () => {
+    // البحث في TheSportsDB بالإنجليزية — إذا فشل نعيد المحاولة بالاسم الأصلي كما هو
+    const term = englishTeamForSearch(name);
+    let search: any;
+    try { search = await fetchJson(`${TSD_FREE_BASE}/searchteams.php?t=${encodeURIComponent(term)}`); } catch { search = {}; }
+    let teams = Array.isArray(search?.teams) ? search.teams : [];
+    if (!teams.length && term !== name) {
+      try { search = await fetchJson(`${TSD_FREE_BASE}/searchteams.php?t=${encodeURIComponent(name)}`); teams = Array.isArray(search?.teams) ? search.teams : []; } catch { teams = []; }
+    }
+    // نفضل فريق كرة القدم، وإلا أول نتيجة
+    const team = teams.find((t: any) => String(t?.strSport) === "Soccer") || teams[0];
+    if (!team) throw new Error("لم يتم العثور على الفريق");
+    const [next, last] = await Promise.all([
+      fetchJson(`${TSD_FREE_BASE}/eventsnext.php?id=${team.idTeam}`).catch(() => ({ events: [] })),
+      fetchJson(`${TSD_FREE_BASE}/eventslast.php?id=${team.idTeam}`).catch(() => ({ results: [], events: [] })),
+    ]);
+    const nextEvent = Array.isArray(next?.events) ? next.events[0] : null;
+    const lastList = Array.isArray(last?.results) ? last.results : (Array.isArray(last?.events) ? last.events : []);
+    const lastEvent = lastList[0] || null;
+    const payload = {
+      source: "thesportsdb",
+      fetchedAt: new Date().toISOString(),
+      team: { id: team.idTeam, name: arabicTeamName(team.strTeam) || team.strTeam, latinName: team.strTeam, league: arabicLeagueName(team.strLeague) || team.strLeague, badge: team.strBadge || undefined },
+      next: nextEvent ? summarizeTeamEvent(nextEvent, "next") : null,
+      last: lastEvent ? summarizeTeamEvent(lastEvent, "last") : null,
+    };
+    setCache(cacheKey, payload, 15 * 60_000);
+    return payload;
+  })().finally(() => footballTeamInFlight.delete(cacheKey));
+  footballTeamInFlight.set(cacheKey, job);
+  try { return res.json({ ...(await job), cache: "MISS" }); }
+  catch (error) {
+    const stale = getCache<any>(cacheKey, true);
+    if (stale) return res.json({ ...stale.value, status: "FALLBACK", stale: true });
+    return res.status(404).json({ source: "thesportsdb", error: (error as Error)?.message });
+  }
+});
+
+// أخبار أي فريق أو منتخب (Google News RSS مجاني) — يستخدمه تاب الرياضة
+app.get("/api/live/team-news", async (req, res) => {
+  const team = String(req.query.team || "").trim();
+  if (!isValidTeamQuery(team)) return res.status(400).json({ error: "اسم الفريق غير صالح" });
+  try {
+    const payload = await fetchTeamNewsCached(team);
+    return res.json(payload);
+  } catch (error) {
+    const stale = getCache<any>(`team-news:v1:${team.toLowerCase()}`, true);
+    if (stale) return res.json({ ...stale.value, status: "FALLBACK", stale: true });
+    return res.status(502).json({ source: "google-news-rss", articles: [], error: (error as Error)?.message });
   }
 });
 

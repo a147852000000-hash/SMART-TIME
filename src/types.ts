@@ -54,7 +54,9 @@ export interface TickerPreferences {
     | 'all'
     | string;
   selectedCryptos?: string[]; // e.g. ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'DOGE', 'TON']
-  newsCategories?: string[]; // تصنيفات الأخبار المعروضة في شريط الأخبار: general, politics, arab, egypt, accidents, middle_east — فارغة = إخفاء الأخبار
+  newsCategories?: string[]; // تصنيفات الأخبار المعروضة في شريط الأخبار: general, politics, arab, egypt, accidents, middle_east, sports — فارغة = إخفاء الأخبار
+  tickerNewsCount?: number; // [ticker-count] عدد الأخبار المعروضة من كل تصنيف في شريط الأخبار (مثلًا 10 أو 20 خبر)
+  showNationalTeam?: boolean; // [national-team] إظهار منتخب البلد (منتخب مصر) — تاب خاص + أخبار المنتخب في تاب الرياضة
   customCryptos?: {
     id: string;
     name: string;

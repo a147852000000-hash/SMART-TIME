@@ -36,12 +36,12 @@ export async function fetchLiveMarket(signal?: AbortSignal): Promise<LiveMarketD
   }
 }
 
-export async function fetchLiveNews(language: 'ar' | 'en', category: NewsCategory = 'general'): Promise<LiveNewsArticle[]> {
+export async function fetchLiveNews(language: 'ar' | 'en', category: NewsCategory = 'general', max: number = 30): Promise<LiveNewsArticle[]> {
   try {
     // B-7: the GNews branch is reserved for signed-in sessions; anonymous
     // callers get the free RSS fallback server-side. authHeaders() is empty
     // for guests, so this is safe either way.
-    const res = await fetch(apiUrl(`/api/live/news?lang=${language}&country=eg&category=${encodeURIComponent(category)}&max=10`), { headers: { ...authHeaders() } });
+    const res = await fetch(apiUrl(`/api/live/news?lang=${language}&country=eg&category=${encodeURIComponent(category)}&max=${max}`), { headers: { ...authHeaders() } });
     if (!res.ok) return [];
     const data = await res.json();
     return data.articles || [];
@@ -52,7 +52,7 @@ export async function fetchLiveNews(language: 'ar' | 'en', category: NewsCategor
 
 // [news-categories] تصنيفات الأخبار المدعومة في شريط الأخبار — كل تصنيف يُخدم
 // من مصدر Google News RSS مجاني على السيرفر (بدون مفتاح وبدون حصة مدفوعة).
-export type NewsCategory = 'general' | 'politics' | 'arab' | 'egypt' | 'accidents' | 'middle_east';
+export type NewsCategory = 'general' | 'politics' | 'arab' | 'egypt' | 'accidents' | 'middle_east' | 'sports';
 
 export const NEWS_CATEGORIES: { id: NewsCategory; labelAr: string; labelEn: string; emoji: string }[] = [
   { id: 'general', labelAr: 'الأخبار الرئيسية', labelEn: 'Top News', emoji: '📰' },
@@ -61,6 +61,8 @@ export const NEWS_CATEGORIES: { id: NewsCategory; labelAr: string; labelEn: stri
   { id: 'egypt', labelAr: 'أخبار مصرية', labelEn: 'Egypt News', emoji: '🇪🇬' },
   { id: 'accidents', labelAr: 'أخبار حوادث', labelEn: 'Accidents', emoji: '🚨' },
   { id: 'middle_east', labelAr: 'الشرق الأوسط', labelEn: 'Middle East', emoji: '🕌' },
+  // [football-free] تصنيف رياضة عام يظهر في الشريط والنافذة وتاب الرياضة
+  { id: 'sports', labelAr: 'أخبار رياضة', labelEn: 'Sports', emoji: '⚽' },
 ];
 
 export const ALL_NEWS_CATEGORY_IDS: NewsCategory[] = NEWS_CATEGORIES.map((c) => c.id);
@@ -71,6 +73,103 @@ export async function fetchLiveSports(): Promise<LiveSportsMatch[]> {
     if (!res.ok) return [];
     const data = await res.json();
     return data.matches || [];
+  } catch {
+    return [];
+  }
+}
+
+// ==================== [football-free] كرة القدم المجانية ====================
+// بيانات الدوري المصري والتصفيات الأفريقية وأمم أفريقيا وأخبار الفرق —
+// كلها من مصادر مجانية بدون مفاتيح (TheSportsDB + ESPN + Google News RSS) عبر السيرفر.
+export interface FootballStandingRow {
+  id?: string;
+  rank: number;
+  team: string;
+  latinName?: string;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goalsFor?: number;
+  goalsAgainst?: number;
+  goalDiff?: number;
+  points: number;
+}
+
+export interface FootballStandingGroup {
+  name: string;
+  rawName?: string;
+  teams: FootballStandingRow[];
+}
+
+export interface FootballLeagueEvent {
+  fixture?: { id?: number; date?: string; status?: { short?: string; long?: string } };
+  teams?: { home?: { name?: string; latinName?: string; logo?: string }; away?: { name?: string; latinName?: string; logo?: string } };
+  goals?: { home?: number | null; away?: number | null };
+  league?: { name?: string; country?: string };
+  venue?: string;
+}
+
+export interface FootballLeagueData {
+  source?: string;
+  league: 'egypt' | 'wcq' | 'afcon';
+  season?: string;
+  fetchedAt?: string;
+  status?: string;
+  stale?: boolean;
+  // الدوري المصري: ترتيب مزدوج + نتائج + مباريات قادمة
+  standings?: FootballStandingRow[];
+  recent?: FootballLeagueEvent[];
+  upcoming?: FootballLeagueEvent[];
+  // التصفيات وأمم أفريقيا: مجموعات
+  groups?: FootballStandingGroup[];
+}
+
+export interface FootballTeamSummary {
+  source?: string;
+  stale?: boolean;
+  team?: { id?: string; name?: string; latinName?: string; league?: string; badge?: string };
+  next?: { kind?: string; date?: string; dateEvent?: string; status?: string; home?: string; away?: string; homeScore?: number | null; awayScore?: number | null; league?: string } | null;
+  last?: { kind?: string; date?: string; dateEvent?: string; status?: string; home?: string; away?: string; homeScore?: number | null; awayScore?: number | null; league?: string } | null;
+}
+
+export type FootballLeagueKey = 'egypt' | 'wcq' | 'afcon';
+
+export const FOOTBALL_LEAGUES: { id: FootballLeagueKey; labelAr: string; labelEn: string; emoji: string }[] = [
+  { id: 'egypt', labelAr: 'الدوري المصري', labelEn: 'Egyptian Premier League', emoji: '🇪🇬' },
+  { id: 'wcq', labelAr: 'تصفيات كأس العالم — أفريقيا', labelEn: 'World Cup Qualifiers (CAF)', emoji: '🌍' },
+  { id: 'afcon', labelAr: 'كأس أمم أفريقيا', labelEn: 'Africa Cup of Nations', emoji: '🏆' },
+];
+
+/** ترتيب ونتائج البطولة (الدوري المصري حي — التصفيات وأمم أفريقيا مجموعات كاملة) */
+export async function fetchFootballLeague(name: FootballLeagueKey): Promise<FootballLeagueData | null> {
+  try {
+    const res = await fetch(apiUrl(`/api/live/football/league?name=${encodeURIComponent(name)}`), { headers: { ...authHeaders() } });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+/** ملخص فريق/منتخب: المباراة القادمة + آخر نتيجة */
+export async function fetchFootballTeam(name: string): Promise<FootballTeamSummary | null> {
+  try {
+    const res = await fetch(apiUrl(`/api/live/football/team?name=${encodeURIComponent(name)}`), { headers: { ...authHeaders() } });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+/** أخبار فريق أو منتخب محدد (Google News RSS مجاني عبر السيرفر) */
+export async function fetchTeamNews(team: string): Promise<LiveNewsArticle[]> {
+  try {
+    const res = await fetch(apiUrl(`/api/live/team-news?team=${encodeURIComponent(team)}`), { headers: { ...authHeaders() } });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.articles || [];
   } catch {
     return [];
   }

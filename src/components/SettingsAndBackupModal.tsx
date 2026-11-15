@@ -377,8 +377,12 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
     silverUnit: '999',
     goldUnit: '24',
     selectedCryptos: ['BTC', 'ETH', 'SOL'],
-    // [news-categories] افتراضيًا كل تصنيفات الأخبار مفعّلة في الشريط (سياسية/عربية/مصرية/حوادث/الشرق الأوسط)
+    // [news-categories] افتراضيًا كل تصنيفات الأخبار مفعّلة في الشريط (سياسية/عربية/مصرية/حوادث/الشرق الأوسط/رياضة)
     newsCategories: [...ALL_NEWS_CATEGORY_IDS],
+    // [ticker-count] عدد الأخبار المعروضة من كل تصنيف في الشريط (افتراضيًا 5)
+    tickerNewsCount: userProfile.tickerPreferences?.tickerNewsCount ?? 5,
+    // [national-team] إظهار منتخب البلد في تاب الرياضة (افتراضيًا مفعّل)
+    showNationalTeam: userProfile.tickerPreferences?.showNationalTeam ?? true,
     speed: 'slow',
     customCryptos: [],
     ...(userProfile.tickerPreferences || {}),
@@ -1260,8 +1264,8 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
                     </span>
                     <span className="text-[11px] text-slate-500 dark:text-slate-400">
                       {isAr
-                        ? 'حدد التصنيفات التي تظهر في الشريط — يعرض الشريط أحدث خبر من كل تصنيف مختار، واضغط على أي خبر في الشريط لفتح قائمة الأخبار الكاملة.'
-                        : 'Pick which news categories appear in the ticker — latest headline per category, tap it for the full list.'}
+                        ? `حدد التصنيفات التي تظهر في الشريط وعدد الأخبار المعروضة من كل تصنيف (مثلًا 10 أو 20 خبر)، واضغط على أي خبر في الشريط لفتح القائمة الكاملة.`
+                        : 'Pick which categories appear in the ticker and how many headlines per category — tap any headline for the full list.'}
                     </span>
                   </div>
                 </div>
@@ -1295,6 +1299,37 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
                     ? 'ملاحظة: إلغاء تحديد جميع التصنيفات يخفي الأخبار من شريط الأخبار مع بقاء باقي العناصر (الذهب، العملات، الطقس…) كما هي.'
                     : 'Note: deselecting all categories hides news from the ticker while other items stay.'}
                 </p>
+                {/* [ticker-count] عدد الأخبار المعروضة من كل تصنيف في الشريط: 3/5/10/15/20 */}
+                <div className="mt-3 pt-3 border-t border-blue-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🔢</span>
+                    <div>
+                      <span className="font-bold block text-[12px] text-slate-900 dark:text-white">
+                        {isAr ? 'عدد الأخبار المعروضة في الشريط' : 'Headlines Shown per Category'}
+                      </span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                        {isAr ? 'عدد الأخبار لكل تصنيف مختار — مثال: 10 أو 20 خبر لكل تصنيف' : 'Headlines per selected category, e.g. 10 or 20'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 self-start sm:self-auto">
+                    {[3, 5, 10, 15, 20].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setTickerPrefs({ ...tickerPrefs, tickerNewsCount: n })}
+                        className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                          (tickerPrefs.tickerNewsCount || 5) === n
+                            ? 'bg-blue-500 text-white shadow-xs'
+                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+                        }`}
+                        title={isAr ? `عرض ${n} أخبار لكل تصنيف في الشريط` : `Show ${n} headlines per category`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {/* بطاقات الخيارات التفاعلية */}
@@ -1531,6 +1566,27 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
                           </span>
                         </span>
                         <span className="text-[9px] opacity-75">⚽ نتائج حية في الشريط</span>
+                      </div>
+
+                      {/* [national-team] إظهار منتخب البلد (منتخب مصر) في تاب الرياضة مع أخباره */}
+                      <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">🇪🇬</span>
+                          <div>
+                            <span className="font-bold block text-[12px] text-slate-900 dark:text-white">
+                              {isAr ? 'إظهار منتخب البلد' : 'Show National Team'}
+                            </span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                              {isAr ? 'تاب خاص بأخبار مباريات منتخب مصر ونتائجه في قسم الرياضة' : 'Dedicated Egypt national team tab with news & results'}
+                            </span>
+                          </div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={tickerPrefs.showNationalTeam !== false}
+                          onChange={(e) => setTickerPrefs({ ...tickerPrefs, showNationalTeam: e.target.checked })}
+                          className="w-4 h-4 rounded cursor-pointer accent-emerald-500"
+                        />
                       </div>
                     </div>
                   )}

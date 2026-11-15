@@ -20,9 +20,23 @@ import {
   ArrowDown,
   RotateCcw,
   GripVertical,
+  Flag,
 } from 'lucide-react';
 import { UserProfile } from '../types';
-import { fetchLiveNews, fetchLiveSports, LiveNewsArticle, LiveSportsMatch } from '../services/liveDataService';
+import {
+  fetchLiveNews,
+  fetchLiveSports,
+  fetchFootballLeague,
+  fetchFootballTeam,
+  fetchTeamNews,
+  FOOTBALL_LEAGUES,
+  FootballLeagueKey,
+  FootballLeagueData,
+  FootballTeamSummary,
+  LiveNewsArticle,
+  LiveSportsMatch,
+} from '../services/liveDataService';
+import { isFavoriteTeamMatch } from '../utils/liveInfoHelpers';
 import { apiUrl } from '../services/apiConfig';
 import { authHeaders } from '../services/authService';
 import { STORAGE_KEYS } from '../services/storageKeys';
@@ -53,6 +67,131 @@ interface WorkoutLog {
 }
 
 type Tab = 'home' | 'exercises' | 'favorites' | 'hobby' | 'news';
+// [football-free] التابات الفرعية داخل التاب الرياضي المخصص
+type SportsSubTab = 'results' | 'standings' | 'favteam' | 'national' | 'newsfeed';
+
+// [football-free] تنسيق تاريخ المباراة بشكل عربي مختصر (يحافظ على التاريخ الخام كاحتياط)
+function formatMatchDate(d?: string | null): string {
+  if (!d) return '—';
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return String(d).slice(0, 10);
+  return dt.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' });
+}
+
+// [football-free] نص حالة المباراة بالعربية
+function statusLabelAr(short?: string | null, isAr = true): string {
+  const s = String(short || '').toUpperCase();
+  if (!isAr) {
+    const en: Record<string, string> = { FT: 'FT', NS: 'Not started', '1H': '1st half', '2H': '2nd half', HT: 'Half time', PST: 'Postponed', CANC: 'Cancelled', AET: 'AET', PEN: 'Pens' };
+    return en[s] || s || '';
+  }
+  const ar: Record<string, string> = {
+    FT: 'انتهت', AET: 'بعد الوقت الإضافي', PEN: 'بركلات الترجيح',
+    NS: 'لم تبدأ', TBD: 'لم تحدد', '1H': 'الشوط الأول', '2H': 'الشوط الثاني',
+    HT: 'بين الشوطين', PST: 'مؤجلة', CANC: 'ملغاة',
+  };
+  if (ar[s]) return ar[s];
+  if (['LIVE', 'IN PLAY', 'ET', 'BT', 'P'].includes(s)) return 'جارية الآن';
+  return s || '';
+}
+
+// [football-free] تمييز صف فريقك المفضل في جدول الترتيب (تسامح في الـ «ال» التعريف)
+function isFavTeamRow(teamName: string | undefined, favTeam: string): boolean {
+  if (!teamName || !favTeam) return false;
+  const norm = (s: string) => s.replace(/ال\s*/u, '').trim();
+  return teamName === favTeam || norm(teamName) === norm(favTeam);
+}
+
+// [football-free] بطاقة ملخص فريق/منتخب: المباراة القادمة + آخر نتيجة + أخبار الفريق
+const TeamSummaryBlock: React.FC<{
+  isAr: boolean;
+  title: string;
+  loading: boolean;
+  summary: FootballTeamSummary | null;
+  articles: LiveNewsArticle[];
+}> = ({ isAr, title, loading, summary, articles }) => {
+  const team = summary?.team;
+  const next = summary?.next || null;
+  const last = summary?.last || null;
+  return (
+    <>
+      <div className="rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-800 font-black text-sm">{title}</div>
+        {loading ? (
+          <div className="py-10 text-center text-slate-500">{isAr ? 'جاري تحميل بيانات الفريق…' : 'Loading team data…'}</div>
+        ) : !team ? (
+          <div className="p-5 text-sm text-slate-500">
+            {isAr ? 'لم نتمكن من جلب بيانات الفريق الآن — تأكد من الاتصال بالإنترنت وجرب التحديث.' : 'Could not load team data — check connection and refresh.'}
+          </div>
+        ) : (
+          <div className="p-4 space-y-3">
+            <div className="flex items-center gap-3">
+              {team.badge ? (
+                <img src={team.badge} alt={team.name || ''} className="w-12 h-12 rounded-xl object-contain bg-slate-100 dark:bg-slate-800 p-1" />
+              ) : (
+                <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xl">⚽</div>
+              )}
+              <div>
+                <div className="font-black text-sm">{team.name}</div>
+                {team.league && <div className="text-[11px] text-slate-500">{team.league}</div>}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20">
+                <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 mb-1">{isAr ? '📅 المباراة القادمة' : 'Next match'}</div>
+                {next ? (
+                  <>
+                    <div className="text-xs font-bold">{next.home} × {next.away}</div>
+                    <div className="text-[10px] text-slate-500 mt-1">{formatMatchDate(next.date || next.dateEvent)} {next.league ? `— ${next.league}` : ''}</div>
+                  </>
+                ) : (
+                  <div className="text-xs text-slate-500">{isAr ? 'لا توجد مباراة قادمة معلنة' : 'No upcoming match'}</div>
+                )}
+              </div>
+              <div className="p-3 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                <div className="text-[10px] font-bold text-slate-500 mb-1">{isAr ? '⏮️ آخر نتيجة' : 'Last result'}</div>
+                {last ? (
+                  <>
+                    <div className="text-xs font-bold">{last.home} × {last.away}</div>
+                    <div className="text-[10px] text-slate-500 mt-1">
+                      {last.homeScore ?? '-'} : {last.awayScore ?? '-'} — {statusLabelAr(last.status, isAr)} {last.league ? `— ${last.league}` : ''}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-xs text-slate-500">{isAr ? 'لا توجد نتيجة سابقة' : 'No previous result'}</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="space-y-3">
+        {articles.length ? articles.slice(0, 12).map((n, i) => (
+          <a
+            key={`tn-${n.url}-${i}`}
+            href={n.url}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-3 p-4 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:shadow-sm"
+          >
+            <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-900 flex items-center justify-center shrink-0">
+              <Newspaper className="w-5 h-5" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-bold text-sm leading-6">{n.title}</h3>
+              <p className="text-[11px] text-slate-500 mt-1">{n.source?.name || (isAr ? 'مصدر إخباري' : 'News source')}</p>
+            </div>
+            <ExternalLink className="w-4 h-4 shrink-0" />
+          </a>
+        )) : !loading && (
+          <div className="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-500">
+            {isAr ? 'لا توجد أخبار متاحة للفريق حاليًا — جرب التحديث بعد قليل.' : 'No team news available right now.'}
+          </div>
+        )}
+      </div>
+    </>
+  );
+};
 
 const MUSCLES = [
   { label: 'الكل', value: 'all' },
@@ -102,9 +241,9 @@ const initialHomeCards = [
     id: 'news',
     tab: 'news' as Tab,
     icon: Newspaper,
-    title: 'أخبار الرياضة وكرة القدم',
-    text: 'أخبار ونتائج ومباريات مباشرة من مصادر الإنترنت المتاحة في SMART TIME.',
-    action: 'تصفح الأخبار',
+    title: 'الرياضة — نتائج وجداول وأخبار',
+    text: 'نتائج الدوري المصري وجداول التصفيات وأمم أفريقيا وأخبار فريقك المفضل والمنتخب — مصادر مجانية حية.',
+    action: 'افتح التاب الرياضي',
   },
 ];
 
@@ -132,6 +271,21 @@ export const SportsView: React.FC<SportsViewProps> = ({ user }) => {
   const [newsLoading, setNewsLoading] = useState(false);
   const [liveMatches, setLiveMatches] = useState<LiveSportsMatch[]>([]);
   const [sportsLoading, setSportsLoading] = useState(false);
+  // ==================== [football-free] حالة التاب الرياضي المخصص ====================
+  const [sportsSubTab, setSportsSubTab] = useState<SportsSubTab>('results');
+  // فريقك المفضل (من إعدادات شريط الأخبار) والمنتخب
+  const favTeam = user.tickerPreferences?.favoriteTeam || user.tickerPreferences?.favoriteEgyptianTeam || 'الأهلي';
+  // [national-team] إظهار منتخب البلد — مفعّل افتراضيًا وقابل للإخفاء من إعدادات شريط الأخبار
+  const showNationalTeam = user.tickerPreferences?.showNationalTeam !== false;
+  const [favTeamSummary, setFavTeamSummary] = useState<FootballTeamSummary | null>(null);
+  const [favTeamNews, setFavTeamNews] = useState<LiveNewsArticle[]>([]);
+  const [favTeamLoading, setFavTeamLoading] = useState(false);
+  const [nationalSummary, setNationalSummary] = useState<FootballTeamSummary | null>(null);
+  const [nationalNews, setNationalNews] = useState<LiveNewsArticle[]>([]);
+  const [nationalLoading, setNationalLoading] = useState(false);
+  const [leagueKey, setLeagueKey] = useState<FootballLeagueKey>('egypt');
+  const [leagueData, setLeagueData] = useState<FootballLeagueData | null>(null);
+  const [leagueLoading, setLeagueLoading] = useState(false);
   const [workouts, setWorkouts] = useState<WorkoutLog[]>(() =>
     readStorage(STORAGE_KEYS.WORKOUT_LOGS, [
       { id: 'seed-1', title: 'جري خفيف صباحي', category: 'كارديو', duration: 30, calories: 280, date: 'اليوم' },
@@ -218,7 +372,8 @@ export const SportsView: React.FC<SportsViewProps> = ({ user }) => {
 
   const loadNews = async () => {
     setNewsLoading(true);
-    const data = await fetchLiveNews(isAr ? 'ar' : 'en');
+    // [football-free] أخبار الرياضة الفعلية — كانت تجلب الأخبار الرئيسية بالخطأ
+    const data = await fetchLiveNews(isAr ? 'ar' : 'en', 'sports');
     setNews(data);
     setNewsLoading(false);
   };
@@ -227,12 +382,42 @@ export const SportsView: React.FC<SportsViewProps> = ({ user }) => {
     setLiveMatches(await fetchLiveSports());
     setSportsLoading(false);
   };
+  // [football-free] محملات التاب الرياضي: ترتيب البطولة + ملخص الفريق + أخبار الفريق
+  const loadLeague = async (key: FootballLeagueKey = leagueKey) => {
+    setLeagueLoading(true);
+    const data = await fetchFootballLeague(key);
+    setLeagueData(data);
+    setLeagueLoading(false);
+  };
+  const loadTeamBlock = async (teamName: string, target: 'fav' | 'national') => {
+    const setSummary = target === 'fav' ? setFavTeamSummary : setNationalSummary;
+    const setNewsList = target === 'fav' ? setFavTeamNews : setNationalNews;
+    const setLoading = target === 'fav' ? setFavTeamLoading : setNationalLoading;
+    setLoading(true);
+    const [summary, articles] = await Promise.all([fetchFootballTeam(teamName), fetchTeamNews(teamName)]);
+    setSummary(summary);
+    setNewsList(articles);
+    setLoading(false);
+  };
+  // تحميل بيانات التاب الفرعي النشط فقط (خفيف على المزودات المجانية + كاش السيرفر يحمي الحصة)
   useEffect(() => {
-    if (activeTab === 'news') {
-      loadNews();
-      loadLive();
-    }
-  }, [activeTab]);
+    if (activeTab !== 'news') return;
+    // [football-free] نتائج الدوري المصري: إن كانت بيانات تاب الترتيب لبطولة أخرى نعيد جلب الدوري المصري
+    if (sportsSubTab === 'results') { if (!leagueData || leagueData.league !== 'egypt') loadLeague('egypt'); loadLive(); }
+    else if (sportsSubTab === 'standings') { loadLeague(leagueKey); }
+    else if (sportsSubTab === 'favteam') { loadTeamBlock(favTeam, 'fav'); }
+    else if (sportsSubTab === 'national') { loadTeamBlock(isAr ? 'المنتخب المصري' : 'Egypt', 'national'); }
+    else if (sportsSubTab === 'newsfeed') { loadNews(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, sportsSubTab, leagueKey]);
+  // زر التحديث يعيد جلب بيانات التاب الفرعي الحالي
+  const refreshSportsTab = () => {
+    if (sportsSubTab === 'results') { loadLeague('egypt'); loadLive(); }
+    else if (sportsSubTab === 'standings') { loadLeague(leagueKey); }
+    else if (sportsSubTab === 'favteam') { loadTeamBlock(favTeam, 'fav'); }
+    else if (sportsSubTab === 'national') { loadTeamBlock(isAr ? 'المنتخب المصري' : 'Egypt', 'national'); }
+    else { loadNews(); }
+  };
 
   const toggleFavorite = (exercise: ExerciseItem) => {
     setFavorites((prev) =>
@@ -601,70 +786,282 @@ export const SportsView: React.FC<SportsViewProps> = ({ user }) => {
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-black text-lg flex items-center gap-2">
-              <Newspaper /> أخبار الرياضة
+              <Trophy className="text-amber-500" /> {isAr ? 'الرياضة — نتائج وجداول وأخبار' : 'Sports — Results, Tables & News'}
             </h2>
             <button
-              onClick={() => {
-                loadNews();
-                loadLive();
-              }}
+              onClick={refreshSportsTab}
+              title={isAr ? 'تحديث بيانات القسم الحالي' : 'Refresh current section'}
               className="p-2 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800"
             >
-              <RefreshCw className={`w-4 h-4 ${newsLoading || sportsLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${newsLoading || sportsLoading || leagueLoading || favTeamLoading || nationalLoading ? 'animate-spin' : ''}`} />
             </button>
           </div>
-          <div className="rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 overflow-hidden">
-            <div className="p-4 border-b border-slate-200 dark:border-slate-800 font-black text-sm">النتائج المباشرة</div>
-            {liveMatches.slice(0, 8).map((m, i) => (
-              <div
-                key={`${m.fixture?.id || i}`}
-                className="p-3 border-b last:border-0 border-slate-100 dark:border-slate-800 flex justify-between"
+
+          {/* [football-free] شريط التابات الفرعية: النتائج / الترتيب والجداول / فريقك المفضل / منتخب مصر / أخبار رياضة */}
+          <div className="flex gap-1.5 overflow-x-auto p-1.5 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 no-scrollbar">
+            {([
+              ['results', 'النتائج', 'Results', <Activity key="i" className="w-4 h-4" />],
+              ['standings', 'الترتيب والجداول', 'Standings', <Trophy key="i" className="w-4 h-4" />],
+              ['favteam', 'فريقك المفضل', 'Favorite Club', <Heart key="i" className="w-4 h-4" />],
+              ...(showNationalTeam ? [['national', 'منتخب مصر', 'National Team', <Flag key="i" className="w-4 h-4" />] as const] : []),
+              ['newsfeed', 'أخبار رياضة', 'Sports News', <Newspaper key="i" className="w-4 h-4" />],
+            ] as const).map(([key, ar, en, icon]) => (
+              <button
+                key={key}
+                onClick={() => setSportsSubTab(key as SportsSubTab)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                  sportsSubTab === key
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
               >
-                <div className="text-xs">
-                  <div className="text-slate-500">{m.league?.name || 'مباراة'}</div>
-                  <b>{m.teams?.home?.name || 'Home'}</b>
-                  <br />
-                  <b>{m.teams?.away?.name || 'Away'}</b>
-                </div>
-                <div className="font-black">
-                  {m.goals?.home ?? '-'} : {m.goals?.away ?? '-'}
-                </div>
-              </div>
+                {icon}
+                {isAr ? ar : en}
+              </button>
             ))}
-            {!sportsLoading && !liveMatches.length && (
-              <div className="p-5 text-sm text-slate-500">
-                لا توجد مباريات مباشرة الآن أو مزود النتائج غير متاح.
-              </div>
-            )}
           </div>
-          <div className="space-y-3">
-            {newsLoading ? (
-              <div className="py-10 text-center text-slate-500">جاري تحميل الأخبار...</div>
-            ) : news.length ? (
-              news.map((n, i) => (
-                <a
-                  key={`${n.url}-${i}`}
-                  href={n.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-3 p-4 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:shadow-sm"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-900 flex items-center justify-center shrink-0">
-                    <Newspaper className="w-5 h-5" />
+
+          {/* ============ 1) النتائج المباشرة + نتائج الدوري المصري + القادمة ============ */}
+          {sportsSubTab === 'results' && (
+            <>
+              <div className="rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 overflow-hidden">
+                <div className="p-4 border-b border-slate-200 dark:border-slate-800 font-black text-sm flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" /> النتائج المباشرة الآن
+                </div>
+                {sportsLoading && <div className="p-5 text-sm text-slate-500">جاري تحميل المباريات المباشرة…</div>}
+                {liveMatches.slice(0, 8).map((m, i) => (
+                  <div
+                    key={`live-${m.fixture?.id || i}`}
+                    className="p-3 border-b last:border-0 border-slate-100 dark:border-slate-800 flex justify-between items-center"
+                  >
+                    <div className="text-xs">
+                      <div className="text-slate-500">{m.league?.name || 'مباراة'}</div>
+                      <b>{m.teams?.home?.name || 'Home'}</b>
+                      <br />
+                      <b>{m.teams?.away?.name || 'Away'}</b>
+                    </div>
+                    <div className="font-black">
+                      {m.goals?.home ?? '-'} : {m.goals?.away ?? '-'}
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-sm leading-6">{n.title}</h3>
-                    <p className="text-[11px] text-slate-500 mt-1">{n.source?.name || 'مصدر إخباري'}</p>
+                ))}
+                {!sportsLoading && !liveMatches.length && (
+                  <div className="p-5 text-sm text-slate-500">
+                    لا توجد مباريات مباشرة الآن — تصفح أحدث نتائج الدوري المصري أدناه.
                   </div>
-                  <ExternalLink className="w-4 h-4 shrink-0" />
-                </a>
-              ))
-            ) : (
-              <div className="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-500">
-                لم تصل أخبار مباشرة حاليًا.
+                )}
               </div>
-            )}
-          </div>
+
+              {/* أحدث نتائج الدوري المصري */}
+              <div className="rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 overflow-hidden">
+                <div className="p-4 border-b border-slate-200 dark:border-slate-800 font-black text-sm flex items-center justify-between">
+                  <span>🇪🇬 أحدث نتائج الدوري المصري</span>
+                  {leagueData?.season && <span className="text-[10px] font-bold text-slate-400">موسم {leagueData.season}</span>}
+                </div>
+                {leagueLoading && <div className="p-5 text-sm text-slate-500">جاري تحميل نتائج الدوري…</div>}
+                {!leagueLoading && (leagueData?.recent?.length ? leagueData.recent : []).map((m, i) => (
+                  <div key={`rec-${m.fixture?.id || i}`} className="p-3 border-b last:border-0 border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs font-bold flex-1">
+                        <div>{m.teams?.home?.name || '—'}</div>
+                        <div className="mt-1">{m.teams?.away?.name || '—'}</div>
+                      </div>
+                      <div className="text-center font-black text-sm bg-slate-100 dark:bg-slate-800 rounded-xl px-3 py-1.5">
+                        {m.goals?.home ?? '-'} : {m.goals?.away ?? '-'}
+                      </div>
+                      <div className="text-[10px] text-slate-400 w-16 text-left shrink-0">
+                        {formatMatchDate(m.fixture?.date)}
+                        <div className="mt-0.5">{statusLabelAr(m.fixture?.status?.short, isAr)}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {!leagueLoading && !(leagueData?.recent?.length) && (
+                  <div className="p-5 text-sm text-slate-500">لا توجد نتائج حديثة متاحة حاليًا — جرب التحديث بعد قليل.</div>
+                )}
+              </div>
+
+              {/* المباريات القادمة */}
+              <div className="rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 overflow-hidden">
+                <div className="p-4 border-b border-slate-200 dark:border-slate-800 font-black text-sm">📅 المباريات القادمة — الدوري المصري</div>
+                {!leagueLoading && (leagueData?.upcoming?.length ? leagueData.upcoming : []).map((m, i) => (
+                  <div key={`up-${m.fixture?.id || i}`} className="p-3 border-b last:border-0 border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                    <div className="text-xs font-bold">
+                      {m.teams?.home?.name || '—'} <span className="text-slate-400">×</span> {m.teams?.away?.name || '—'}
+                    </div>
+                    <div className="text-[10px] text-slate-400 shrink-0 text-left">{formatMatchDate(m.fixture?.date)}</div>
+                  </div>
+                ))}
+                {!leagueLoading && !(leagueData?.upcoming?.length) && (
+                  <div className="p-5 text-sm text-slate-500">لا توجد مباريات قادمة معلنة حاليًا.</div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* ============ 2) الترتيب والجداول: الدوري المصري / تصفيات كأس العالم / أمم أفريقيا ============ */}
+          {sportsSubTab === 'standings' && (
+            <>
+              <div className="flex gap-1.5 overflow-x-auto p-1.5 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 no-scrollbar">
+                {FOOTBALL_LEAGUES.map((lg) => (
+                  <button
+                    key={lg.id}
+                    onClick={() => setLeagueKey(lg.id)}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                      leagueKey === lg.id
+                        ? 'bg-amber-500 text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    {lg.emoji} {isAr ? lg.labelAr : lg.labelEn}
+                  </button>
+                ))}
+              </div>
+
+              {leagueLoading && (
+                <div className="py-10 text-center text-slate-500">جاري تحميل جدول الترتيب…</div>
+              )}
+
+              {/* الدوري المصري: جدول ترتيب واحد */}
+              {!leagueLoading && leagueKey === 'egypt' && (leagueData?.standings?.length ? (
+                <div className="rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 overflow-hidden">
+                  <div className="p-4 border-b border-slate-200 dark:border-slate-800 font-black text-sm">🇪🇬 جدول ترتيب الدوري المصري</div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 dark:bg-slate-800/60 text-slate-500">
+                          <th className="p-2 font-bold">#</th>
+                          <th className="p-2 font-bold text-right">الفريق</th>
+                          <th className="p-2 font-bold">لعب</th>
+                          <th className="p-2 font-bold">فاز</th>
+                          <th className="p-2 font-bold">تعادل</th>
+                          <th className="p-2 font-bold">خسر</th>
+                          <th className="p-2 font-bold">+/-</th>
+                          <th className="p-2 font-bold">نقاط</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {leagueData.standings.map((row, i) => (
+                          <tr key={row.id || row.team || i} className={`border-t border-slate-100 dark:border-slate-800 ${isFavTeamRow(row.team, favTeam) ? 'bg-emerald-500/10' : ''}`}>
+                            <td className="p-2 text-center font-black">{row.rank || i + 1}</td>
+                            <td className="p-2 font-bold whitespace-nowrap">{row.team}</td>
+                            <td className="p-2 text-center">{row.played}</td>
+                            <td className="p-2 text-center">{row.won}</td>
+                            <td className="p-2 text-center">{row.drawn}</td>
+                            <td className="p-2 text-center">{row.lost}</td>
+                            <td className="p-2 text-center">{typeof row.goalDiff === 'number' && row.goalDiff > 0 ? `+${row.goalDiff}` : (row.goalDiff ?? 0)}</td>
+                            <td className="p-2 text-center font-black text-blue-600 dark:text-blue-400">{row.points}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-500">
+                  لم يتوفر جدول ترتيب للدوري المصري حاليًا — جرب التحديث بعد قليل.
+                </div>
+              ))}
+
+              {/* التصفيات وأمم أفريقيا: مجموعات */}
+              {!leagueLoading && leagueKey !== 'egypt' && (leagueData?.groups?.length ? leagueData.groups : []).map((g, gi) => (
+                <div key={g.rawName || gi} className="rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 overflow-hidden">
+                  <div className="p-4 border-b border-slate-200 dark:border-slate-800 font-black text-sm">
+                    {FOOTBALL_LEAGUES.find((lg) => lg.id === leagueKey)?.emoji} {g.name}
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 dark:bg-slate-800/60 text-slate-500">
+                          <th className="p-2 font-bold">#</th>
+                          <th className="p-2 font-bold text-right">المنتخب</th>
+                          <th className="p-2 font-bold">لعب</th>
+                          <th className="p-2 font-bold">فاز</th>
+                          <th className="p-2 font-bold">تعادل</th>
+                          <th className="p-2 font-bold">خسر</th>
+                          <th className="p-2 font-bold">+/-</th>
+                          <th className="p-2 font-bold">نقاط</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {g.teams.map((row, i) => (
+                          <tr key={row.id || row.team || i} className={`border-t border-slate-100 dark:border-slate-800 ${isFavTeamRow(row.team, isAr ? 'المنتخب المصري' : 'Egypt') ? 'bg-emerald-500/10' : ''}`}>
+                            <td className="p-2 text-center font-black">{row.rank || i + 1}</td>
+                            <td className="p-2 font-bold whitespace-nowrap">{row.team}</td>
+                            <td className="p-2 text-center">{row.played}</td>
+                            <td className="p-2 text-center">{row.won}</td>
+                            <td className="p-2 text-center">{row.drawn}</td>
+                            <td className="p-2 text-center">{row.lost}</td>
+                            <td className="p-2 text-center">{typeof row.goalDiff === 'number' && row.goalDiff > 0 ? `+${row.goalDiff}` : (row.goalDiff ?? 0)}</td>
+                            <td className="p-2 text-center font-black text-blue-600 dark:text-blue-400">{row.points}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+              {!leagueLoading && leagueKey !== 'egypt' && !(leagueData?.groups?.length) && (
+                <div className="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-500">
+                  لم تتوفر جداول هذه البطولة حاليًا — جرب التحديث بعد قليل.
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ============ 3) فريقك المفضل: ملخص + أخبار ============ */}
+          {sportsSubTab === 'favteam' && (
+            <TeamSummaryBlock
+              isAr={isAr}
+              title={isAr ? `⚽ فريقك المفضل — ${favTeam}` : `Favorite Club — ${favTeam}`}
+              loading={favTeamLoading}
+              summary={favTeamSummary}
+              articles={favTeamNews}
+            />
+          )}
+
+          {/* ============ 4) منتخب مصر: ملخص + أخبار (قابل للإخفاء من الإعدادات) ============ */}
+          {sportsSubTab === 'national' && (
+            <TeamSummaryBlock
+              isAr={isAr}
+              title={isAr ? '🇪🇬 منتخب مصر — أخبار ومباريات ونتائج' : 'Egypt National Team — News & Results'}
+              loading={nationalLoading}
+              summary={nationalSummary}
+              articles={nationalNews}
+            />
+          )}
+
+          {/* ============ 5) أخبار رياضة ============ */}
+          {sportsSubTab === 'newsfeed' && (
+            <div className="space-y-3">
+              {newsLoading ? (
+                <div className="py-10 text-center text-slate-500">جاري تحميل الأخبار...</div>
+              ) : news.length ? (
+                news.map((n, i) => (
+                  <a
+                    key={`${n.url}-${i}`}
+                    href={n.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-3 p-4 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:shadow-sm"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-900 flex items-center justify-center shrink-0">
+                      <Newspaper className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-bold text-sm leading-6">{n.title}</h3>
+                      <p className="text-[11px] text-slate-500 mt-1">{n.source?.name || 'مصدر إخباري'}</p>
+                    </div>
+                    <ExternalLink className="w-4 h-4 shrink-0" />
+                  </a>
+                ))
+              ) : (
+                <div className="p-6 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-500">
+                  لم تصل أخبار مباشرة حاليًا.
+                </div>
+              )}
+            </div>
+          )}
         </section>
       )}
 

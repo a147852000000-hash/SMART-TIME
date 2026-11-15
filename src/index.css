@@ -611,3 +611,12 @@ html[class*="theme-"] nav button[class*="text-accent-600"] {
 .dark .card-bg-candy .dashboard-section-icon{
   background:rgba(15,23,42,.52);
 }
+
+/* [football-free] إخفاء شريط التمرير في أشرطة التابات الفرعية القابلة للسحب أفقيًا */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

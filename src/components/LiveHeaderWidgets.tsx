@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { Language, UserProfile, DailyTask, TaskPriority, TaskCategory } from '../types';
 import { NotesRepository } from '../services/repositories/notesRepository';
-import { fetchLiveMarket, fetchLiveNews, fetchLiveSports, fetchLiveWeather, LiveMarketData, LiveNewsArticle, LiveSportsMatch, LiveWeatherData, NEWS_CATEGORIES, ALL_NEWS_CATEGORY_IDS, NewsCategory } from '../services/liveDataService';
+import { fetchLiveMarket, fetchLiveNews, fetchLiveSports, fetchLiveWeather, fetchFootballLeague, LiveMarketData, LiveNewsArticle, LiveSportsMatch, LiveWeatherData, FootballLeagueData, NEWS_CATEGORIES, ALL_NEWS_CATEGORY_IDS, NewsCategory } from '../services/liveDataService';
 import {
   MOCK_CRYPTO_RATES,
   MOCK_CURRENCY_GOLD_RATES,
@@ -80,6 +80,9 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
   const [activeNewsCat, setActiveNewsCat] = useState<NewsCategory>('general');
   const [liveSports, setLiveSports] = useState<LiveSportsMatch[]>([]);
   const [liveWeather, setLiveWeather] = useState<LiveWeatherData | null>(null);
+  // [football-free] ترتيب ونتائج الدوري المصري الحقيقية — تُجلب عند فتح نافذة الدوري
+  const [egyptLeagueData, setEgyptLeagueData] = useState<FootballLeagueData | null>(null);
+  const [egyptLeagueLoading, setEgyptLeagueLoading] = useState(false);
   const pointerDownTimeRef = useRef(0);
 
   // مهام وتنبيهات قسم ذكرني (المهمات اليومية)
@@ -152,6 +155,19 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
     return () => clearInterval(timer);
   }, []);
 
+  // [football-free] عند فتح نافذة الدوري: جلب الترتيب والنتائج الحقيقية من مصدر مجاني
+  useEffect(() => {
+    if (activeModal !== 'league') return;
+    let mounted = true;
+    setEgyptLeagueLoading(true);
+    fetchFootballLeague('egypt').then((data) => {
+      if (!mounted) return;
+      if (data && ((data.standings && data.standings.length) || (data.recent && data.recent.length))) setEgyptLeagueData(data);
+      setEgyptLeagueLoading(false);
+    }).catch(() => { if (mounted) setEgyptLeagueLoading(false); });
+    return () => { mounted = false; };
+  }, [activeModal]);
+
   // Live Internet feed: market data is refreshed frequently, news/scores on their natural cadence.
   // [news-categories] التصنيفات المفعلة من إعدادات شريط الأخبار — مصفوفة فارغة = إخفاء الأخبار من الشريط
   // ALL_NEWS_CATEGORY_IDS.filter يعيد الترتيب الرسمي ويستبعد أي قيمة تالفة محفوظة
@@ -160,15 +176,19 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
     ? ALL_NEWS_CATEGORY_IDS.filter((c) => savedNewsCats.includes(c))
     : [...ALL_NEWS_CATEGORY_IDS];
   const enabledNewsCategoriesKey = enabledNewsCategories.join(',');
+  // [ticker-count] عدد الأخبار المطلوب من كل تصنيف — نفس القيمة المستخدمة في العرض
+  const tickerNewsCount = Math.max(1, Math.min(Number(user.tickerPreferences?.tickerNewsCount) || 5, 20));
+  const tickerNewsCountKey = String(tickerNewsCount);
 
   useEffect(() => {
     let mounted = true;
     // [news-categories] يجلب أحدث الأخبار لكل تصنيف مفعّل — كل تصنيف له ذاكرة تخزين مؤقت
     // على السيرفر (5 دقائق) والمصدر مجاني (Google News RSS) بدون أي حصة مدفوعة
+    // [ticker-count] يطلب من السيرفر عدد الأخبار المُعد في الإعدادات (حتى 20)
     const refreshNews = async () => {
       const lang = (language === 'fr' ? 'en' : language) as 'ar' | 'en';
       const pairs = await Promise.all(enabledNewsCategories.map(async (cat) => {
-        try { return [cat, await fetchLiveNews(lang, cat)] as const; } catch { return [cat, [] as LiveNewsArticle[]] as const; }
+        try { return [cat, await fetchLiveNews(lang, cat, tickerNewsCount)] as const; } catch { return [cat, [] as LiveNewsArticle[]] as const; }
       }));
       if (!mounted) return;
       // الدمج مع آخر بيانات معروفة: تصنيف فشل جلبُه يُبقي على آخر أخبار نجحت
@@ -197,7 +217,7 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
     document.addEventListener('visibilitychange', handleVisibility);
     return () => { mounted = false; window.clearInterval(marketTimer); window.clearInterval(newsTimer); window.clearInterval(sportsTimer); window.clearInterval(weatherTimer); document.removeEventListener('visibilitychange', handleVisibility); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [language, user.city, enabledNewsCategoriesKey]);
+  }, [language, user.city, enabledNewsCategoriesKey, tickerNewsCountKey]);
 
   const isAr = language === 'ar';
   const age = calculateUserAge(user.birthDate);
@@ -647,25 +667,50 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
       )}
 
       {/* 5.5 الأخبار المباشرة حسب التصنيفات المختارة من إعدادات شريط الأخبار:
-          سياسية / عربية / مصرية / حوادث / الشرق الأوسط — أحدث خبر من كل تصنيف مفعّل */}
+          سياسية / عربية / مصرية / حوادث / الشرق الأوسط / رياضة
+          [ticker-count] عدد الأخبار لكل تصنيف قابل للضبط من الإعدادات (3/5/10/15/20)
+          — أول خبر يظهر بعنوان التصنيف والباقي بأيقونة التصنيف فقط */}
       {enabledNewsCategories.map((cat) => {
         const catMeta = NEWS_CATEGORIES.find((c) => c.id === cat);
         const catArticles = liveNewsByCat[cat] || [];
+        const tickerCount = Math.max(1, Math.min(Number(prefs.tickerNewsCount) || 5, 20));
+        const shown = catArticles.slice(0, tickerCount);
+        const catLabel = catMeta ? `${catMeta.emoji} ${isAr ? catMeta.labelAr : catMeta.labelEn}:` : (isAr ? 'أخبار مباشرة:' : 'Live News:');
+        if (!shown.length) {
+          // [ticker-count] لا أخبار بعد (تحميل أو فشل مؤقت) — عنصر واحد على الأقل لكل تصنيف
+          return (
+            <React.Fragment key={`news-${cat}`}>
+              <button
+                onClick={() => { setActiveNewsCat(cat); handleItemClick('news'); }}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 shrink-0 font-sans hover:scale-[1.03] cursor-pointer active:scale-95 transition-all"
+                title={catMeta ? (isAr ? `${catMeta.labelAr} — انقر لعرض جميع أخبار هذا التصنيف` : `${catMeta.labelEn} — tap to open the full list`) : (isAr ? 'أخبار مباشرة' : 'Live news')}
+              >
+                <Newspaper className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                <span className="font-bold text-xs">{catLabel}</span>
+                <span className="text-xs text-slate-800 dark:text-slate-200 font-medium max-w-[210px] truncate">
+                  {isAr ? 'جاري تحميل الأخبار من الإنترنت…' : 'Loading live news…'}
+                </span>
+              </button>
+              <span className="text-slate-300 dark:text-slate-700 font-normal">/</span>
+            </React.Fragment>
+          );
+        }
         return (
           <React.Fragment key={`news-${cat}`}>
-            <button
-              onClick={() => { setActiveNewsCat(cat); handleItemClick('news'); }}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 shrink-0 font-sans hover:scale-[1.03] cursor-pointer active:scale-95 transition-all"
-              title={catMeta ? (isAr ? `${catMeta.labelAr} — انقر لعرض جميع أخبار هذا التصنيف` : `${catMeta.labelEn} — tap to open the full list`) : (isAr ? 'أخبار مباشرة' : 'Live news')}
-            >
-              <Newspaper className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-              <span className="font-bold text-xs">
-                {catMeta ? `${catMeta.emoji} ${isAr ? catMeta.labelAr : catMeta.labelEn}:` : (isAr ? 'أخبار مباشرة:' : 'Live News:')}
-              </span>
-              <span className="text-xs text-slate-800 dark:text-slate-200 font-medium max-w-[210px] truncate">
-                {catArticles[0]?.title || (isAr ? 'جاري تحميل الأخبار من الإنترنت…' : 'Loading live news…')}
-              </span>
-            </button>
+            {shown.map((article, i) => (
+              <button
+                key={`${article.url}-${i}`}
+                onClick={() => { setActiveNewsCat(cat); handleItemClick('news'); }}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 shrink-0 font-sans hover:scale-[1.03] cursor-pointer active:scale-95 transition-all"
+                title={article.source?.name ? `${article.source.name} — ${catMeta ? (isAr ? catMeta.labelAr : catMeta.labelEn) : ''}` : (catMeta ? (isAr ? catMeta.labelAr : catMeta.labelEn) : 'أخبار مباشرة')}
+              >
+                <Newspaper className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                <span className="font-bold text-xs">{i === 0 ? catLabel : (catMeta?.emoji || '📰')}</span>
+                <span className="text-xs text-slate-800 dark:text-slate-200 font-medium max-w-[210px] truncate">
+                  {article.title}
+                </span>
+              </button>
+            ))}
             <span className="text-slate-300 dark:text-slate-700 font-normal">/</span>
           </React.Fragment>
         );
@@ -1013,9 +1058,9 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
                 })}
               </div>
 
-              {/* قائمة الأخبار الكاملة للتصنيف المختار */}
+              {/* قائمة الأخبار الكاملة للتصنيف المختار — [ticker-count] حتى 20 خبر مع الخدمة */}
               <div className="max-h-[48vh] overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
-                {modalArticles.slice(0, 10).map((a, i) => (
+                {modalArticles.slice(0, 20).map((a, i) => (
                   <a
                     key={`${activeNewsCat}-${i}`}
                     href={a.url}
@@ -1174,49 +1219,103 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
               </div>
             </div>
 
-            {/* جدول الترتيب المصغر — [ticker-fresh] clearly labelled as a static
-                reference: the free sports feed has no reliable standings source,
-                so we say so instead of passing it off as live. */}
+            {/* [football-free] ترتيب الدوري المصري الحقيقي — بيانات حية مجانية من TheSportsDB
+                عند فشل المزود تظهر اللقطة المحفوظة بوسم واضح «استرشادي» */}
             <div>
               <h4 className="font-bold text-xs text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1">
                 <Trophy className="w-3.5 h-3.5 text-accent-500" />
-                <span>{isAr ? 'ترتيب الدوري (استرشادي)' : 'Standings (reference)'}</span>
-                <span className="text-[9px] font-medium text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-                  {isAr ? 'بيانات محفوظة' : 'saved snapshot'}
+                <span>{isAr ? 'ترتيب الدوري المصري' : 'Egyptian League Standings'}</span>
+                <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold">
+                  {isAr ? (egyptLeagueData?.stale ? 'آخر بيانات متاحة' : 'بيانات حية') : (egyptLeagueData?.stale ? 'cached' : 'live')}
                 </span>
+                {egyptLeagueData?.season && <span className="text-[9px] font-medium text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{egyptLeagueData.season}</span>}
               </h4>
-              <div className="overflow-hidden rounded-2xl border border-slate-100 dark:border-slate-800 text-[11px]">
-                <table className="w-full text-center">
-                  <thead className="bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold text-[10px]">
-                    <tr>
-                      <th className="py-1.5 px-2 text-start">#</th>
-                      <th className="py-1.5 px-2 text-start">{isAr ? 'الفريق' : 'Team'}</th>
-                      <th className="py-1.5 px-1">{isAr ? 'لعب' : 'P'}</th>
-                      <th className="py-1.5 px-1">{isAr ? 'فوز' : 'W'}</th>
-                      <th className="py-1.5 px-2 font-black text-accent-600">{isAr ? 'نقاط' : 'Pts'}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {EGYPTIAN_LEAGUE_STANDINGS.map((team) => (
-                      <tr
-                        key={team.rank}
-                        className={team.team.includes(favTeam) ? 'bg-accent-50/70 dark:bg-accent-950/40 font-bold' : ''}
-                      >
-                        <td className="py-1.5 px-2 text-start text-slate-400">{team.rank}</td>
-                        <td className="py-1.5 px-2 text-start font-medium text-slate-900 dark:text-white">
-                          {team.team}
-                        </td>
-                        <td className="py-1.5 px-1 text-slate-500">{team.played}</td>
-                        <td className="py-1.5 px-1 text-emerald-600">{team.won}</td>
-                        <td className="py-1.5 px-2 font-bold font-mono text-accent-600 dark:text-accent-400">
-                          {team.points}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              {(() => {
+                const liveRows = egyptLeagueData?.standings || [];
+                const isLive = liveRows.length > 0;
+                const rows: { rank: number; team: string; played: number; won: number; points: number; id?: string }[] = isLive
+                  ? liveRows.map((r) => ({ rank: r.rank, team: r.team, played: r.played, won: r.won, points: r.points, id: r.id }))
+                  : EGYPTIAN_LEAGUE_STANDINGS.map((t) => ({ rank: t.rank, team: t.team, played: t.played, won: t.won, points: t.points }));
+                return (
+                  <div className="overflow-hidden rounded-2xl border border-slate-100 dark:border-slate-800 text-[11px]">
+                    <table className="w-full text-center">
+                      <thead className="bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold text-[10px]">
+                        <tr>
+                          <th className="py-1.5 px-2 text-start">#</th>
+                          <th className="py-1.5 px-2 text-start">{isAr ? 'الفريق' : 'Team'}</th>
+                          <th className="py-1.5 px-1">{isAr ? 'لعب' : 'P'}</th>
+                          <th className="py-1.5 px-1">{isAr ? 'فوز' : 'W'}</th>
+                          <th className="py-1.5 px-2 font-black text-accent-600">{isAr ? 'نقاط' : 'Pts'}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {rows.map((team) => (
+                          <tr
+                            key={`${team.id || team.rank}-${team.team}`}
+                            className={team.team.includes(favTeam) || favTeam.includes(team.team) ? 'bg-accent-50/70 dark:bg-accent-950/40 font-bold' : ''}
+                          >
+                            <td className="py-1.5 px-2 text-start text-slate-400">{team.rank}</td>
+                            <td className="py-1.5 px-2 text-start font-medium text-slate-900 dark:text-white">
+                              {team.team}
+                            </td>
+                            <td className="py-1.5 px-1 text-slate-500">{team.played}</td>
+                            <td className="py-1.5 px-1 text-emerald-600">{team.won}</td>
+                            <td className="py-1.5 px-2 font-bold font-mono text-accent-600 dark:text-accent-400">
+                              {team.points}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+              {!egyptLeagueData?.standings?.length && (
+                <p className="mt-1 text-[9px] text-slate-400">
+                  {isAr ? 'الجدول أعلاه استرشادي محفوظ — البيانات الحية غير متاحة مؤقتًا' : 'Static reference table — live data temporarily unavailable'}
+                </p>
+              )}
             </div>
+
+            {/* [football-free] نتائج الدوري المصري الأخيرة من المزود المجاني */}
+            {egyptLeagueData?.recent && egyptLeagueData.recent.length > 0 && (
+              <div className="mt-4">
+                <h4 className="font-bold text-xs text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1">
+                  <Activity className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>{isAr ? 'نتائج الدوري المصري الأخيرة' : 'Recent Egyptian League Results'}</span>
+                  {egyptLeagueData.season && <span className="text-[9px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{egyptLeagueData.season}</span>}
+                </h4>
+                <div className="space-y-1.5">
+                  {egyptLeagueData.recent.slice(0, 6).map((m, i) => (
+                    <div key={`eg-recent-${m.fixture?.id || i}`} className="flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 text-[11px]">
+                      <span className="font-bold text-slate-800 dark:text-slate-200 truncate flex-1 text-start">{m.teams?.home?.name || '—'}</span>
+                      <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-900 rounded-lg px-2 py-0.5 shadow-2xs shrink-0">
+                        {m.goals?.home ?? '-'} : {m.goals?.away ?? '-'}
+                      </span>
+                      <span className="font-bold text-slate-800 dark:text-slate-200 truncate flex-1 text-end">{m.teams?.away?.name || '—'}</span>
+                      <span className="text-[9px] text-slate-400 shrink-0 w-16 text-center">{m.fixture?.date ? String(m.fixture.date).slice(0, 10) : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* رابط التاب الرياضي الكامل (نتائج + جداول التصفيات وأمم أفريقيا + أخبار الفريق والمنتخب) */}
+            {onNavigate && (
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveModal(null);
+                    onNavigate('sports');
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Trophy className="w-4 h-4" />
+                  <span>{isAr ? 'فتح التاب الرياضي الكامل — الجداول والنتائج وأخبار الفريق المفضل والمنتخب' : 'Open the full Sports tab'}</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
