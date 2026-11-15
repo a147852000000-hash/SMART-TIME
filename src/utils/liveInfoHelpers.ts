@@ -538,6 +538,78 @@ export const POPULAR_TEAMS_CATEGORIES: TeamCategory[] = [
 
 export const ALL_POPULAR_TEAMS = POPULAR_TEAMS_CATEGORIES.flatMap((c) => c.teams);
 
+// [ticker-fresh] Bilingual club-name aliases (Arabic favorite -> English feed).
+// The free sports feed (TheSportsDB) publishes English club names while users
+// pick their favorite team in Arabic — without this map a live match for
+// "الأهلي" vs "Al Ahly" would never be detected.
+export const TEAM_EN_ALIASES: Record<string, string[]> = {
+  'ريال مدريد': ['real madrid', 'real madrid cf'],
+  'برشلونة': ['barcelona', 'fc barcelona', 'barcelona fc'],
+  'مانشستر سيتي': ['manchester city', 'man city', 'manchester city fc'],
+  'ليفربول': ['liverpool', 'liverpool fc'],
+  'أرسنال': ['arsenal', 'arsenal fc'],
+  'مانشستر يونايتد': ['manchester united', 'man united', 'man utd', 'manchester utd'],
+  'تشيلسي': ['chelsea', 'chelsea fc'],
+  'بايرن ميونخ': ['bayern munich', 'bayern', 'fc bayern munich', 'bayern munchen'],
+  'بوروسيا دورتموند': ['borussia dortmund', 'dortmund', 'bvb'],
+  'باريس سان جيرمان': ['paris saint-germain', 'paris saint germain', 'psg', 'paris sg'],
+  'إنتر ميلان': ['inter milan', 'internazionale', 'inter'],
+  'يوفنتوس': ['juventus', 'juve'],
+  'إيه سي ميلان': ['ac milan', 'milan'],
+  'أتلتيكو مدريد': ['atletico madrid', 'atletico', 'atletico de madrid'],
+  'توتنهام هوتسبير': ['tottenham hotspur', 'tottenham', 'spurs'],
+  'باير ليفركوزن': ['bayer leverkusen', 'leverkusen'],
+  'الهلال السعودي': ['al hilal', 'al-hilal', 'hilal saudi', 'al hilal saudi'],
+  'النصر السعودي': ['al nassr', 'al-nassr', 'nassr', 'al nassr saudi'],
+  'الاتحاد السعودي': ['al ittihad', 'al-ittihad', 'ittihad', 'ittihad club'],
+  'الأهلي السعودي': ['al ahli', 'al-ahli', 'al ahli saudi', 'ahli jeddah'],
+  'الترجي التونسي': ['esperance', 'esperance sportive de tunis', 'esperance tunis', 'taraji'],
+  'الوداد الرياضي': ['wydad', 'wydad ac', 'wydad casablanca', 'wydad athletic club'],
+  'الرجاء الرياضي': ['raja', 'raja casablanca', 'raja club athletic'],
+  'العين الإماراتي': ['al ain', 'al-ain', 'al ain fc'],
+  'الأهلي': ['al ahly', 'al-ahly', 'ahly', 'al ahly sc', 'al ahly club'],
+  'الزمالك': ['zamalek', 'zamalek sc', 'zamalek club'],
+  'بيراميدز': ['pyramids', 'pyramids fc', 'pyramids club'],
+  'المصري البورسعيدي': ['al masry', 'al-masry', 'masry', 'al masry port said'],
+  'الإسماعيلي': ['ismaily', 'al-ismaily', 'ismaily sc'],
+  'الاتحاد السكندري': ['ittihad alexandria', 'al ittihad alexandria', 'ittihad al askandaryah'],
+  'سيراميكا كليوباترا': ['ceramica cleopatra', 'ceramica'],
+  'زد إف سي': ['zed fc', 'zed'],
+  'مودرن سبورت': ['modern sport', 'modern sports', 'future fc', 'modern sport fc'],
+  'سموحة': ['smouha', 'smouha sc'],
+  'غزل المحلة': ['ghazl el mahallah', 'ghazl el mehalla', 'ghazl mahalla', 'ghazl el mahalla'],
+  'إنبي': ['enppi', 'enppi club', 'enppi sc'],
+  'البنك الأهلي': ['al ahly bank', 'ahly bank', 'national bank egypt', 'national bank of egypt'],
+  'طلائع الجيش': ["tala'ea el gaish", 'talaea el gaish', 'tala al jaish', 'talaea el gaish'],
+  'حرس الحدود': ['haras el hodood', 'haras el hodoud', 'border guards fc'],
+  'الجونة': ['el gouna', 'gouna fc'],
+  'فاركو': ['farco', 'farko'],
+  'بتروجت': ['petrojet', 'petrojet fc'],
+};
+
+const normalizeClubName = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/[\u064B-\u065F\u0670]/g, '')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+
+/** True when an event team name refers to the user's favorite club (bilingual). */
+export function isFavoriteTeamMatch(eventTeamName: string | undefined, favoriteTeam: string): boolean {
+  if (!eventTeamName || !favoriteTeam) return false;
+  const ev = normalizeClubName(eventTeamName);
+  if (!ev) return false;
+  const fav = favoriteTeam.trim();
+  const aliases = TEAM_EN_ALIASES[fav] || [];
+  const candidates = [normalizeClubName(fav), ...aliases.map(normalizeClubName)];
+  const favWords = normalizeClubName(fav).split(' ').filter((w) => w.length >= 4);
+  return candidates.some((c) => c && (ev.includes(c) || c.includes(ev))) ||
+    favWords.some((w) => ev.includes(w) && w.length >= 4);
+}
+
 export interface GlobalMatchItem {
   id: string;
   leagueNameAr: string;

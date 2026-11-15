@@ -2016,7 +2016,12 @@ app.get("/api/live/market", async (_req, res) => {
   };
 
   const metalsCache = getCache<any>("market:metals:v2", true);
-  try {
+  // [ticker-fresh] reuse the fresh sub-cache instead of hitting the provider on
+  // every composite miss — the 60s metals TTL defines the real refresh cadence.
+  const metalsFresh = getCache<any>("market:metals:v2");
+  if (metalsFresh) {
+    result.gold = metalsFresh.value.gold; result.silver = metalsFresh.value.silver; result.statuses.metals = "LIVE";
+  } else try {
     const [gold, silver] = await Promise.all([
       fetchJson("https://api.gold-api.com/price/XAU"),
       fetchJson("https://api.gold-api.com/price/XAG"),
@@ -2030,7 +2035,12 @@ app.get("/api/live/market", async (_req, res) => {
   }
 
   const fxCache = getCache<any>("market:fx:v2", true);
-  try {
+  // [ticker-fresh] serve the 120s fx sub-cache when fresh; provider is called
+  // only when it truly expires.
+  const fxFresh = getCache<any>("market:fx:v2");
+  if (fxFresh) {
+    result.currencies = fxFresh.value; result.statuses.fx = "LIVE";
+  } else try {
     const fx = await fetchJson("https://api.frankfurter.dev/v2/rates?base=USD&quotes=EGP,EUR,GBP,SAR,AED");
     for (const row of Array.isArray(fx) ? fx : []) result.currencies[row.quote] = row.rate;
     result.statuses.fx = "LIVE";
@@ -2042,17 +2052,24 @@ app.get("/api/live/market", async (_req, res) => {
 
   const cryptoCache = getCache<any>("market:crypto:v2", true);
   const now = Date.now();
+  const cryptoFresh = getCache<any>("market:crypto:v2");
   try {
-    if (now < cryptoBlockedUntil && cryptoCache) throw new Error("CoinGecko rate limited; using cached data");
-    if (!cryptoInFlight) {
-      const ids = "bitcoin,ethereum,solana,binancecoin,ripple";
-      cryptoInFlight = fetchJson(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`)
-        .finally(() => { cryptoInFlight = null; });
+    // [ticker-fresh] fresh 120s sub-cache wins — no provider call needed.
+    if (cryptoFresh) {
+      result.crypto = cryptoFresh.value; result.statuses.crypto = "LIVE";
+    } else {
+      if (now < cryptoBlockedUntil && cryptoCache) throw new Error("CoinGecko rate limited; using cached data");
+      if (!cryptoInFlight) {
+        // [ticker-fresh] one request covers the full ticker picker list (MOCK + extended DB)
+        const ids = "bitcoin,ethereum,solana,binancecoin,ripple,cardano,dogecoin,the-open-network,tether,avalanche-2,sui,near,pepe,shiba-inu,chainlink,polkadot,polygon-ecosystem-token,kaspa,fetch-ai,render-token,injective-protocol,celestia,aptos,arbitrum,optimism,litecoin,bitcoin-cash,stellar,uniswap,ethereum-classic,filecoin,cosmos,hedera-hashgraph,bonk,dogwifcoin,monero,bittensor,aave";
+        cryptoInFlight = fetchJson(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`)
+          .finally(() => { cryptoInFlight = null; });
+      }
+      result.crypto = await cryptoInFlight;
+      result.statuses.crypto = "LIVE";
+      cryptoBlockedUntil = 0;
+      setCache("market:crypto:v2", result.crypto, 120_000);
     }
-    result.crypto = await cryptoInFlight;
-    result.statuses.crypto = "LIVE";
-    cryptoBlockedUntil = 0;
-    setCache("market:crypto:v2", result.crypto, 120_000);
   } catch (error) {
     const message = (error as Error)?.message || "Crypto provider unavailable";
     if (message.includes("HTTP 429") || message.includes("rate limited")) cryptoBlockedUntil = Date.now() + 5 * 60_000;
@@ -2126,6 +2143,11 @@ app.get("/api/live/news", async (req, res) => {
 app.get("/api/live/weather", async (req, res) => {
   try {
     const requestedCity = String(req.query.city || "Cairo").trim() || "Cairo";
+    // [ticker-fresh] 10-minute cache per city — protects the free open-meteo
+    // quota; weather does not change faster than that anyway.
+    const weatherCacheKey = `weather:city:${requestedCity.toLowerCase()}`;
+    const weatherFresh = getCache<any>(weatherCacheKey);
+    if (weatherFresh) return res.json({ ...weatherFresh.value, cache: "HIT" });
     const geo = await fetchJson(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(requestedCity)}&count=1&language=en&format=json`);
     const place = geo?.results?.[0];
     if (!place?.latitude || !place?.longitude) {
@@ -2133,7 +2155,7 @@ app.get("/api/live/weather", async (req, res) => {
     }
     const weather = await fetchJson(`https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`);
     const current = weather?.current || {};
-    return res.json({
+    const payload = {
       source: "open-meteo",
       fetchedAt: new Date().toISOString(),
       city: place.name || requestedCity,
@@ -2141,7 +2163,9 @@ app.get("/api/live/weather", async (req, res) => {
       humidity: Number(current.relative_humidity_2m),
       windKmh: Number(current.wind_speed_10m),
       weatherCode: Number(current.weather_code),
-    });
+    };
+    setCache(weatherCacheKey, payload, 600_000);
+    return res.json({ ...payload, cache: "MISS" });
   } catch (error) {
     return res.status(502).json({ source: "open-meteo", error: (error as Error)?.message });
   }
@@ -2171,22 +2195,69 @@ app.get('/api/sports/exercises', async (req, res) => {
   }
 });
 
+// [ticker-fresh] map a free TheSportsDB event into the API-Football shape the
+// frontend already understands, so the ticker works without any paid key.
+function mapTheSportsDbEvent(e: any) {
+  if (!e || !e.strHomeTeam || !e.strAwayTeam) return null;
+  const statusRaw = String(e.strStatus || "").toUpperCase();
+  const statusMap: Record<string, string> = {
+    "NOT STARTED": "NS", TBD: "NS", "1ST HALF": "1H", "SECOND HALF": "2H",
+    "HALF TIME": "HT", "MATCH FINISHED": "FT", "POSTPONED": "PST", "CANCELLED": "CANC",
+  };
+  const short = statusMap[statusRaw] || statusRaw || "NS";
+  return {
+    fixture: {
+      id: Number(e.idEvent) || 0,
+      date: e.strTimestamp || e.dateEvent || null,
+      status: { short, long: statusRaw || short },
+    },
+    teams: {
+      home: { name: e.strHomeTeam, logo: e.strHomeTeamBadge || undefined },
+      away: { name: e.strAwayTeam, logo: e.strAwayTeamBadge || undefined },
+    },
+    goals: {
+      home: e.intHomeScore == null || e.intHomeScore === "" ? null : Number(e.intHomeScore),
+      away: e.intAwayScore == null || e.intAwayScore === "" ? null : Number(e.intAwayScore),
+    },
+    league: { name: e.strLeague || "", country: e.strCountry || "" },
+  };
+}
+
 app.get("/api/live/sports", async (req, res) => {
   // B-7: API-Football quota is server-side and finite — require a session.
   if (!authUser(req)) {
     return res.status(401).json({ error: "هذه الخدمة تتطلب تسجيل الدخول." });
   }
   const key = process.env.API_FOOTBALL_KEY;
-  if (!key) {
-    return res.json({ source: "unconfigured", matches: [], configured: false, fetchedAt: new Date().toISOString() });
+  const sportsCacheKey = key ? "sports:apifootball:v2" : "sports:thesportsdb:v2";
+  const sportsFresh = getCache<any>(sportsCacheKey);
+  if (sportsFresh) return res.json({ ...sportsFresh.value, cache: "HIT" });
+  if (key) {
+    try {
+      const live = String(req.query.live || "all");
+      const url = `https://v3.football.api-sports.io/fixtures?live=${encodeURIComponent(live)}`;
+      const data = await fetchJson(url, { headers: { "x-apisports-key": key, Accept: "application/json" } });
+      const payload = { source: "api-football", configured: true, fetchedAt: new Date().toISOString(), matches: data.response || [] };
+      setCache(sportsCacheKey, payload, 60_000);
+      return res.json({ ...payload, cache: "MISS" });
+    } catch (error) {
+      return res.status(502).json({ source: "api-football", configured: true, matches: [], error: (error as Error)?.message });
+    }
   }
+  // [ticker-fresh] free no-key fallback: TheSportsDB test key "123" — today's
+  // real soccer fixtures with scores. Cached 2 minutes to respect free limits.
   try {
-    const live = String(req.query.live || "all");
-    const url = `https://v3.football.api-sports.io/fixtures?live=${encodeURIComponent(live)}`;
-    const data = await fetchJson(url, { headers: { "x-apisports-key": key, Accept: "application/json" } });
-    res.json({ source: "api-football", configured: true, fetchedAt: new Date().toISOString(), matches: data.response || [] });
+    const day = new Date().toISOString().slice(0, 10);
+    const data = await fetchJson(`https://www.thesportsdb.com/api/v1/json/123/eventsday.php?d=${day}&s=Soccer`);
+    const events = Array.isArray(data?.events) ? data.events : [];
+    const matches = events.map(mapTheSportsDbEvent).filter(Boolean);
+    const payload = { source: "thesportsdb", configured: true, date: day, fetchedAt: new Date().toISOString(), matches };
+    setCache(sportsCacheKey, payload, 120_000);
+    return res.json({ ...payload, cache: "MISS" });
   } catch (error) {
-    res.status(502).json({ source: "api-football", configured: true, matches: [], error: (error as Error)?.message });
+    const stale = getCache<any>(sportsCacheKey, true);
+    if (stale) return res.json({ ...stale.value, status: "FALLBACK", stale: true });
+    return res.json({ source: "thesportsdb", configured: true, fetchedAt: new Date().toISOString(), matches: [], error: (error as Error)?.message });
   }
 });
 

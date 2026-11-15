@@ -36,10 +36,9 @@ import {
   MOCK_GOLD_KARAT_RATES,
   MOCK_EGYPTIAN_LEAGUE_MATCHES,
   EGYPTIAN_LEAGUE_STANDINGS,
-  GLOBAL_FOOTBALL_MATCHES,
-  getMatchForFavoriteTeam,
   EXTENDED_CRYPTO_DATABASE,
   CryptoMarketItem,
+  isFavoriteTeamMatch,
   getZodiacDailyTip,
   calculateUserAge,
   getUserZodiac,
@@ -160,9 +159,18 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
     refreshMarket(); refreshNews(); refreshSports(); refreshWeather();
     const marketTimer = window.setInterval(refreshMarket, 60_000);
     const newsTimer = window.setInterval(refreshNews, 300_000);
-    const sportsTimer = window.setInterval(refreshSports, 15_000);
+    // [ticker-fresh] server caches sports for 2 minutes — polling faster wastes quota.
+    const sportsTimer = window.setInterval(refreshSports, 60_000);
     const weatherTimer = window.setInterval(refreshWeather, 600_000);
-    return () => { mounted = false; window.clearInterval(marketTimer); window.clearInterval(newsTimer); window.clearInterval(sportsTimer); window.clearInterval(weatherTimer); };
+    // [ticker-fresh] mobile/background browsers throttle timers — refetch everything
+    // the moment the user returns to the app so the ticker is never stale.
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        refreshMarket(); refreshNews(); refreshSports(); refreshWeather();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => { mounted = false; window.clearInterval(marketTimer); window.clearInterval(newsTimer); window.clearInterval(sportsTimer); window.clearInterval(weatherTimer); document.removeEventListener('visibilitychange', handleVisibility); };
   }, [language, user.city]);
 
   const isAr = language === 'ar';
@@ -293,20 +301,45 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
   EXTENDED_CRYPTO_DATABASE.forEach((c) => allKnownCryptosMap.set(c.symbol, c));
   (prefs.customCryptos || []).forEach((c) => allKnownCryptosMap.set(c.symbol, c));
 
+  // [ticker-fresh] every ticker coin resolves to its CoinGecko id so the price
+  // AND the 24h change come from the live feed, not the static seed values.
+  const COINGECKO_IDS: Record<string, string> = {
+    BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana', BNB: 'binancecoin', XRP: 'ripple',
+    ADA: 'cardano', DOGE: 'dogecoin', TON: 'the-open-network', USDT: 'tether', AVAX: 'avalanche-2',
+    SUI: 'sui', NEAR: 'near', PEPE: 'pepe', SHIB: 'shiba-inu', LINK: 'chainlink',
+    DOT: 'polkadot', POL: 'polygon-ecosystem-token', KAS: 'kaspa', FET: 'fetch-ai', RENDER: 'render-token',
+    INJ: 'injective-protocol', TIA: 'celestia', APT: 'aptos', ARB: 'arbitrum', OP: 'optimism',
+    LTC: 'litecoin', BCH: 'bitcoin-cash', XLM: 'stellar', UNI: 'uniswap', ETC: 'ethereum-classic',
+    FIL: 'filecoin', ATOM: 'cosmos', HBAR: 'hedera-hashgraph', BONK: 'bonk', WIF: 'dogwifcoin',
+    XMR: 'monero', TAO: 'bittensor', AAVE: 'aave',
+  };
+
   const selectedCryptosList: CryptoMarketItem[] = userCryptoSymbols.map((sym) => {
-    return (
-      allKnownCryptosMap.get(sym) || {
-        id: sym.toLowerCase(),
-        name: sym,
-        nameAr: sym,
-        nameEn: sym,
-        symbol: sym,
-        priceUsd: 1.0,
-        change24h: 1.5,
-        iconColor: '#f59e0b',
-        iconSymbol: '🪙',
-      }
-    );
+    const known = allKnownCryptosMap.get(sym);
+    // DB coins use the curated map; custom (search-saved) coins carry their own
+    // CoinGecko id in `id` — both paths get live prices when the feed has them.
+    const cgId: string | undefined = COINGECKO_IDS[sym] || (known as any)?.id || sym;
+    const live = cgId ? liveMarket?.crypto?.[cgId] : undefined;
+    const base = known || {
+      id: sym.toLowerCase(),
+      name: sym,
+      nameAr: sym,
+      nameEn: sym,
+      symbol: sym,
+      priceUsd: 1.0,
+      change24h: 1.5,
+      iconColor: '#f59e0b',
+      iconSymbol: '🪙',
+    };
+    // No live feed yet (first paint / provider down)? keep the seed value.
+    if (!live) return { ...base, ...(cgId ? { id: cgId } : {}) } as CryptoMarketItem;
+    return {
+      ...base,
+      ...(cgId ? { id: cgId } : {}),
+      priceUsd: live.usd ?? base.priceUsd,
+      change24h: live.usd_24h_change != null ? Number(live.usd_24h_change.toFixed(2)) : base.change24h,
+      isLivePrice: true,
+    } as CryptoMarketItem;
   });
 
   // أسعار الفضة حسب اختيار المستخدم
@@ -323,17 +356,26 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
   const zodiacTip = getZodiacDailyTip(user.zodiacSign || zodiac.nameAr, isAr);
 
   // مباريات فريقك المفضل (دعم الأندية العالمية والمحلية)
+  // [ticker-fresh] honest data only: live score > today's fixture > truthful
+  // "no match" — the old static demo scores are never shown again.
   const favTeam = prefs.favoriteTeam || prefs.favoriteEgyptianTeam || 'الأهلي';
-  const liveFavoriteMatch = liveSports.find((m) => {
-    const home = m.teams?.home?.name || '';
-    const away = m.teams?.away?.name || '';
-    const fav = favTeam.toLowerCase();
-    return home.toLowerCase().includes(fav) || away.toLowerCase().includes(fav) || fav.includes(home.toLowerCase()) || fav.includes(away.toLowerCase());
-  });
+  const favLower = favTeam.toLowerCase();
+  // [ticker-fresh] bilingual matching (Arabic favorite vs English feed names).
+  const isFavoriteMatch = (m: LiveSportsMatch) =>
+    isFavoriteTeamMatch(m.teams?.home?.name, favTeam) || isFavoriteTeamMatch(m.teams?.away?.name, favTeam);
+  const LIVE_STATUSES = ['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE'];
+  const liveFavoriteMatch = liveSports.find((m) => isFavoriteMatch(m) && LIVE_STATUSES.includes(m.fixture?.status?.short || ''));
+  const favoriteUpcomingMatch = !liveFavoriteMatch ? liveSports.find((m) => isFavoriteMatch(m)) : undefined;
+  const kickoffLabel = (m: LiveSportsMatch) => {
+    const d = m.fixture?.date ? new Date(m.fixture.date) : null;
+    if (!d || isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString(isAr ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+  };
   const highlightedMatch = liveFavoriteMatch
-    ? { id: String(liveFavoriteMatch.fixture?.id || 'live-favorite'), homeTeam: liveFavoriteMatch.teams?.home?.name || favTeam, awayTeam: liveFavoriteMatch.teams?.away?.name || '—', homeScore: liveFavoriteMatch.goals?.home ?? 0, awayScore: liveFavoriteMatch.goals?.away ?? 0, leagueNameAr: liveFavoriteMatch.league?.name || 'مباشر', leagueNameEn: liveFavoriteMatch.league?.name || 'Live' }
-    : getMatchForFavoriteTeam(favTeam);
-  const otherMatches = GLOBAL_FOOTBALL_MATCHES.filter((m) => m.id !== highlightedMatch.id);
+    ? { id: String(liveFavoriteMatch.fixture?.id || 'live-favorite'), homeTeam: liveFavoriteMatch.teams?.home?.name || favTeam, awayTeam: liveFavoriteMatch.teams?.away?.name || '—', homeScore: liveFavoriteMatch.goals?.home ?? 0, awayScore: liveFavoriteMatch.goals?.away ?? 0, leagueNameAr: liveFavoriteMatch.league?.name || 'مباشر الآن', leagueNameEn: liveFavoriteMatch.league?.name || 'Live now', isUpcoming: false, kickoff: '' }
+    : favoriteUpcomingMatch
+    ? { id: String(favoriteUpcomingMatch.fixture?.id || 'upcoming-favorite'), homeTeam: favoriteUpcomingMatch.teams?.home?.name || favTeam, awayTeam: favoriteUpcomingMatch.teams?.away?.name || '—', homeScore: favoriteUpcomingMatch.goals?.home ?? 0, awayScore: favoriteUpcomingMatch.goals?.away ?? 0, leagueNameAr: favoriteUpcomingMatch.league?.name || 'مباراة اليوم', leagueNameEn: favoriteUpcomingMatch.league?.name || 'Today', isUpcoming: true, kickoff: kickoffLabel(favoriteUpcomingMatch) }
+    : null;
 
   // يتوقف الشريط فقط عند الوقوف عليه بالماوس أو الضغط واللمس بالأصبع
   const isPaused = isInteracting || activeModal !== null;
@@ -515,26 +557,44 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
               {isAr ? 'فريقك المفضل' : 'Favorite'}:
             </span>
             <span className="font-bold font-sans text-slate-900 dark:text-white flex items-center gap-1.5 text-xs sm:text-[13px]">
-              <span className={highlightMatchStyles(highlightedMatch.homeTeam, favTeam)}>
-                {highlightedMatch.homeTeam}
-              </span>
-              <span className="font-mono bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded text-xs text-emerald-600 font-bold shadow-2xs">
-                {highlightedMatch.homeScore} - {highlightedMatch.awayScore}
-              </span>
-              <span className={highlightMatchStyles(highlightedMatch.awayTeam, favTeam)}>
-                {highlightedMatch.awayTeam}
-              </span>
+              {highlightedMatch ? (
+                <>
+                  <span className={highlightMatchStyles(highlightedMatch.homeTeam, favTeam)}>
+                    {highlightedMatch.homeTeam}
+                  </span>
+                  {highlightedMatch.isUpcoming ? (
+                    <span className="font-mono bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded text-[11px] text-slate-500 font-bold shadow-2xs">
+                      {isAr ? 'لم تبدأ' : 'Not started'}{highlightedMatch.kickoff ? ` • ${highlightedMatch.kickoff}` : ''}
+                    </span>
+                  ) : (
+                    <span className="font-mono bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded text-xs text-emerald-600 font-bold shadow-2xs">
+                      {highlightedMatch.homeScore} - {highlightedMatch.awayScore}
+                    </span>
+                  )}
+                  <span className={highlightMatchStyles(highlightedMatch.awayTeam, favTeam)}>
+                    {highlightedMatch.awayTeam}
+                  </span>
+                </>
+              ) : (
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                  {isAr ? `${favTeam}: لا توجد مباراة مباشرة اليوم` : `${favTeam}: no live match today`}
+                </span>
+              )}
             </span>
-            {highlightedMatch.leagueNameAr && (
+            {highlightedMatch?.leagueNameAr && (
               <span className="hidden sm:inline-flex items-center text-[10px] text-emerald-700 dark:text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded font-sans font-bold">
                 {isAr ? highlightedMatch.leagueNameAr : highlightedMatch.leagueNameEn}
               </span>
             )}
-            {otherMatches[0] && (
-              <span className="hidden md:inline-flex items-center gap-1 text-xs text-slate-500 font-sans ps-1 border-s border-emerald-200 dark:border-emerald-800">
-                <span>{liveSports[0]?.teams?.home?.name || otherMatches[0].homeTeam} {liveSports[0]?.goals?.home ?? otherMatches[0].homeScore}-{liveSports[0]?.goals?.away ?? otherMatches[0].awayScore} {liveSports[0]?.teams?.away?.name || otherMatches[0].awayTeam}</span>
-              </span>
-            )}
+            {liveSports.length > 0 && (() => {
+              const other = liveSports.find((m) => m !== liveFavoriteMatch && m !== favoriteUpcomingMatch);
+              if (!other) return null;
+              return (
+                <span className="hidden md:inline-flex items-center gap-1 text-xs text-slate-500 font-sans ps-1 border-s border-emerald-200 dark:border-emerald-800">
+                  <span>{other.teams?.home?.name} {other.goals?.home ?? '-'}-{other.goals?.away ?? '-'} {other.teams?.away?.name}</span>
+                </span>
+              );
+            })()}
           </button>
           <span className="text-slate-300 dark:text-slate-700 font-normal">/</span>
         </>
@@ -590,7 +650,7 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
                   {cryptoCoin.symbol}:
                 </span>
                 <span className="font-bold font-mono text-slate-900 dark:text-white text-xs sm:text-[13px]">
-                  ${(() => { const idMap: Record<string,string> = { BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana', BNB: 'binancecoin', XRP: 'ripple' }; const v = liveMarket?.crypto?.[idMap[cryptoCoin.symbol]]?.usd; return (v ?? cryptoCoin.priceUsd).toLocaleString(undefined, { maximumFractionDigits: 8 }); })()}
+                  ${(cryptoCoin.priceUsd ?? 0).toLocaleString(undefined, { maximumFractionDigits: 8 })}
                 </span>
                 <span
                   className={`text-[10px] font-mono font-bold ${
@@ -905,13 +965,31 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
                 </span>
               </h4>
               <div className="space-y-2">
-                {GLOBAL_FOOTBALL_MATCHES.map((match) => {
-                  const isFav =
-                    (favTeam && match.homeTeam.toLowerCase().includes(favTeam.toLowerCase())) ||
-                    (favTeam && match.awayTeam.toLowerCase().includes(favTeam.toLowerCase()));
+                {/* [ticker-fresh] REAL today's fixtures from the live feed — no static demo scores. */}
+                {liveSports.length === 0 && (
+                  <p className="text-[11px] text-slate-400 text-center py-3">
+                    {isAr ? 'لا توجد مباريات متاحة الآن — يتم التحديث تلقائيًا كل دقيقة' : 'No matches available right now — refreshes automatically every minute'}
+                  </p>
+                )}
+                {liveSports.slice(0, 15).map((m: any) => {
+                  const home = m.teams?.home?.name || '—';
+                  const away = m.teams?.away?.name || '—';
+                  const isFav = isFavoriteMatch(m);
+                  const short = m.fixture?.status?.short || '';
+                  const isLive = LIVE_STATUSES.includes(short);
+                  const isDone = short === 'FT' || short === 'AET' || short === 'PEN';
+                  const statusLabel = isLive
+                    ? (isAr ? 'مباشر الآن' : 'Live')
+                    : isDone
+                    ? (isAr ? 'انتهت' : 'Finished')
+                    : short === 'PST'
+                    ? (isAr ? 'مؤجلة' : 'Postponed')
+                    : (m.fixture?.date ? `${isAr ? 'اليوم' : 'Today'} ${kickoffLabel(m)}` : short || '—');
+                  const homeIsFav = isFavoriteTeamMatch(m.teams?.home?.name, favTeam);
+                  const awayIsFav = isFavoriteTeamMatch(m.teams?.away?.name, favTeam);
                   return (
                     <div
-                      key={match.id}
+                      key={String(m.fixture?.id || `${home}-${away}`)}
                       className={`p-2.5 rounded-2xl border transition-all ${
                         isFav
                           ? 'bg-accent-50/70 dark:bg-accent-950/30 border-accent-400 dark:border-accent-600 shadow-xs'
@@ -920,52 +998,50 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
                     >
                       <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1.5">
                         <span className="font-semibold flex items-center gap-1.5">
-                          {match.leagueNameAr && (
+                          {m.league?.name && (
                             <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold">
-                              {isAr ? match.leagueNameAr : match.leagueNameEn}
+                              {m.league.name}
                             </span>
                           )}
-                          <span>{match.roundAr}</span>
-                          <span>•</span>
-                          <span>{match.stadiumAr}</span>
+                          {m.league?.country && <span>{m.league.country}</span>}
                         </span>
                         <span
                           className={`font-bold px-1.5 py-0.5 rounded-md ${
-                            match.statusAr.includes('مباشر')
+                            isLive
                               ? 'bg-red-500 text-white animate-pulse'
                               : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                           }`}
                         >
-                          {match.statusAr}
+                          {statusLabel}
                         </span>
                       </div>
                       <div className="flex items-center justify-between font-bold text-xs">
                         <div
                           className={`flex items-center gap-1.5 flex-1 ${
-                            favTeam && match.homeTeam.toLowerCase().includes(favTeam.toLowerCase())
+                            homeIsFav
                               ? 'text-accent-600 dark:text-accent-400 font-black'
                               : 'text-slate-800 dark:text-slate-200'
                           }`}
                         >
-                          <span className="truncate">{match.homeTeam}</span>
-                          {favTeam && match.homeTeam.toLowerCase().includes(favTeam.toLowerCase()) && (
+                          <span className="truncate">{home}</span>
+                          {homeIsFav && (
                             <Star className="w-3.5 h-3.5 fill-accent-500 text-accent-500 shrink-0" />
                           )}
                         </div>
                         <div className="px-3 py-1 bg-white dark:bg-slate-900 rounded-xl shadow-xs font-mono font-black text-sm text-emerald-600 dark:text-emerald-400 mx-2 shrink-0">
-                          {match.homeScore} - {match.awayScore}
+                          {isLive || isDone ? `${m.goals?.home ?? 0} - ${m.goals?.away ?? 0}` : (m.fixture?.date ? kickoffLabel(m) : '—')}
                         </div>
                         <div
                           className={`flex items-center justify-end gap-1.5 flex-1 ${
-                            favTeam && match.awayTeam.toLowerCase().includes(favTeam.toLowerCase())
+                            awayIsFav
                               ? 'text-accent-600 dark:text-accent-400 font-black'
                               : 'text-slate-800 dark:text-slate-200'
                           }`}
                         >
-                          {favTeam && match.awayTeam.toLowerCase().includes(favTeam.toLowerCase()) && (
+                          {awayIsFav && (
                             <Star className="w-3.5 h-3.5 fill-accent-500 text-accent-500 shrink-0" />
                           )}
-                          <span className="truncate">{match.awayTeam}</span>
+                          <span className="truncate">{away}</span>
                         </div>
                       </div>
                     </div>
@@ -974,11 +1050,16 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
               </div>
             </div>
 
-            {/* جدول الترتيب المصغر */}
+            {/* جدول الترتيب المصغر — [ticker-fresh] clearly labelled as a static
+                reference: the free sports feed has no reliable standings source,
+                so we say so instead of passing it off as live. */}
             <div>
               <h4 className="font-bold text-xs text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1">
                 <Trophy className="w-3.5 h-3.5 text-accent-500" />
-                <span>{isAr ? 'صدارة جدول الترتيب' : 'League Standings'}</span>
+                <span>{isAr ? 'ترتيب الدوري (استرشادي)' : 'Standings (reference)'}</span>
+                <span className="text-[9px] font-medium text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                  {isAr ? 'بيانات محفوظة' : 'saved snapshot'}
+                </span>
               </h4>
               <div className="overflow-hidden rounded-2xl border border-slate-100 dark:border-slate-800 text-[11px]">
                 <table className="w-full text-center">
@@ -1730,7 +1811,8 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
 
 // مساعدة لتمييز اسم الفريق المفضل
 function highlightMatchStyles(teamName: string, favTeam: string): string {
-  if (teamName.includes(favTeam)) {
+  // [ticker-fresh] bilingual favorite highlight (Arabic fav vs English feed).
+  if (teamName && favTeam && isFavoriteTeamMatch(teamName, favTeam)) {
     return 'text-accent-600 dark:text-accent-400 font-black';
   }
   return 'text-slate-800 dark:text-slate-200 font-bold';
