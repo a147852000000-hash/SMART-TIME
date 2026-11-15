@@ -15,6 +15,10 @@ export interface AuthUser {
   phone?: string;
   phoneVerified?: boolean;
   role?: 'owner' | 'admin' | 'user' | 'guest';
+  // True when this account is the reserved program owner account
+  // (eng.mamdouh2009@gmail.com) regardless of the current session role.
+  accountIsOwner?: boolean;
+  activationStatus?: string;
 }
 
 export interface AuthSession {
@@ -109,6 +113,17 @@ export async function selectLoginRole(roleChoiceTicket: string, role: 'owner' | 
   const data: any = await res.json().catch(() => ({}));
   if (!res.ok || !data.token || !data.user) throw new Error(data.message || data.error || 'تعذر اختيار نوع الدخول.');
   const session: AuthSession = { token: data.token, user: data.user };
+  saveSession(session); applyUserToProfile(session.user); return session;
+}
+
+// [owner-perms] Flip the owner account's live session between 'owner' and
+// 'user' without logging out and in again. The server updates the same
+// session row, so the returned token stays valid.
+export async function switchSessionRole(): Promise<AuthSession> {
+  const res = await api('/api/auth/switch-role', { method: 'POST' });
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok || !data.user) throw new Error(data.error || 'تعذر تبديل نوع الجلسة.');
+  const session: AuthSession = { token: data.token || getStoredSession()?.token || '', user: data.user };
   saveSession(session); applyUserToProfile(session.user); return session;
 }
 

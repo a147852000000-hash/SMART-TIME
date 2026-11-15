@@ -87,6 +87,9 @@ export default function App() {
   // Global App State
   const [authChecked, setAuthChecked] = useState(false);
   const [authenticated, setAuthenticated] = useState(() => Boolean(getStoredSession()?.token));
+  // [owner-perms] Owner/Admin sessions land in the management panel first;
+  // this flag lets them enter the normal app with the same session.
+  const [enteredApp, setEnteredApp] = useState(false);
   const [currentView, setCurrentView] = useState<AppView>('dashboard');
   const [viewHistory, setViewHistory] = useState<AppView[]>([]);
   const [language, setLanguage] = useState<Language>('ar');
@@ -169,6 +172,7 @@ export default function App() {
   const handleAuthenticated = useCallback(async () => {
     const session = await restoreSession();
     setAuthenticated(Boolean(session));
+    setEnteredApp(false);
     if (session) setUserProfile(UserRepository.getProfile());
   }, []);
 
@@ -176,6 +180,7 @@ export default function App() {
     try {
       const session = await startTrialSession();
       setAuthenticated(Boolean(session));
+      setEnteredApp(false);
       if (session) setUserProfile(UserRepository.getProfile());
     } catch (error) {
       console.error('Trial session error:', error);
@@ -188,6 +193,7 @@ export default function App() {
     await logoutAuth();
     setAuthenticated(false);
     setAuthChecked(true);
+    setEnteredApp(false);
     setViewHistory([]);
     setCurrentView('dashboard');
     setIsSettingsOpen(false);
@@ -421,8 +427,17 @@ export default function App() {
   }
 
   const sessionRole = getStoredSession()?.user.role;
-  if (authenticated && sessionRole === 'admin') {
-    return <AdminCenter onLogout={() => { setAuthenticated(false); setAuthChecked(true); }} />;
+  const isManagementSession = authenticated && (sessionRole === 'admin' || sessionRole === 'owner') && !enteredApp;
+  if (isManagementSession) {
+    // [owner-perms] Owner and Admin sessions open the real management panel
+    // (working /api/admin/users endpoints); both can enter the app afterwards
+    // without logging out. A page reload restores the same behaviour.
+    return (
+      <AdminCenter
+        onLogout={() => { setAuthenticated(false); setAuthChecked(true); setEnteredApp(false); }}
+        onEnterApp={() => setEnteredApp(true)}
+      />
+    );
   }
 
   return (

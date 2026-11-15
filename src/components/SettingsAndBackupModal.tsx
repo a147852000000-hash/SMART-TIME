@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { enablePasskeyOnThisDevice, listAccountPasskeys, removeAccountPasskey, fingerprintLoginAvailable } from '../services/authService';
+import { enablePasskeyOnThisDevice, listAccountPasskeys, removeAccountPasskey, fingerprintLoginAvailable, switchSessionRole, getStoredSession } from '../services/authService';
 import {
   Settings,
   X,
@@ -263,6 +263,26 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
   const [passkeySupported, setPasskeySupported] = useState(false);
   const [passkeyList, setPasskeyList] = useState<Array<{ id: string; deviceName?: string | null; createdAt: string; alg: string }>>([]);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
+
+  // [owner-perms] Session role of the reserved owner account. The owner can
+  // flip between the management powers (owner) and plain app usage (user)
+  // without logging out — the server updates the same live session.
+  const sessionUser = getStoredSession()?.user;
+  const isOwnerAccount = Boolean(sessionUser?.accountIsOwner) || String(userProfile.email || '').toLowerCase() === 'eng.mamdouh2009@gmail.com';
+  const sessionRoleNow = sessionUser?.role === 'owner' ? 'owner' : sessionUser?.role === 'admin' ? 'admin' : 'user';
+  const [switchingRole, setSwitchingRole] = useState(false);
+  const handleSwitchSessionRole = async () => {
+    if (switchingRole) return;
+    setSwitchingRole(true);
+    try {
+      await switchSessionRole();
+      // The session changed role — reload so App re-routes (panel vs app).
+      window.location.reload();
+    } catch (err: any) {
+      showToast(err?.message || (isAr ? 'تعذر تبديل نوع الجلسة.' : 'Could not switch session role.'));
+      setSwitchingRole(false);
+    }
+  };
 
   // مرجع إدخال ملف الصورة وتحميلها من الهاتف
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -734,6 +754,45 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
                   <span>{isAr ? 'تسجيل الخروج من الحساب' : 'Log out of account'}</span>
                 </button>
               </div>
+
+              {/* [owner-perms] نوع الجلسة الحالية — لحساب المالك فقط: تبديل فوري بين صلاحيات المالك وجلسة مستخدم عادي */}
+              {isOwnerAccount && (
+                <div className="p-4 rounded-2xl border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/30 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                      <Shield className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-sm text-slate-900 dark:text-white">{isAr ? 'نوع الجلسة الحالية' : 'Current Session Role'}</h3>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                        {sessionRoleNow === 'owner'
+                          ? (isAr ? 'أنت الآن بجلسة المالك: لوحة الإدارة وصلاحيات التعيين والحذف مفتوحة لك.' : 'Owner session: full management powers are active.')
+                          : sessionRoleNow === 'admin'
+                            ? (isAr ? 'أنت الآن بجلسة إداري (Admin).' : 'Admin session active.')
+                            : (isAr ? 'أنت الآن بمستخدم عادي: التطبيق بدون أدوات الإدارة.' : 'Plain user session: management tools hidden.')}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={switchingRole}
+                    onClick={() => void handleSwitchSessionRole()}
+                    className={`w-full py-3 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 ${
+                      sessionRoleNow === 'owner'
+                        ? 'bg-slate-900 text-white hover:bg-slate-800'
+                        : 'bg-amber-500 text-slate-950 hover:bg-amber-400'
+                    }`}
+                  >
+                    <Shield className="w-4 h-4" />
+                    {sessionRoleNow === 'owner'
+                      ? (isAr ? 'التبديل إلى جلسة مستخدم عادي' : 'Switch to plain user session')
+                      : (isAr ? 'التبديل إلى صلاحيات المالك' : 'Switch to owner powers')}
+                  </button>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">
+                    {isAr ? 'التبديل فوري وبنفس الجلسة — بدون خروج أو إعادة دخول، ويعمل على جميع الأجهزة.' : 'Instant switch on the same session — no re-login needed, works on every device.'}
+                  </p>
+                </div>
+              )}
 
               {/* الدخول بالبصمة (Passkey) — للأجهزة المدعومة فقط وللحسابات الحقيقية */}
               {passkeySupported && !isGuestAccount && (

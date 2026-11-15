@@ -160,10 +160,17 @@ const MAX_REVIEW_NOTE_LENGTH = 300;
 function hashPassword(password: string) { const salt = crypto.randomBytes(16).toString('hex'); return `${salt}:${crypto.scryptSync(password, salt, 64).toString('hex')}`; }
 function verifyPassword(password: string, stored: string) { const [salt, expected] = String(stored||'').split(':'); if (!salt||!expected) return false; const actual=crypto.scryptSync(password,salt,64).toString('hex'); return crypto.timingSafeEqual(Buffer.from(actual,'hex'),Buffer.from(expected,'hex')); }
 function createSession(userId: string, sessionRole: 'owner'|'admin'|'user'|'role_choice' = 'user', lifetimeDays = AUTH_SESSION_DAYS) { const token=crypto.randomBytes(32).toString('hex'); const now=new Date(); const expires=new Date(now.getTime()+lifetimeDays*86400000).toISOString(); db.prepare('INSERT INTO sessions (id,user_id,expires_at,created_at,session_role) VALUES (?,?,?,?,?)').run(token,userId,expires,now.toISOString(),sessionRole); return token; }
-function authUser(req: express.Request, allowRoleChoice = false, explicitToken = '') { const h=String(req.headers.authorization||''); const token=String(explicitToken|| (h.startsWith('Bearer ')?h.slice(7).trim():'')); if(!token)return null; const row=db.prepare(`SELECT u.id,u.email,u.username,u.display_name as name,u.phone,u.phone_verified as phoneVerified,u.role,u.activation_status,s.id as session_id,s.session_role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=? AND julianday(s.expires_at) > julianday('now')`).get(token) as any || null; if(!row || (!allowRoleChoice && row.session_role==='role_choice'))return null; return row; }
+function authUser(req: express.Request, allowRoleChoice = false, explicitToken = '') { const h=String(req.headers.authorization||''); const token=String(explicitToken|| (h.startsWith('Bearer ')?h.slice(7).trim():'')); if(!token)return null; const row=db.prepare(`SELECT u.id,u.email,u.username,u.display_name as name,u.phone,u.phone_verified as phoneVerified,u.role,u.activation_status,s.id as session_id,s.session_role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=? AND julianday(s.expires_at) > julianday('now')`).get(token) as any || null; if(!row || (!allowRoleChoice && row.session_role==='role_choice'))return null;
+  // [owner-perms] Suspended accounts lose API access on every request (the
+  // program owner account itself can never be suspended).
+  if (row && String(row.activation_status||'active')==='suspended' && resolvedAccountRole(row)!=='owner') return null;
+  return row; }
 function resolvedAccountRole(row:any): 'owner'|'admin'|'user' { const email=String(row?.email||'').trim().toLowerCase(); if (email===PROGRAM_OWNER_EMAIL) return 'owner'; const stored=String(row?.role||'user').trim().toLowerCase(); return stored==='admin' ? 'admin' : 'user'; }
 function sessionAccountRole(row:any): 'owner'|'admin'|'user' { if (resolvedAccountRole(row)==='owner') return row?.session_role==='user' ? 'user' : 'owner'; return resolvedAccountRole(row); }
-function publicUser(row:any){return {id:row.id,email:row.email,username:row.username||undefined,name:row.name||row.display_name||'',phone:row.phone||undefined,phoneVerified:!!row.phoneVerified,role:sessionAccountRole(row),activationStatus:row.activation_status||row.activationStatus||'pending'};}
+function publicUser(row:any){return {id:row.id,email:row.email,username:row.username||undefined,name:row.name||row.display_name||'',phone:row.phone||undefined,phoneVerified:!!row.phoneVerified,role:sessionAccountRole(row),activationStatus:row.activation_status||row.activationStatus||'pending',accountIsOwner:resolvedAccountRole(row)==='owner'};}
+// [owner-perms] Guard helpers shared by the admin management endpoints.
+function isManagerActor(actor:any): 'owner'|'admin'|null { if(!actor)return null; const r=sessionAccountRole(actor); return r==='owner'||r==='admin' ? r : null; }
+function killUserSessions(userId:string){ try{ db.prepare('DELETE FROM sessions WHERE user_id=?').run(userId);}catch{} }
 function normalizePhone(phone:string){return String(phone||'').replace(/[\s()-]/g,'');}
 function normalizeUsername(username:string){return String(username||'').trim().toLowerCase();}
 
@@ -507,11 +514,111 @@ app.post('/api/auth/login', turnstileGuard, rateLimitGuard('login', 10, 15, (req
       if(SANDBOX_DEMO_AUTH&&!row&&identifier.includes('@'))return res.status(401).json({error:'هذا البريد غير مسجل في نسخة المعاينة هذه (قاعدة بياناتها مستقلة عن الخادم الرئيسي). أنشئ حسابًا جديدًا من «Sign up» أو ادخل كزائر.'});
       if(SANDBOX_DEMO_AUTH&&row&&identifier.includes('@'))return res.status(401).json({error:'البريد مسجل لكن كلمة المرور غير صحيحة. اضغط «Forgot password?» — في وضع المعاينة سيظهر كود الاستعادة على الشاشة مباشرة.'});
       return res.status(401).json({error:'بيانات الدخول غير صحيحة. تأكد من البريد أو اسم المستخدم وكلمة المرور.'});
-    }if(resolvedAccountRole(row)==='owner'){const roleChoiceTicket=createSession(row.id,'role_choice',5/1440);return res.json({requiresRoleChoice:true,availableRoles:['owner','user'],roleChoiceTicket});}const role=resolvedAccountRole(row);const user={...row,name:row.display_name,phoneVerified:row.phone_verified,session_role:role};res.json({token:createSession(row.id,role),user:publicUser(user)});}catch(e:any){res.status(500).json({error:e.message||'تعذر تسجيل الدخول'});}});
+    }
+    // [owner-perms] Suspended accounts cannot start a new session at all.
+    if(String(row.activation_status||'active')==='suspended' && resolvedAccountRole(row)!=='owner'){
+      return res.status(403).json({error:'تم تعطيل هذا الحساب من قبل الإدارة. تواصل مع الدعم لإعادة التفعيل.'});
+    }
+    if(resolvedAccountRole(row)==='owner'){const roleChoiceTicket=createSession(row.id,'role_choice',5/1440);return res.json({requiresRoleChoice:true,availableRoles:['owner','user'],roleChoiceTicket});}const role=resolvedAccountRole(row);const user={...row,name:row.display_name,phoneVerified:row.phone_verified,session_role:role};res.json({token:createSession(row.id,role),user:publicUser(user)});}catch(e:any){res.status(500).json({error:e.message||'تعذر تسجيل الدخول'});}});
 app.post('/api/auth/select-role',(req,res)=>{try{const bodyTicket=String(req.body?.roleChoiceTicket||'');const ticket=authUser(req,true,bodyTicket);if(!ticket||ticket.session_role!=='role_choice')return res.status(401).json({error:'انتهت صلاحية اختيار نوع الدخول. سجّل الدخول مرة أخرى.'});const role=String(req.body.role||'');if(role!=='owner'&&role!=='user')return res.status(400).json({error:'اختيار نوع الدخول غير صالح.'});if(resolvedAccountRole(ticket)!=='owner')return res.status(403).json({error:'هذا الاختيار مخصص لحساب المالك.'});const expires=new Date(Date.now()+AUTH_SESSION_DAYS*86400000).toISOString();db.prepare('UPDATE sessions SET session_role=?,expires_at=? WHERE id=?').run(role,expires,ticket.session_id);const user={...ticket,session_role:role};res.json({token:ticket.session_id,user:publicUser(user)});}catch(e:any){res.status(500).json({error:e.message||'تعذر اختيار نوع الدخول'});}});
 app.get('/api/auth/me',(req,res)=>{const user=authUser(req);if(!user||user.session_role==='role_choice')return res.status(401).json({error:'جلسة الدخول منتهية'});res.json({user:publicUser(user)});});
 app.get('/api/owner/admins',(req,res)=>{const actor=authUser(req);if(!actor||sessionAccountRole(actor)!=='owner')return res.status(403).json({error:'هذا القسم مخصص للمالك فقط.'});const view=String(req.query.view||'users');if(view==='admins'){const admins=db.prepare("SELECT id,email,username,display_name as name,role,activation_status FROM users WHERE role='admin' ORDER BY created_at DESC").all();return res.json({admins});}const users=db.prepare("SELECT id,email,username,display_name as name,role,activation_status FROM users WHERE lower(email)<>? AND role IN ('user','owner') ORDER BY created_at DESC").all(PROGRAM_OWNER_EMAIL);return res.json({users});});
 app.patch('/api/owner/admins/:id',(req,res)=>{const actor=authUser(req);if(!actor||sessionAccountRole(actor)!=='owner')return res.status(403).json({error:'هذا الإجراء مخصص للمالك فقط.'});const targetId=String(req.params.id||'').trim();const action=String(req.body.action||'');if(!targetId||targetId===actor.id)return res.status(400).json({error:'لا يمكن تغيير صلاحية حساب المالك.'});const target=db.prepare('SELECT id,email,role FROM users WHERE id=?').get(targetId) as any;if(!target)return res.status(404).json({error:'الحساب غير موجود.'});if(resolvedAccountRole(target)==='owner')return res.status(403).json({error:'لا يمكن تغيير صلاحيات المالك.'});if(action==='assign'){db.prepare("UPDATE users SET role='admin' WHERE id=?").run(targetId);return res.json({ok:true,role:'admin'});}if(action==='remove'){if(target.role!=='admin')return res.status(409).json({error:'الحساب ليس Admin حاليًا.'});db.prepare("UPDATE users SET role='user' WHERE id=?").run(targetId);return res.json({ok:true,role:'user'});}return res.status(400).json({error:'الإجراء غير معروف.'});});
+
+// ----------------------------------------------------
+// [owner-perms] Account management endpoints that actually exist.
+// The old AdminCenter UI called /api/admin/users which was never implemented
+// on this server, so the management panel could never load. These routes give
+// the Owner (and Admins, with narrower powers) real, server-enforced control:
+//   Owner  : list / activate / suspend / promote / demote / delete accounts
+//   Admin  : list / activate / suspend plain user accounts only
+// The program owner account itself is immutable from these routes, and any
+// permission change or suspension immediately terminates the target's sessions.
+// ----------------------------------------------------
+const ADMIN_USER_COLUMNS = "id,email,username,display_name as name,role,activation_status,created_at";
+app.get('/api/admin/users',(req,res)=>{
+  const actor=authUser(req); const actorRole=isManagerActor(actor);
+  if(!actorRole) return res.status(403).json({error:'هذه اللوحة مخصصة للمالك والإداريين فقط.'});
+  const rows=db.prepare(`SELECT ${ADMIN_USER_COLUMNS} FROM users ORDER BY (lower(email)=?) DESC, created_at DESC`).all(PROGRAM_OWNER_EMAIL) as any[];
+  // Rows carry resolved flags so the panel never has to guess permissions.
+  const users=rows.map((u)=>({...u, resolvedRole:resolvedAccountRole(u), accountIsOwner:resolvedAccountRole(u)==='owner'}));
+  const stats={ total:users.length, active:users.filter((u:any)=>u.activation_status==='active').length, suspended:users.filter((u:any)=>u.activation_status==='suspended').length, admins:users.filter((u:any)=>u.resolvedRole==='admin').length };
+  return res.json({ viewer:{ id:actor.id, role:actorRole }, stats, users });
+});
+app.patch('/api/admin/users/:id',(req,res)=>{
+  const actor=authUser(req); const actorRole=isManagerActor(actor);
+  if(!actorRole) return res.status(403).json({error:'هذا الإجراء مخصص للمالك والإداريين فقط.'});
+  const targetId=String(req.params.id||'').trim();
+  if(!targetId) return res.status(400).json({error:'معرّف الحساب مطلوب.'});
+  if(targetId===actor.id) return res.status(400).json({error:'لا يمكن تعديل حسابك من هذه اللوحة.'});
+  const target=db.prepare('SELECT id,email,role,activation_status FROM users WHERE id=?').get(targetId) as any;
+  if(!target) return res.status(404).json({error:'الحساب غير موجود.'});
+  if(resolvedAccountRole(target)==='owner') return res.status(403).json({error:'حساب المالك محمي ولا يمكن تعديله.'});
+  if(actorRole==='admin' && resolvedAccountRole(target)==='admin') return res.status(403).json({error:'الإداري لا يمكنه تعديل حسابات إداريين آخرين.'});
+  const patchActivation=String(req.body?.activationStatus||'').trim().toLowerCase();
+  const patchRole=String(req.body?.role||'').trim().toLowerCase();
+  let changed=false;
+  if(patchActivation){
+    if(patchActivation!=='active'&&patchActivation!=='suspended') return res.status(400).json({error:'حالة التفعيل غير صالحة (active أو suspended فقط).'});
+    db.prepare('UPDATE users SET activation_status=?, activated_by=?, activated_at=? WHERE id=?').run(patchActivation,actor.id,new Date().toISOString(),targetId);
+    if(patchActivation==='suspended') killUserSessions(targetId);
+    changed=true;
+  }
+  if(patchRole){
+    if(actorRole!=='owner') return res.status(403).json({error:'تغيير الأدوار مخصص للمالك فقط.'});
+    if(patchRole!=='admin'&&patchRole!=='user') return res.status(400).json({error:'الدور غير صالح (admin أو user فقط).'});
+    if(patchRole===String(target.role||'user').toLowerCase()) return res.status(409).json({error:'الحساب يحمل هذا الدور بالفعل.'});
+    db.prepare('UPDATE users SET role=? WHERE id=?').run(patchRole,targetId);
+    killUserSessions(targetId);
+    changed=true;
+  }
+  if(!changed) return res.status(400).json({error:'لا يوجد تغيير مطلوب (activationStatus أو role).'});
+  const updated=db.prepare(`SELECT ${ADMIN_USER_COLUMNS} FROM users WHERE id=?`).get(targetId) as any;
+  return res.json({ok:true,user:updated});
+});
+app.delete('/api/admin/users/:id',(req,res)=>{
+  const actor=authUser(req);
+  if(!actor||sessionAccountRole(actor)!=='owner') return res.status(403).json({error:'حذف الحسابات مخصص للمالك فقط.'});
+  const targetId=String(req.params.id||'').trim();
+  if(!targetId) return res.status(400).json({error:'معرّف الحساب مطلوب.'});
+  if(targetId===actor.id) return res.status(400).json({error:'لا يمكن حذف حسابك الحالي.'});
+  const target=db.prepare('SELECT id,email FROM users WHERE id=?').get(targetId) as any;
+  if(!target) return res.status(404).json({error:'الحساب غير موجود.'});
+  if(resolvedAccountRole(target)==='owner') return res.status(403).json({error:'حساب المالك محمي ولا يمكن حذفه.'});
+  // Best-effort cleanup of the account's own data (single SQLite file — no
+  // extra services, staying inside the Always Free envelope).
+  try{
+    db.exec('BEGIN IMMEDIATE');
+    try{
+      db.prepare('DELETE FROM sessions WHERE user_id=?').run(targetId);
+      try{ db.prepare('DELETE FROM user_app_data WHERE user_id=?').run(targetId);}catch{}
+      try{ db.prepare('DELETE FROM conversation_members WHERE user_id=?').run(targetId);}catch{}
+      try{ db.prepare('DELETE FROM saved_messages WHERE user_id=?').run(targetId);}catch{}
+      try{ db.prepare('DELETE FROM message_reads WHERE user_id=?').run(targetId);}catch{}
+      try{ db.prepare('DELETE FROM voice_dna_shares WHERE owner_user_id=? OR recipient_user_id=?').run(targetId,targetId);}catch{}
+      try{ db.prepare('DELETE FROM voice_dna_public_keys WHERE user_id=?').run(targetId);}catch{}
+      try{ db.prepare('DELETE FROM voice_dna_recovery_envelopes WHERE user_id=?').run(targetId);}catch{}
+      try{ db.prepare('DELETE FROM voice_dna_recovery_samples WHERE user_id=?').run(targetId);}catch{}
+      try{ db.prepare('DELETE FROM voice_dna_sync_packages WHERE recipient_user_id=? OR profile_id IN (SELECT id FROM voice_dna_profiles WHERE owner_user_id=?)').run(targetId,targetId);}catch{}
+      try{ db.prepare('DELETE FROM voice_dna_profiles WHERE owner_user_id=?').run(targetId);}catch{}
+      db.prepare('DELETE FROM users WHERE id=?').run(targetId);
+      db.exec('COMMIT');
+    }catch(inner:any){ try{ db.exec('ROLLBACK'); }catch{} throw inner; }
+  }catch(e:any){ return res.status(500).json({error:e.message||'تعذر حذف الحساب.'}); }
+  return res.json({ok:true,deletedEmail:target.email});
+});
+// [owner-perms] Switch the session role of the program owner account between
+// 'owner' (management powers) and 'user' (plain app usage) without logging in
+// again. Only the reserved owner account can do this.
+app.post('/api/auth/switch-role',(req,res)=>{
+  const actor=authUser(req);
+  if(!actor||actor.session_role==='role_choice') return res.status(401).json({error:'جلسة الدخول منتهية'});
+  if(resolvedAccountRole(actor)!=='owner') return res.status(403).json({error:'التبديل الفوري بين الصلاحيات مخصص لحساب المالك فقط.'});
+  const nextRole=actor.session_role==='owner'?'user':'owner';
+  db.prepare('UPDATE sessions SET session_role=? WHERE id=?').run(nextRole,actor.session_id);
+  const refreshed=db.prepare('SELECT u.id,u.email,u.username,u.display_name as name,u.phone,u.phone_verified as phoneVerified,u.role,u.activation_status,s.session_role FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.id=?').get(actor.session_id) as any;
+  return res.json({token:actor.session_id,user:publicUser(refreshed)});
+});
 app.post('/api/auth/owner/activate',(req,res)=>{
   try{
     const actor=authUser(req);
