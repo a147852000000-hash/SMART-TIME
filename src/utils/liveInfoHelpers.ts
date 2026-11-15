@@ -212,6 +212,8 @@ export interface CryptoMarketItem {
   symbol: string;
   priceUsd: number;
   change24h: number;
+  /** True when priceUsd/change24h came from the live market feed (not the seed DB). */
+  isLivePrice?: boolean;
   /** Optional: API search results may not carry it; UI falls back. */
   iconColor?: string;
   iconSymbol?: string;
