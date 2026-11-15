@@ -36,12 +36,12 @@ export async function fetchLiveMarket(signal?: AbortSignal): Promise<LiveMarketD
   }
 }
 
-export async function fetchLiveNews(language: 'ar' | 'en'): Promise<LiveNewsArticle[]> {
+export async function fetchLiveNews(language: 'ar' | 'en', category: NewsCategory = 'general'): Promise<LiveNewsArticle[]> {
   try {
     // B-7: the GNews branch is reserved for signed-in sessions; anonymous
     // callers get the free RSS fallback server-side. authHeaders() is empty
     // for guests, so this is safe either way.
-    const res = await fetch(apiUrl(`/api/live/news?lang=${language}&country=eg&category=general&max=10`), { headers: { ...authHeaders() } });
+    const res = await fetch(apiUrl(`/api/live/news?lang=${language}&country=eg&category=${encodeURIComponent(category)}&max=10`), { headers: { ...authHeaders() } });
     if (!res.ok) return [];
     const data = await res.json();
     return data.articles || [];
@@ -49,6 +49,21 @@ export async function fetchLiveNews(language: 'ar' | 'en'): Promise<LiveNewsArti
     return [];
   }
 }
+
+// [news-categories] تصنيفات الأخبار المدعومة في شريط الأخبار — كل تصنيف يُخدم
+// من مصدر Google News RSS مجاني على السيرفر (بدون مفتاح وبدون حصة مدفوعة).
+export type NewsCategory = 'general' | 'politics' | 'arab' | 'egypt' | 'accidents' | 'middle_east';
+
+export const NEWS_CATEGORIES: { id: NewsCategory; labelAr: string; labelEn: string; emoji: string }[] = [
+  { id: 'general', labelAr: 'الأخبار الرئيسية', labelEn: 'Top News', emoji: '📰' },
+  { id: 'politics', labelAr: 'أخبار سياسية', labelEn: 'Politics', emoji: '🏛️' },
+  { id: 'arab', labelAr: 'أخبار عربية', labelEn: 'Arab News', emoji: '🌍' },
+  { id: 'egypt', labelAr: 'أخبار مصرية', labelEn: 'Egypt News', emoji: '🇪🇬' },
+  { id: 'accidents', labelAr: 'أخبار حوادث', labelEn: 'Accidents', emoji: '🚨' },
+  { id: 'middle_east', labelAr: 'الشرق الأوسط', labelEn: 'Middle East', emoji: '🕌' },
+];
+
+export const ALL_NEWS_CATEGORY_IDS: NewsCategory[] = NEWS_CATEGORIES.map((c) => c.id);
 
 export async function fetchLiveSports(): Promise<LiveSportsMatch[]> {
   try {
