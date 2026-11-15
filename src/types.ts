@@ -54,6 +54,7 @@ export interface TickerPreferences {
     | 'all'
     | string;
   selectedCryptos?: string[]; // e.g. ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'DOGE', 'TON']
+  newsCategories?: string[]; // تصنيفات الأخبار المعروضة في شريط الأخبار: general, politics, arab, egypt, accidents, middle_east — فارغة = إخفاء الأخبار
   customCryptos?: {
     id: string;
     name: string;

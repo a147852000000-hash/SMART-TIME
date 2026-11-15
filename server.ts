@@ -2084,16 +2084,45 @@ app.get("/api/live/market", async (_req, res) => {
 
 const stripXml = (value: string) => value.replace(/<[^>]*>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
 
-async function fetchGoogleNewsRss(lang: string) {
-  const hl = lang === "ar" ? "ar" : "en-US";
-  const gl = "EG";
-  const ceid = lang === "ar" ? "EG:ar" : "US:en";
-  const xml = await fetch(`https://news.google.com/rss?hl=${hl}&gl=${gl}&ceid=${ceid}`, { signal: AbortSignal.timeout(12000) }).then(async r => {
+// [news-categories] Free Google News RSS feeds per ticker category — no API key,
+// no quota at all (free-tier red line). Search feeds are restricted to the last
+// 2 days with "when:2d" so the ticker always carries fresh headlines only.
+const NEWS_CATEGORY_FEEDS: Record<string, { ar: string; en: string }> = {
+  general: {
+    ar: "https://news.google.com/rss?hl=ar&gl=EG&ceid=EG:ar",
+    en: "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en",
+  },
+  politics: {
+    ar: `https://news.google.com/rss/search?q=${encodeURIComponent("سياسة when:2d")}&hl=ar&gl=EG&ceid=EG:ar`,
+    en: `https://news.google.com/rss/search?q=${encodeURIComponent("politics when:2d")}&hl=en-US&gl=US&ceid=US:en`,
+  },
+  arab: {
+    ar: `https://news.google.com/rss/search?q=${encodeURIComponent("العالم العربي when:2d")}&hl=ar&gl=EG&ceid=EG:ar`,
+    en: `https://news.google.com/rss/search?q=${encodeURIComponent("Arab world when:2d")}&hl=en-US&gl=US&ceid=US:en`,
+  },
+  egypt: {
+    ar: `https://news.google.com/rss/headlines/section/geo/${encodeURIComponent("مصر")}?hl=ar&gl=EG&ceid=EG:ar`,
+    en: `https://news.google.com/rss/search?q=${encodeURIComponent("Egypt when:2d")}&hl=en-US&gl=EG&ceid=EG:en`,
+  },
+  accidents: {
+    ar: `https://news.google.com/rss/search?q=${encodeURIComponent("حوادث مصر when:2d")}&hl=ar&gl=EG&ceid=EG:ar`,
+    en: `https://news.google.com/rss/search?q=${encodeURIComponent("accidents when:2d")}&hl=en-US&gl=US&ceid=US:en`,
+  },
+  middle_east: {
+    ar: `https://news.google.com/rss/search?q=${encodeURIComponent("الشرق الأوسط when:2d")}&hl=ar&gl=EG&ceid=EG:ar`,
+    en: `https://news.google.com/rss/search?q=${encodeURIComponent("middle east when:2d")}&hl=en-US&gl=US&ceid=US:en`,
+  },
+};
+
+async function fetchGoogleNewsRss(lang: string, category: string = "general") {
+  const feedSet = NEWS_CATEGORY_FEEDS[category] || NEWS_CATEGORY_FEEDS.general;
+  const url = lang === "ar" ? feedSet.ar : feedSet.en;
+  const xml = await fetch(url, { signal: AbortSignal.timeout(12000) }).then(async r => {
     if (!r.ok) throw new Error(`HTTP ${r.status} from Google News`);
     return r.text();
   });
   const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
-  return items.slice(0, 15).map((m) => {
+  const articles = items.slice(0, 15).map((m) => {
     const block = m[1];
     // [FIX B-5] This RegExp is built from a template literal, so "\s" and "\S"
     // lose their backslashes to string escaping and degrade into the character
@@ -2106,6 +2135,10 @@ async function fetchGoogleNewsRss(lang: string) {
     const publishedAt = get("pubDate");
     return { title, description: "", url, publishedAt, source: { name: source } };
   }).filter((a) => a.title && a.url);
+  // [news-fallback] A failing or empty category feed degrades to the general
+  // feed so the ticker never goes blank because of one category.
+  if (!articles.length && category !== "general") return fetchGoogleNewsRss(lang, "general");
+  return articles;
 }
 
 app.get("/api/live/news", async (req, res) => {
@@ -2117,10 +2150,12 @@ app.get("/api/live/news", async (req, res) => {
     const max = String(req.query.max || "10");
 
     // B-7: the GNews daily quota is spent server-side and is limited — only
-    // signed-in sessions may consume it. Anonymous visitors get the free
-    // Google News RSS path below without touching the key at all.
+    // signed-in sessions may consume it, and only for the general category
+    // (GNews has no politics/accidents etc. categories). Anonymous visitors
+    // and all other categories get the free Google News RSS path below
+    // without touching the key at all.
     const session = authUser(req);
-    if (key && session) {
+    if (key && session && category === "general") {
       try {
         const data = await fetchJson(`https://gnews.io/api/v4/top-headlines?category=${encodeURIComponent(category)}&lang=${encodeURIComponent(lang)}&country=${encodeURIComponent(country)}&max=${max}&apikey=${encodeURIComponent(key)}`);
         const payload = { source: "gnews", configured: true, fetchedAt: new Date().toISOString(), articles: data.articles || [], status: "LIVE" }; setCache(`news:${lang}:${country}:${category}`, payload, 5*60*1000); setServiceStatus("news","LIVE","gnews","Fresh provider data"); return res.json(payload);
@@ -2129,7 +2164,7 @@ app.get("/api/live/news", async (req, res) => {
       }
     }
 
-    const articles = await fetchGoogleNewsRss(lang);
+    const articles = await fetchGoogleNewsRss(lang, category);
     const payload = { source: "google-news-rss", configured: Boolean(key), fetchedAt: new Date().toISOString(), articles, status: key ? "FALLBACK" : "LIVE" }; setCache(`news:${lang}:${country}:${category}`, payload, 5*60*1000); setServiceStatus("news", key ? "FALLBACK" : "LIVE", "google-news-rss", key ? "GNews unavailable; RSS fallback active" : "RSS live source active"); return res.json(payload);
   } catch (error) {
     const lang = String(req.query.lang || "ar"), country = String(req.query.country || "eg"), category = String(req.query.category || "general");

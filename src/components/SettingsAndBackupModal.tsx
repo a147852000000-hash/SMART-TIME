@@ -63,6 +63,7 @@ import {
 import { translations } from '../services/i18n';
 import { apiUrl } from '../services/apiConfig';
 import { authHeaders } from '../services/authService';
+import { NEWS_CATEGORIES, ALL_NEWS_CATEGORY_IDS, NewsCategory } from '../services/liveDataService';
 import { BackupRepository, UserRepository, NotificationSoundService, NotificationSoundSettings } from '../services';
 import {
   calculateUserAge,
@@ -376,6 +377,8 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
     silverUnit: '999',
     goldUnit: '24',
     selectedCryptos: ['BTC', 'ETH', 'SOL'],
+    // [news-categories] افتراضيًا كل تصنيفات الأخبار مفعّلة في الشريط (سياسية/عربية/مصرية/حوادث/الشرق الأوسط)
+    newsCategories: [...ALL_NEWS_CATEGORY_IDS],
     speed: 'slow',
     customCryptos: [],
     ...(userProfile.tickerPreferences || {}),
@@ -448,6 +451,19 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
     }
     const nextSelected = currentSelected.filter((s) => s !== symbol);
     setTickerPrefs({ ...tickerPrefs, selectedCryptos: nextSelected });
+  };
+
+  // [news-categories] دالة تفعيل/تعطيل تصنيفات الأخبار في شريط الأخبار
+  // إلغاء تحديد جميع التصنيفات = إخفاء الأخبار من الشريط (تحكم كامل للمستخدم)
+  const toggleNewsCategory = (id: NewsCategory) => {
+    const saved = tickerPrefs.newsCategories;
+    const current: NewsCategory[] = Array.isArray(saved)
+      ? ALL_NEWS_CATEGORY_IDS.filter((c) => (saved as string[]).includes(c))
+      : [...ALL_NEWS_CATEGORY_IDS];
+    const next = current.includes(id)
+      ? current.filter((c) => c !== id)
+      : [...current, id];
+    setTickerPrefs({ ...tickerPrefs, newsCategories: next });
   };
 
   // 3. تفضيلات الأقسام
@@ -1231,6 +1247,54 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* [news-categories] تصنيفات الأخبار المعروضة في شريط الأخبار:
+                  الرئيسية / سياسية / عربية / مصرية / حوادث / الشرق الأوسط */}
+              <div className="p-3.5 rounded-2xl bg-blue-500/5 dark:bg-blue-500/10 border border-blue-500/20">
+                <div className="flex items-center gap-2.5 mb-2">
+                  <span className="text-xl">📰</span>
+                  <div>
+                    <span className="font-bold block text-slate-900 dark:text-white">
+                      {isAr ? 'تصنيفات الأخبار في شريط الأخبار' : 'News Categories in Ticker'}
+                    </span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      {isAr
+                        ? 'حدد التصنيفات التي تظهر في الشريط — يعرض الشريط أحدث خبر من كل تصنيف مختار، واضغط على أي خبر في الشريط لفتح قائمة الأخبار الكاملة.'
+                        : 'Pick which news categories appear in the ticker — latest headline per category, tap it for the full list.'}
+                    </span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {NEWS_CATEGORIES.map((cat) => {
+                    const saved = tickerPrefs.newsCategories;
+                    const active = Array.isArray(saved)
+                      ? ALL_NEWS_CATEGORY_IDS.includes(cat.id) && (saved as string[]).includes(cat.id)
+                      : true;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => toggleNewsCategory(cat.id)}
+                        className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border text-[11px] font-bold transition-all ${
+                          active
+                            ? 'bg-blue-500 text-white border-blue-500 shadow-xs'
+                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-blue-400'
+                        }`}
+                        title={active ? (isAr ? 'مفعّل — اضغط للإزالة من الشريط' : 'Enabled — tap to disable') : (isAr ? 'غير مفعّل — اضغط للإضافة للشريط' : 'Disabled — tap to enable')}
+                      >
+                        <span className="shrink-0">{cat.emoji}</span>
+                        <span className="truncate">{isAr ? cat.labelAr : cat.labelEn}</span>
+                        {active && <Check className="w-3.5 h-3.5 ms-auto shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-[10px] text-slate-400">
+                  {isAr
+                    ? 'ملاحظة: إلغاء تحديد جميع التصنيفات يخفي الأخبار من شريط الأخبار مع بقاء باقي العناصر (الذهب، العملات، الطقس…) كما هي.'
+                    : 'Note: deselecting all categories hides news from the ticker while other items stay.'}
+                </p>
               </div>
 
               {/* بطاقات الخيارات التفاعلية */}

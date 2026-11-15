@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { Language, UserProfile, DailyTask, TaskPriority, TaskCategory } from '../types';
 import { NotesRepository } from '../services/repositories/notesRepository';
-import { fetchLiveMarket, fetchLiveNews, fetchLiveSports, fetchLiveWeather, LiveMarketData, LiveNewsArticle, LiveSportsMatch, LiveWeatherData } from '../services/liveDataService';
+import { fetchLiveMarket, fetchLiveNews, fetchLiveSports, fetchLiveWeather, LiveMarketData, LiveNewsArticle, LiveSportsMatch, LiveWeatherData, NEWS_CATEGORIES, ALL_NEWS_CATEGORY_IDS, NewsCategory } from '../services/liveDataService';
 import {
   MOCK_CRYPTO_RATES,
   MOCK_CURRENCY_GOLD_RATES,
@@ -74,7 +74,10 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
   const [goldCalcGrams, setGoldCalcGrams] = useState<number>(10);
   const [goldCalcKarat, setGoldCalcKarat] = useState<string>('21');
   const [liveMarket, setLiveMarket] = useState<LiveMarketData | null>(null);
-  const [liveNews, setLiveNews] = useState<LiveNewsArticle[]>([]);
+  // [news-categories] آخر الأخبار لكل تصنيف مختار من إعدادات شريط الأخبار (التصنيف → مقالات)
+  // مع حماية كاملة من البيانات التالفة المحفوظة (Array.isArray)
+  const [liveNewsByCat, setLiveNewsByCat] = useState<Record<string, LiveNewsArticle[]>>({});
+  const [activeNewsCat, setActiveNewsCat] = useState<NewsCategory>('general');
   const [liveSports, setLiveSports] = useState<LiveSportsMatch[]>([]);
   const [liveWeather, setLiveWeather] = useState<LiveWeatherData | null>(null);
   const pointerDownTimeRef = useRef(0);
@@ -150,10 +153,32 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
   }, []);
 
   // Live Internet feed: market data is refreshed frequently, news/scores on their natural cadence.
+  // [news-categories] التصنيفات المفعلة من إعدادات شريط الأخبار — مصفوفة فارغة = إخفاء الأخبار من الشريط
+  // ALL_NEWS_CATEGORY_IDS.filter يعيد الترتيب الرسمي ويستبعد أي قيمة تالفة محفوظة
+  const savedNewsCats = user.tickerPreferences?.newsCategories;
+  const enabledNewsCategories: NewsCategory[] = Array.isArray(savedNewsCats)
+    ? ALL_NEWS_CATEGORY_IDS.filter((c) => savedNewsCats.includes(c))
+    : [...ALL_NEWS_CATEGORY_IDS];
+  const enabledNewsCategoriesKey = enabledNewsCategories.join(',');
+
   useEffect(() => {
     let mounted = true;
+    // [news-categories] يجلب أحدث الأخبار لكل تصنيف مفعّل — كل تصنيف له ذاكرة تخزين مؤقت
+    // على السيرفر (5 دقائق) والمصدر مجاني (Google News RSS) بدون أي حصة مدفوعة
+    const refreshNews = async () => {
+      const lang = (language === 'fr' ? 'en' : language) as 'ar' | 'en';
+      const pairs = await Promise.all(enabledNewsCategories.map(async (cat) => {
+        try { return [cat, await fetchLiveNews(lang, cat)] as const; } catch { return [cat, [] as LiveNewsArticle[]] as const; }
+      }));
+      if (!mounted) return;
+      // الدمج مع آخر بيانات معروفة: تصنيف فشل جلبُه يُبقي على آخر أخبار نجحت
+      setLiveNewsByCat((prev) => {
+        const next = { ...prev };
+        for (const [cat, arts] of pairs) if (arts.length) next[cat] = arts;
+        return next;
+      });
+    };
     const refreshMarket = async () => { const data = await fetchLiveMarket(); if (mounted && data) setLiveMarket(data); };
-    const refreshNews = async () => { const data = await fetchLiveNews(language === 'fr' ? 'en' : language); if (mounted && data.length) setLiveNews(data); };
     const refreshSports = async () => { const data = await fetchLiveSports(); if (mounted && data.length) setLiveSports(data); };
     const refreshWeather = async () => { const data = await fetchLiveWeather(user.city || 'Cairo'); if (mounted && data) setLiveWeather(data); };
     refreshMarket(); refreshNews(); refreshSports(); refreshWeather();
@@ -171,7 +196,8 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => { mounted = false; window.clearInterval(marketTimer); window.clearInterval(newsTimer); window.clearInterval(sportsTimer); window.clearInterval(weatherTimer); document.removeEventListener('visibilitychange', handleVisibility); };
-  }, [language, user.city]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language, user.city, enabledNewsCategoriesKey]);
 
   const isAr = language === 'ar';
   const age = calculateUserAge(user.birthDate);
@@ -620,20 +646,30 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
         </>
       )}
 
-      {/* 5.5 أهم الأخبار المحلية */}
-      <div
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 shrink-0 font-sans"
-        title={isAr ? 'أهم الأخبار المحلية' : 'Local News Headlines'}
-      >
-        <Newspaper className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-        <span className="font-bold text-xs">
-          {isAr ? '📰 أخبار مباشرة:' : '📰 Live News:'}
-        </span>
-        <span className="text-xs text-slate-800 dark:text-slate-200 font-medium max-w-[210px] truncate">
-          {liveNews[0]?.title || (isAr ? 'جاري تحميل الأخبار من الإنترنت…' : 'Loading live news…')}
-        </span>
-      </div>
-      <span className="text-slate-300 dark:text-slate-700 font-normal">/</span>
+      {/* 5.5 الأخبار المباشرة حسب التصنيفات المختارة من إعدادات شريط الأخبار:
+          سياسية / عربية / مصرية / حوادث / الشرق الأوسط — أحدث خبر من كل تصنيف مفعّل */}
+      {enabledNewsCategories.map((cat) => {
+        const catMeta = NEWS_CATEGORIES.find((c) => c.id === cat);
+        const catArticles = liveNewsByCat[cat] || [];
+        return (
+          <React.Fragment key={`news-${cat}`}>
+            <button
+              onClick={() => { setActiveNewsCat(cat); handleItemClick('news'); }}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 shrink-0 font-sans hover:scale-[1.03] cursor-pointer active:scale-95 transition-all"
+              title={catMeta ? (isAr ? `${catMeta.labelAr} — انقر لعرض جميع أخبار هذا التصنيف` : `${catMeta.labelEn} — tap to open the full list`) : (isAr ? 'أخبار مباشرة' : 'Live news')}
+            >
+              <Newspaper className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+              <span className="font-bold text-xs">
+                {catMeta ? `${catMeta.emoji} ${isAr ? catMeta.labelAr : catMeta.labelEn}:` : (isAr ? 'أخبار مباشرة:' : 'Live News:')}
+              </span>
+              <span className="text-xs text-slate-800 dark:text-slate-200 font-medium max-w-[210px] truncate">
+                {catArticles[0]?.title || (isAr ? 'جاري تحميل الأخبار من الإنترنت…' : 'Loading live news…')}
+              </span>
+            </button>
+            <span className="text-slate-300 dark:text-slate-700 font-normal">/</span>
+          </React.Fragment>
+        );
+      })}
 
       {/* 6. العملات المشفرة الرقمية (اختيار المستخدم) */}
       {prefs.showCrypto !== false && (
@@ -919,6 +955,94 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
           </div>
         </div>
       )}
+
+      {/* نافذة الأخبار المباشرة حسب التصنيف (News Modal) — سياسية / عربية / مصرية / حوادث / الشرق الأوسط */}
+      {activeModal === 'news' && (() => {
+        const activeCatMeta = NEWS_CATEGORIES.find((c) => c.id === activeNewsCat);
+        const modalArticles = liveNewsByCat[activeNewsCat] || [];
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+            onClick={() => setActiveModal(null)}
+          >
+            <div
+              className="bg-white dark:bg-slate-900 rounded-3xl p-5 max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-800 animate-scaleUp"
+              onClick={(e) => e.stopPropagation()}
+              dir={isAr ? 'rtl' : 'ltr'}
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500 shrink-0">
+                    <Newspaper className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                      {isAr ? 'الأخبار المباشرة' : 'Live News'}
+                    </h3>
+                    <p className="text-[10px] text-slate-400">
+                      {activeCatMeta ? `${activeCatMeta.emoji} ${isAr ? activeCatMeta.labelAr : activeCatMeta.labelEn}` : ''}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiveModal(null)}
+                  className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* شريط تبديل التصنيفات داخل النافذة */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-1">
+                {enabledNewsCategories.map((cat) => {
+                  const meta = NEWS_CATEGORIES.find((c) => c.id === cat);
+                  const isActive = cat === activeNewsCat;
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => setActiveNewsCat(cat)}
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap border transition-colors shrink-0 ${
+                        isActive
+                          ? 'bg-blue-500 text-white border-blue-500 shadow-xs'
+                          : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-blue-400'
+                      }`}
+                    >
+                      {meta ? `${meta.emoji} ${isAr ? meta.labelAr : meta.labelEn}` : cat}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* قائمة الأخبار الكاملة للتصنيف المختار */}
+              <div className="max-h-[48vh] overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                {modalArticles.slice(0, 10).map((a, i) => (
+                  <a
+                    key={`${activeNewsCat}-${i}`}
+                    href={a.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block py-2.5 px-1 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors"
+                  >
+                    <h4 className="text-xs font-bold leading-5 text-slate-900 dark:text-white">{a.title}</h4>
+                    <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                      <span>{a.source?.name || 'News'}</span>
+                      {a.publishedAt && <span>• {new Date(a.publishedAt).toLocaleString(isAr ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' })}</span>}
+                    </div>
+                  </a>
+                ))}
+                {!modalArticles.length && (
+                  <div className="py-6 text-center text-xs text-slate-500">
+                    {isAr ? 'جاري تحميل أخبار هذا التصنيف…' : 'Loading this category…'}
+                  </div>
+                )}
+              </div>
+              <p className="mt-2 text-[10px] text-slate-400">
+                {isAr ? 'اضغط على أي خبر لقراءته من المصدر الأصلي — يتم التحديث تلقائيًا كل 5 دقائق' : 'Tap any headline to read at source — auto-refreshed every 5 minutes'}
+              </p>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* نافذة تفاصيل الدوري والمباريات العالمية والمحلية (League Modal) */}
       {activeModal === 'league' && (
