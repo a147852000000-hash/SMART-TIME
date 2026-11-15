@@ -19,8 +19,7 @@ export type AppView =
   | 'chat'
   | 'media'
   | 'sports'
-  | 'settings'
-  | 'food';
+  | 'settings';
 
 export interface TickerPreferences {
   showTimeAndDate: boolean;
@@ -94,7 +93,6 @@ export interface EducationPreferences {
 }
 
 export interface UserProfile {
-  foodPreferences?: any;
   id: string;
   name: string;
   email: string;
@@ -745,7 +743,6 @@ export type NotificationCategory =
   | 'expenses'
   | 'vehicles'
   | 'education'
-  | 'food'
   | 'notes'
   | 'religious'
   | 'security'
@@ -762,7 +759,6 @@ export interface AppNotification {
     | 'expenses'
     | 'vehicles'
     | 'education'
-    | 'food'
     | 'notes'
     | 'religious'
     | 'backup'

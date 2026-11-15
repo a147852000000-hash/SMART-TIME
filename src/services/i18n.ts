@@ -15,7 +15,6 @@ export interface Translations {
   expenses: string;
   vehicles: string;
   education: string;
-  food: string;
   shoppingList: string;
   trips: string;
   hotChat: string;
@@ -88,7 +87,7 @@ export const translations: Record<Language, Translations> = {
     appName: 'SMART TIME',
     appArabicName: 'وقتـك من ذهب',
     appSlogan: 'Your Time. Your Gold. — وقتك أثمن ما تملك',
-    searchPlaceholder: 'ابحث في كل شيء (ملاحظات، مصاريف، سيارات، وصفات، رحلات)...',
+    searchPlaceholder: 'ابحث في كل شيء (ملاحظات، مصاريف، سيارات، رحلات)...',
     voiceSearch: 'البحث الصوتي الذكي',
     listening: 'جارٍ الاستماع إليك...',
     speakNow: 'تحدث الآن (مثال: ابحث عن مصاريف الشهر الماضي)...',
@@ -99,7 +98,6 @@ export const translations: Record<Language, Translations> = {
     expenses: 'المصروفات والميزانية',
     vehicles: 'السيارات والوقود',
     education: 'التعليم والأبناء',
-    food: 'الطعام والوصفات',
     shoppingList: 'قائمة المشتريات',
     trips: 'الرحلات والنقل الذكي',
     hotChat: 'المحادثات الفورية',
@@ -164,7 +162,6 @@ export const translations: Record<Language, Translations> = {
     send: 'إرسال',
     typeMessage: 'اكتب رسالتك هنا...',
     categories: {
-      food: 'طعام ومطاعم',
       vehicle: 'سيارات ووقود',
       education: 'تعليم ودراسة',
       bills: 'فواتير ومرافق',
@@ -184,7 +181,7 @@ export const translations: Record<Language, Translations> = {
     appName: 'SMART TIME',
     appArabicName: 'Your Time Is Gold',
     appSlogan: 'Your Time. Your Gold.',
-    searchPlaceholder: 'Search everything (Notes, Expenses, Cars, Food, Trips)...',
+    searchPlaceholder: 'Search everything (Notes, Expenses, Cars, Trips)...',
     voiceSearch: 'Global Smart Voice Search',
     listening: 'Listening...',
     speakNow: 'Speak now (e.g., "Show car expenses last month")...',
@@ -195,7 +192,6 @@ export const translations: Record<Language, Translations> = {
     expenses: 'Expenses & Budget',
     vehicles: 'Vehicles & Fuel',
     education: 'Education & Family',
-    food: 'Food & Recipes',
     shoppingList: 'Shopping List',
     trips: 'Trips & Mobility',
     hotChat: 'Hot Chat',
@@ -260,7 +256,6 @@ export const translations: Record<Language, Translations> = {
     send: 'Send',
     typeMessage: 'Type your message...',
     categories: {
-      food: 'Food & Dining',
       vehicle: 'Vehicle & Fuel',
       education: 'Education & Tuitions',
       bills: 'Bills & Utilities',
@@ -291,7 +286,6 @@ export const translations: Record<Language, Translations> = {
     expenses: 'Dépenses',
     vehicles: 'Véhicules',
     education: 'Éducation',
-    food: 'Nourriture & Recettes',
     shoppingList: 'Liste de courses',
     trips: 'Trajets',
     hotChat: 'Discussion',
@@ -356,7 +350,6 @@ export const translations: Record<Language, Translations> = {
     send: 'Envoyer',
     typeMessage: 'Votre message...',
     categories: {
-      food: 'Nourriture',
       vehicle: 'Véhicule',
       education: 'Éducation',
       bills: 'Factures',

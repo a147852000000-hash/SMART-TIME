@@ -1888,8 +1888,8 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
                 </span>
                 <p className="text-[11px] text-slate-600 dark:text-slate-300">
                   {isAr
-                    ? 'املأ الحقول لتخصيص سلوك كل قسم: السيارات، المصاريف، المطبخ، العبادات، والتعليم.'
-                    : 'Configure defaults for vehicles, expenses, cooking, prayers, and student tracking.'}
+                    ? 'املأ الحقول لتخصيص سلوك كل قسم: السيارات، المصاريف، العبادات، والتعليم.'
+                    : 'Configure defaults for vehicles, expenses, prayers, and student tracking.'}
                 </p>
               </div>
 

@@ -25,10 +25,6 @@ export class UserRepository {
         ...DEFAULT_USER.religiousDetails,
         ...(saved?.religiousDetails || {}),
       },
-      foodPreferences: {
-        ...DEFAULT_USER.foodPreferences,
-        ...(saved?.foodPreferences || {}),
-      },
       educationPreferences: {
         ...DEFAULT_USER.educationPreferences,
         ...(saved?.educationPreferences || {}),

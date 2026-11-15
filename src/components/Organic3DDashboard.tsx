@@ -193,80 +193,7 @@ export const Organic3DDashboard: React.FC<Organic3DDashboardProps> = ({
       ),
     },
 
-    // 3. الطعام (Center-Right)
-    {
-      id: 'food',
-      titleAr: 'الطعام',
-      subtitleAr: 'استكشف وصفاتك ومطاعمك',
-      category: 'المطبخ والوصفات',
-      themeColor: {
-        bgLight: 'bg-rose-50/80 dark:bg-rose-950/40',
-        border: 'border-rose-200/90 dark:border-rose-700/60',
-        glow: 'rgba(244, 63, 94, 0.25)',
-        text: 'text-rose-950 dark:text-rose-100',
-        badge: 'bg-rose-100/90 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200',
-        cardGradient: 'from-rose-100/60 via-orange-50/40 to-white/90 dark:from-rose-950/50 dark:via-slate-900/60 dark:to-slate-950/80',
-        accentGlow: 'from-rose-400/30 to-orange-300/10',
-        blobPath: 'M 30,30 C 70,12 125,20 150,55 C 170,85 160,125 125,140 C 85,152 30,135 15,100 C 5,70 12,40 30,30 Z',
-      },
-      render3DIcon: () => (
-        <div className="relative w-28 h-28 sm:w-32 sm:h-32 flex items-center justify-center filter drop-shadow-md">
-          <div className="absolute inset-2 bg-gradient-to-tr from-rose-300/30 via-orange-200/30 to-amber-200/20 rounded-full blur-lg" />
-          <svg viewBox="0 0 160 160" className="w-full h-full relative z-10">
-            <defs>
-              <linearGradient id="clocheDomeGrad" x1="0.2" y1="0" x2="0.8" y2="1">
-                <stop offset="0%" stopColor="#ffe4e6" />
-                <stop offset="30%" stopColor="#f43f5e" />
-                <stop offset="70%" stopColor="#e11d48" />
-                <stop offset="100%" stopColor="#9f1239" />
-              </linearGradient>
-              <linearGradient id="silverPlateGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#ffffff" />
-                <stop offset="40%" stopColor="#fed7aa" />
-                <stop offset="100%" stopColor="#fb923c" />
-              </linearGradient>
-            </defs>
-
-            {/* Layered Organic Serving Platter */}
-            <ellipse cx="80" cy="120" rx="64" ry="24" fill="#fed7aa" opacity="0.65" />
-            <ellipse cx="80" cy="115" rx="58" ry="20" fill="url(#silverPlateGrad)" stroke="#f97316" strokeWidth="1.5" />
-
-            {/* 3D Cloche Dome */}
-            <g transform="translate(0, -6)">
-              {/* Knob */}
-              <circle cx="80" cy="46" r="8" fill="#fda4af" stroke="#be123c" strokeWidth="1.5" />
-              <rect x="77" y="52" width="6" height="5" fill="#be123c" />
-
-              {/* Dome */}
-              <path
-                d="M 32,100 C 32,60 52,56 80,56 C 108,56 128,60 128,100 Z"
-                fill="url(#clocheDomeGrad)"
-                stroke="#ffe4e6"
-                strokeWidth="1.5"
-                filter="drop-shadow(0 4px 6px rgba(159, 18, 57, 0.3))"
-              />
-              {/* Specular Highlight */}
-              <path d="M 45,95 C 45,72 58,66 75,64" fill="none" stroke="#ffffff" strokeWidth="3.5" strokeLinecap="round" opacity="0.6" />
-
-              {/* Rim */}
-              <ellipse cx="80" cy="100" rx="49" ry="9" fill="#e11d48" stroke="#ffe4e6" strokeWidth="1.5" />
-            </g>
-
-            {/* Crossed Fork and Knife */}
-            <g transform="translate(80, 85) rotate(-35) scale(0.65)">
-              {/* Knife */}
-              <path d="M -4,-35 L 4,-35 L 4,10 L 1,35 L -1,35 L -4,10 Z" fill="#ffffff" stroke="#94a3b8" strokeWidth="1.5" />
-            </g>
-            <g transform="translate(80, 85) rotate(35) scale(0.65)">
-              {/* Fork */}
-              <path d="M -6,-35 L -6,-15 L -2,-15 L -2,35 L 2,35 L 2,-15 L 6,-15 L 6,-35 Z" fill="#ffffff" stroke="#94a3b8" strokeWidth="1.5" />
-            </g>
-          </svg>
-        </div>
-      ),
-    },
-
-    // 4. الرحلات (Middle-Left)
+    // 3. الرحلات (Middle-Left)
     {
       id: 'trips',
       titleAr: 'الرحلات',
@@ -344,7 +271,7 @@ export const Organic3DDashboard: React.FC<Organic3DDashboardProps> = ({
       ),
     },
 
-    // 5. الملاحظات (Middle-Right)
+    // 4. الملاحظات (Middle-Right)
     {
       id: 'notes',
       titleAr: 'الملاحظات',
@@ -420,7 +347,7 @@ export const Organic3DDashboard: React.FC<Organic3DDashboardProps> = ({
       ),
     },
 
-    // 6. الرياضة (Bottom-Center)
+    // 5. الرياضة (Bottom-Center)
     {
       id: 'sports',
       titleAr: 'الرياضة',
@@ -565,41 +492,29 @@ export const Organic3DDashboard: React.FC<Organic3DDashboardProps> = ({
           />
         </div>
 
-        {/* ROW 2: [الطعام] (بارز يميناً بانسيابية مميزة) */}
-        <div className="flex justify-end pr-1 sm:pr-4">
-          <div className="w-full sm:w-[85%]">
-            <OrganicCardButton
-              card={cards[2]}
-              onClick={() => onNavigate(cards[2].id)}
-              align="full"
-              isProminent
-            />
-          </div>
-        </div>
-
-        {/* ROW 3: [الرحلات] (يساراً) + [الملاحظات] (يميناً) */}
+        {/* ROW 2: [الرحلات] (يساراً) + [الملاحظات] (يميناً) */}
         <div className="grid grid-cols-2 gap-3.5">
-          {/* 4. الرحلات */}
+          {/* 3. الرحلات */}
           <OrganicCardButton
-            card={cards[3]}
-            onClick={() => onNavigate(cards[3].id)}
+            card={cards[2]}
+            onClick={() => onNavigate(cards[2].id)}
             align="right"
           />
 
-          {/* 5. الملاحظات */}
+          {/* 4. الملاحظات */}
           <OrganicCardButton
-            card={cards[4]}
-            onClick={() => onNavigate(cards[4].id)}
+            card={cards[3]}
+            onClick={() => onNavigate(cards[3].id)}
             align="left"
           />
         </div>
 
-        {/* ROW 4: [الرياضة] (أسفل المنتصف) */}
+        {/* ROW 3: [الرياضة] (أسفل المنتصف) */}
         <div className="flex justify-center pt-1 pb-4">
           <div className="w-full sm:w-[85%]">
             <OrganicCardButton
-              card={cards[5]}
-              onClick={() => onNavigate(cards[5].id)}
+              card={cards[4]}
+              onClick={() => onNavigate(cards[4].id)}
               align="center"
               isProminent
             />

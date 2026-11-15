@@ -11,7 +11,6 @@ import {
   DollarSign,
   FileText,
   GraduationCap,
-  Utensils,
   ShieldCheck,
   Cloud,
   X,
@@ -101,12 +100,6 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
           icon: GraduationCap,
           color: 'text-violet-500 bg-violet-500/10 border-violet-500/20',
         };
-      case 'food':
-        return {
-          label: isAr ? 'المطبخ' : 'Kitchen',
-          icon: Utensils,
-          color: 'text-rose-500 bg-rose-500/10 border-rose-500/20',
-        };
       case 'security':
         return {
           label: isAr ? 'الخزنة والأمان' : 'Security',
@@ -160,11 +153,6 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
       id: 'education',
       label: isAr ? 'التعليم' : 'Education',
       count: notifications.filter((n) => n.category === 'education').length,
-    },
-    {
-      id: 'food',
-      label: isAr ? 'المطبخ' : 'Kitchen',
-      count: notifications.filter((n) => n.category === 'food').length,
     },
     {
       id: 'security',

@@ -108,18 +108,6 @@ export const DEFAULT_DASHBOARD_MODULES: DashboardModuleItem[] = [
     descriptionEn: 'Multi-model AI suite: Gemini, ChatGPT, Claude with tool selector.',
   },
   {
-    id: 'food',
-    nameAr: 'المطبخ وقائمة المشتريات',
-    nameEn: 'Food & Shopping',
-    category: 'primary',
-    visible: true,
-    order: 7,
-    iconName: 'UtensilsCrossed',
-    color: 'orange',
-    descriptionAr: 'أنظمة كيتو، الطيبات، وصفات عائلية، وقائمة مشتريات ذكية مدمجة.',
-    descriptionEn: 'Diets (Keto, Tayyibat, Sports), meal macros & sync to shopping list.',
-  },
-  {
     id: 'trips',
     nameAr: 'الرحلات ومقارنة النقل الذكي',
     nameEn: 'Smart Trips',
@@ -152,10 +140,12 @@ export class DashboardLayoutRepository {
     }
 
     // Ensure all default modules exist in saved settings (merge gracefully)
-    const existingIds = new Set(raw.modules.map((m: DashboardModuleItem) => m.id));
+    // [food removed] purge legacy 'food' entries from layouts saved by older builds
+    const legacyModules = raw.modules.filter((m: DashboardModuleItem) => m.id !== 'food');
+    const existingIds = new Set(legacyModules.map((m: DashboardModuleItem) => m.id));
     const missing = DEFAULT_DASHBOARD_MODULES.filter((d) => !existingIds.has(d.id));
 
-    const combinedModules = [...raw.modules, ...missing].sort(
+    const combinedModules = [...legacyModules, ...missing].sort(
       (a: DashboardModuleItem, b: DashboardModuleItem) => a.order - b.order
     );
 
