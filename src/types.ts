@@ -57,6 +57,8 @@ export interface TickerPreferences {
   newsCategories?: string[]; // تصنيفات الأخبار المعروضة في شريط الأخبار: general, politics, arab, egypt, accidents, middle_east, sports — فارغة = إخفاء الأخبار
   tickerNewsCount?: number; // [ticker-count] عدد الأخبار المعروضة من كل تصنيف في شريط الأخبار (مثلًا 10 أو 20 خبر)
   showNationalTeam?: boolean; // [national-team] إظهار منتخب البلد (منتخب مصر) — تاب خاص + أخبار المنتخب في تاب الرياضة
+  showTablesTab?: boolean; // [tables-fixtures-tabs] إظهار تاب الجداول والترتيب (الدوري المصري + التصفيات) في لوحة أخبار الرئيسية
+  showFixturesTab?: boolean; // [tables-fixtures-tabs] إظهار تاب مواعيد المباريات المهمة (محلية وعالمية) في لوحة أخبار الرئيسية
   customCryptos?: {
     id: string;
     name: string;

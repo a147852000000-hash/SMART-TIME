@@ -387,6 +387,9 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
     tickerNewsCount: userProfile.tickerPreferences?.tickerNewsCount ?? 5,
     // [national-team] إظهار منتخب البلد في تاب الرياضة (افتراضيًا مفعّل)
     showNationalTeam: userProfile.tickerPreferences?.showNationalTeam ?? true,
+    // [tables-fixtures-tabs] تابا الجداول والمواعيد في لوحة أخبار الرئيسية (افتراضيًا ظاهران)
+    showTablesTab: userProfile.tickerPreferences?.showTablesTab ?? true,
+    showFixturesTab: userProfile.tickerPreferences?.showFixturesTab ?? true,
     speed: 'slow',
     // [ticker-direction] اتجاه حركة الشريط (افتراضيًا لليمين) — القيمة المحفوظة تُطبّق بعدها
     direction: 'right',
@@ -1687,6 +1690,48 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
                           type="checkbox"
                           checked={tickerPrefs.showNationalTeam !== false}
                           onChange={(e) => setTickerPrefs({ ...tickerPrefs, showNationalTeam: e.target.checked })}
+                          className="w-4 h-4 rounded cursor-pointer accent-emerald-500"
+                        />
+                      </div>
+
+                      {/* [tables-fixtures-tabs] تاب الجداول والترتيب في لوحة أخبار الرئيسية */}
+                      <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">🏆</span>
+                          <div>
+                            <span className="font-bold block text-[12px] text-slate-900 dark:text-white">
+                              {isAr ? 'تاب الجداول والترتيب (الرئيسية)' : 'Standings Tab (Home)'}
+                            </span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                              {isAr ? 'جدول الدوري المصري وجدول تصفيات كأس العالم أو كأس أمم أفريقيا داخل لوحة أخبار الرئيسية' : 'Egyptian league & qualifiers tables inside the home news panel'}
+                            </span>
+                          </div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={tickerPrefs.showTablesTab !== false}
+                          onChange={(e) => setTickerPrefs({ ...tickerPrefs, showTablesTab: e.target.checked })}
+                          className="w-4 h-4 rounded cursor-pointer accent-emerald-500"
+                        />
+                      </div>
+
+                      {/* [tables-fixtures-tabs] تاب مواعيد المباريات المهمة في لوحة أخبار الرئيسية */}
+                      <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">📅</span>
+                          <div>
+                            <span className="font-bold block text-[12px] text-slate-900 dark:text-white">
+                              {isAr ? 'تاب مواعيد المباريات (الرئيسية)' : 'Fixtures Tab (Home)'}
+                            </span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                              {isAr ? 'مواعيد المباريات المهمة المحلية والعالمية: الدوري المصري، منتخب مصر، فريقك المفضل، وكبار الأندية العالمية' : 'Key local & world fixtures: Egyptian league, Egypt NT, your club & top world clubs'}
+                            </span>
+                          </div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={tickerPrefs.showFixturesTab !== false}
+                          onChange={(e) => setTickerPrefs({ ...tickerPrefs, showFixturesTab: e.target.checked })}
                           className="w-4 h-4 rounded cursor-pointer accent-emerald-500"
                         />
                       </div>

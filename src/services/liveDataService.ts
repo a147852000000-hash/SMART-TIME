@@ -163,6 +163,37 @@ export async function fetchFootballTeam(name: string): Promise<FootballTeamSumma
   }
 }
 
+// ==================== [fixtures-tab] مواعيد المباريات المهمة المحلية والعالمية ====================
+export interface FootballFixtureItem {
+  id?: number | string;
+  date?: string | null;      // ISO/UTC من المزود
+  dateEvent?: string | null; // التاريخ الخام YYYY-MM-DD
+  timeEvent?: string | null; // وقت البداية من المزود
+  status?: string | null;
+  home: string;
+  away: string;
+  homeLatin?: string;
+  awayLatin?: string;
+  homeLogo?: string;
+  awayLogo?: string;
+  league?: string;
+  kind: 'local' | 'world' | 'national' | 'fav';
+}
+
+/** مواعيد مباريات مهمة مجتمعة: الدوري المصري والأهلي والزمالك ومنتخب مصر وكبار العالم + فريقك المفضل */
+export async function fetchFootballFixtures(fav?: string, max: number = 24): Promise<FootballFixtureItem[]> {
+  try {
+    const q = new URLSearchParams({ max: String(max) });
+    if (fav) q.set('fav', fav);
+    const res = await fetch(apiUrl(`/api/live/football/fixtures?${q.toString()}`), { headers: { ...authHeaders() } });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.fixtures) ? data.fixtures : [];
+  } catch {
+    return [];
+  }
+}
+
 /** أخبار فريق أو منتخب محدد (Google News RSS مجاني عبر السيرفر) */
 export async function fetchTeamNews(team: string): Promise<LiveNewsArticle[]> {
   try {

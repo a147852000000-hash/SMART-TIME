@@ -2360,6 +2360,46 @@ const AR_TEAM_NAMES: Record<string, string> = {
   "south sudan": "جنوب السودان", "sao tome and principe": "ساو تومي وبرينسيبي",
   "libya": "ليبيا", "eritrea": "إريتريا", "central african republic": "أفريقيا الوسطى",
   "burundi": "بوروندي", "malawi": "مالاوي", "niger": "النيجر",
+  // [fixtures-tab] أندية عالمية ومنافسون شائعون — تاب مواعيد المباريات المهمة
+  "real madrid": "ريال مدريد", "barcelona": "برشلونة", "fc barcelona": "برشلونة",
+  "atletico madrid": "أتلتيكو مدريد", "atletico": "أتلتيكو مدريد",
+  "sevilla": "إشبيلية", "sevilla fc": "إشبيلية", "real betis": "ريال بيتيس", "betis": "ريال بيتيس",
+  "villarreal": "فياريال", "valencia": "فالنسيا", "celta vigo": "سلتا فيغو", "celta": "سلتا فيغو",
+  "athletic bilbao": "أتلتيك بلباو", "real sociedad": "ريال سوسييداد",
+  "girona": "جيرونا", "osasuna": "أوساسونا", "getafe": "خيتافي", "rayo vallecano": "رايو فاييكانو",
+  "mallorca": "مايوركا", "alaves": "ألافيس", "elche": "إلتشي", "levante": "ليفانتي",
+  "cadiz": "قادش", "granada": "غرناطة", "eibar": "إيبار", "espanyol": "إسبانيول",
+  "liverpool": "ليفربول", "manchester city": "مانشستر سيتي", "man city": "مانشستر سيتي",
+  "manchester united": "مانشستر يونايتد", "man united": "مانشستر يونايتد",
+  "arsenal": "آرسنال", "chelsea": "تشيلسي", "tottenham": "توتنهام", "tottenham hotspur": "توتنهام",
+  "newcastle": "نيوكاسل", "newcastle united": "نيوكاسل", "west ham": "وست هام",
+  "aston villa": "أستون فيلا", "everton": "إيفرتون", "brighton": "برايتون",
+  "wolves": "وولفرهامبتون", "fulham": "فولهام", "crystal palace": "كريستال بالاس",
+  "brentford": "برينتفورد", "nottingham forest": "نوتنغهام فورست", "bournemouth": "بورنموث",
+  "leeds": "ليدز", "leeds united": "ليدز", "burnley": "بيرنلي", "sunderland": "سندرلاند",
+  "bayern munich": "بايرن ميونخ", "bayern": "بايرن ميونخ",
+  "borussia dortmund": "بوروسيا دورتموند", "dortmund": "دورتموند",
+  "rb leipzig": "لايبزيغ", "bayer leverkusen": "باير ليفركوزن", "leverkusen": "ليفركوزن",
+  "eintracht frankfurt": "أينتراخت فرانكفورت", "frankfurt": "فرانكفورت",
+  "paris saint germain": "باريس سان جيرمان", "paris saint-germain": "باريس سان جيرمان",
+  "paris sg": "باريس سان جيرمان", "psg": "باريس سان جيرمان",
+  "marseille": "مارسيليا", "olympique marseille": "مارسيليا", "lyon": "ليون", "monaco": "موناكو",
+  "lille": "ليل", "nice": "نيس", "rennes": "رين", "lens": "لانس",
+  "inter": "إنتر ميلان", "inter milan": "إنتر ميلان", "internazionale": "إنتر ميلان",
+  "juventus": "يوفنتوس", "ac milan": "ميلان", "milan": "ميلان", "napoli": "نابولي",
+  "roma": "روما", "as roma": "روما", "lazio": "لاتسيو", "atalanta": "أتالانتا",
+  "fiorentina": "فيورنتينا", "bologna": "بولونيا", "torino": "تورينو",
+  "venezia": "فينيسيا", "parma": "بارما", "lecce": "لتشي", "cagliari": "كالياري",
+  "verona": "هيلاس فيرونا", "genoa": "جنوى", "como": "كومو", "sassuolo": "ساسوولو", "pisa": "بيزا", "cremonese": "كريمونيسي",
+  "koln": "كولن", "cologne": "كولن", "freiburg": "فرايبورغ", "union berlin": "يونيون برلين",
+  "wolfsburg": "فولفسبورغ", "mainz": "ماينتس", "augsburg": "أوغسبورغ", "st pauli": "سانت باولي",
+  "heidenheim": "هايدنهايم", "hamburg": "هامبورغ", "werder bremen": "فيردر بريمن", "hoffenheim": "هوفنهايم", "bochum": "بوخوم",
+  "celtic": "سلتيك", "rangers": "رينجرز", "club brugge": "كلوب بروج", "ajax": "أياكس", "psv": "آيندهوفن", "psv eindhoven": "آيندهوفن", "feyenoord": "فينورد", "az alkmaar": "ألكمار",
+  "benfica": "بنفيكا", "porto": "بورتو", "sporting cp": "سبورتينغ لشبونة", "galatasaray": "غلطة سراي", "fenerbahce": "فنربخشة", "besiktas": "بشكتاش", "olympiacos": "أولمبياكوس", "red bull salzburg": "ريد بول سالزبورغ", "shakhtar donetsk": "شاختار دونيتسك", "dynamo kyiv": "دينامو كييف", "slavia praha": "سلافيا براغ", "qarabag": "قره باغ", "kairat": "كيرات",
+  "pafos": "بافوس", "union saint-gilloise": "يونيون سانت جيلواز", "athletic club": "أتلتيك بلباو",
+  "al hilal": "الهلال", "al nassr": "النصر", "al ittihad fc": "الاتحاد السعودي",
+  "al ahli saudi": "الأهلي السعودي", "al shabab": "الشباب", "al qadsiah": "القادسية",
+  "al ettifaq": "الاتفاق", "al fateh": "الفتح", "al riyadh": "الرياض", "al okhdood": "الأخدود", "al kholood": "الخلود", "damac": "ضمك", "neom": "نيوم", "al najma": "النجمة", "al ain": "العين الإماراتي",
 };
 // خريطة أسماء البطولات الإنجليزية → العربية
 const AR_LEAGUE_NAMES: Record<string, string> = {
@@ -2375,6 +2415,29 @@ const AR_LEAGUE_NAMES: Record<string, string> = {
   "FIFA World Cup, Qualification CAF": "تصفيات كأس العالم – أفريقيا",
   "FIFA World Cup Qualifiers Africa": "تصفيات كأس العالم – أفريقيا",
   "Arab Club Champions Cup": "كأس العرب للأندية",
+  // [fixtures-tab] أسماء البطولات العالمية — تاب مواعيد المباريات المهمة
+  "Spanish La Liga": "الدوري الإسباني",
+  "English Premier League": "الدوري الإنجليزي الممتاز",
+  "French Ligue 1": "الدوري الفرنسي",
+  "German Bundesliga": "الدوري الألماني",
+  "Italian Serie A": "الدوري الإيطالي",
+  "Saudi-Arabian Pro League": "الدوري السعودي",
+  "Saudi Arabian Pro League": "الدوري السعودي",
+  "UEFA Champions League": "دوري أبطال أوروبا",
+  "AFC Champions League Elite": "دوري أبطال آسيا النخبة",
+  "AFC Champions League Two": "دوري أبطال آسيا الثاني",
+  "AFC Champions League": "دوري أبطال آسيا",
+  "UEFA Europa League": "الدوري الأوروبي",
+  "UEFA Conference League": "دوري المؤتمر الأوروبي",
+  "FIFA Club World Cup": "كأس العالم للأندية",
+  "Club Friendlies": "مباريات ودية",
+  "Friendlies": "مباريات ودية",
+  "Copa del Rey": "كأس ملك إسبانيا",
+  "FA Cup": "كأس الاتحاد الإنجليزي",
+  "English League Cup": "كأس الرابطة الإنجليزية",
+  "Italian Coppa Italia": "كأس إيطاليا",
+  "German DFB Pokal": "كأس ألمانيا",
+  "Kings Cup": "كأس الملك السعودي",
 };
 function arabicTeamName(name?: string): string | undefined {
   if (!name) return undefined;
@@ -2631,6 +2694,164 @@ app.get("/api/live/football/team", async (req, res) => {
     const stale = getCache<any>(cacheKey, true);
     if (stale) return res.json({ ...stale.value, status: "FALLBACK", stale: true });
     return res.status(404).json({ source: "thesportsdb", error: (error as Error)?.message });
+  }
+});
+
+// ==================== [fixtures-tab] مواعيد المباريات المهمة المحلية والعالمية ====================
+// تجميع مجاني 100% من TheSportsDB (نفس المفتاح التجريبي المجاني المستخدم أعلاه):
+//   • محلية: مباريات الدوري المصري القادمة + الأهلي والزمالك
+//   • منتخب مصر: مبارياته القادمة (تصفيات كأس أمم أفريقيا الجارية وغيرها)
+//   • عالمية: ريال مدريد، برشلونة، ليفربول، مان سيتي، آرسنال، تشيلسي، بايرن ميونخ،
+//     باريس سان جيرمان، إنتر، يوفنتوس، الهلال السعودي
+//   • فريقك المفضل (اختياري عبر ?fav=)
+// كاش مستقل لكل فريق 60 دقيقة حتى لا نتجاوز حد المفتاح المجاني (30 طلب/دقيقة)،
+// وكاش للقائمة المجمعة 15 دقيقة مع قفل منع التكرار المتزامن.
+const FIXTURES_TEAM_IDS: { id: string; kind: "local" | "world" | "national" }[] = [
+  { id: "138995", kind: "local" },    // الأهلي
+  { id: "138997", kind: "local" },    // الزمالك
+  { id: "136138", kind: "national" }, // منتخب مصر
+  { id: "133738", kind: "world" },    // ريال مدريد
+  { id: "133739", kind: "world" },    // برشلونة
+  { id: "133602", kind: "world" },    // ليفربول
+  { id: "133613", kind: "world" },    // مانشستر سيتي
+  { id: "133604", kind: "world" },    // آرسنال
+  { id: "133610", kind: "world" },    // تشيلسي
+  { id: "133664", kind: "world" },    // بايرن ميونخ
+  { id: "133714", kind: "world" },    // باريس سان جيرمان
+  { id: "133681", kind: "world" },    // إنتر ميلان
+  { id: "133676", kind: "world" },    // يوفنتوس
+  { id: "136013", kind: "world" },    // الهلال (السعودية)
+];
+const fixturesInFlight: Map<string, Promise<any>> = new Map();
+const fixturesSleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// توحيد شكل مباراة قادمة من TheSportsDbEvent بأسماء عربية
+function mapUpcomingFixture(e: any, kind: string, fallbackLeague?: string) {
+  const m = arabizeTheSportsDbEvent(e);
+  if (!m || !m.teams?.home?.name || !m.teams?.away?.name) return null;
+  return {
+    id: m.fixture?.id,
+    date: m.fixture?.date,
+    dateEvent: e?.dateEvent || null,
+    timeEvent: e?.strTime || null,
+    status: m.fixture?.status?.short || "NS",
+    home: m.teams.home.name,
+    away: m.teams.away.name,
+    homeLatin: m.teams.home.latinName,
+    awayLatin: m.teams.away.latinName,
+    homeLogo: m.teams.home.logo,
+    awayLogo: m.teams.away.logo,
+    league: m.league?.name || fallbackLeague || "",
+    kind,
+  };
+}
+// مواعيد فريق واحد (كاش 60 دقيقة لكل فريق+نوع حتى لا يتعارض شارة فريقك المفضل مع القائمة الثابتة) — الفشل يعيد الكاش القديم أو قائمة فارغة
+async function fetchTeamFixturesCached(teamId: string, kind: string): Promise<any[]> {
+  const key = `football:fixtures:team:v1:${teamId}:${kind}`;
+  const fresh = getCache<any[]>(key);
+  if (fresh) return fresh.value;
+  try {
+    const data = await fetchJson(`${TSD_FREE_BASE}/eventsnext.php?id=${teamId}`);
+    const events = Array.isArray(data?.events) ? data.events.slice(0, 3) : [];
+    const mapped = events.map((e: any) => mapUpcomingFixture(e, kind)).filter(Boolean);
+    setCache(key, mapped, 60 * 60_000);
+    return mapped;
+  } catch {
+    const stale = getCache<any[]>(key, true);
+    return stale ? stale.value : [];
+  }
+}
+// معرف فريقك المفضل عبر البحث المجاني (كاش 24 ساعة — المعرفات ثابتة)
+async function resolveFavTeamId(name: string): Promise<string | null> {
+  const key = `football:teamid:v1:${name.toLowerCase()}`;
+  const fresh = getCache<string>(key);
+  if (fresh) return fresh.value;
+  try {
+    const term = englishTeamForSearch(name);
+    const search = await fetchJson(`${TSD_FREE_BASE}/searchteams.php?t=${encodeURIComponent(term)}`);
+    const teams = Array.isArray(search?.teams) ? search.teams : [];
+    const team = teams.find((t: any) => String(t?.strSport) === "Soccer") || teams[0];
+    if (!team?.idTeam) throw new Error("لم يتم العثور على الفريق");
+    setCache(key, String(team.idTeam), 24 * 60 * 60_000);
+    return String(team.idTeam);
+  } catch {
+    return null;
+  }
+}
+// مواعيد الدوري المصري القادمة (كاش 60 دقيقة)
+async function fetchEgyptLeagueFixturesCached(): Promise<any[]> {
+  const key = "football:fixtures:league:v1:egypt-next";
+  const fresh = getCache<any[]>(key);
+  if (fresh) return fresh.value;
+  try {
+    const data = await fetchJson(`${TSD_FREE_BASE}/eventsnextleague.php?id=${EGYPT_LEAGUE_ID}`);
+    const events = Array.isArray(data?.events) ? data.events.slice(0, 6) : [];
+    const mapped = events.map((e: any) => mapUpcomingFixture(e, "local", "الدوري المصري")).filter(Boolean);
+    setCache(key, mapped, 60 * 60_000);
+    return mapped;
+  } catch {
+    const stale = getCache<any[]>(key, true);
+    return stale ? stale.value : [];
+  }
+}
+app.get("/api/live/football/fixtures", async (req, res) => {
+  const fav = String(req.query.fav || "").trim();
+  const max = Math.min(Math.max(Number(req.query.max) || 24, 6), 40);
+  const cacheKey = `football:fixtures:v1:${fav ? fav.toLowerCase() : "none"}:${max}`;
+  const fresh = getCache<any>(cacheKey);
+  if (fresh) return res.json({ ...fresh.value, cache: "HIT" });
+  const existing = fixturesInFlight.get(cacheKey);
+  if (existing) {
+    try { return res.json({ ...(await existing), cache: "DEDUP" }); } catch { return res.json({ source: "thesportsdb", fixtures: [] }); }
+  }
+  const job = (async () => {
+    const [leagueUpcoming] = await Promise.all([fetchEgyptLeagueFixturesCached()]);
+    await fixturesSleep(250);
+    // فريقك المفضل أولًا (يحصل على شارة ⭐ وحسم التكرار لصالحه)
+    let favList: any[] = [];
+    if (fav && isValidTeamQuery(fav)) {
+      const favId = await resolveFavTeamId(fav);
+      if (favId) favList = await fetchTeamFixturesCached(favId, "fav");
+    }
+    await fixturesSleep(250);
+    // باقي الفرق على دفعات صغيرة متباعدة — احترام حد المفتاح المجاني (30 طلب/دقيقة)
+    const grouped: any[] = [];
+    for (let i = 0; i < FIXTURES_TEAM_IDS.length; i += 3) {
+      const batch = FIXTURES_TEAM_IDS.slice(i, i + 3);
+      const lists = await Promise.all(batch.map((t) => fetchTeamFixturesCached(t.id, t.kind)));
+      for (const l of lists) grouped.push(...l);
+      await fixturesSleep(300);
+    }
+    // دمج + حسم التكرار (نسخة فريقك المفضل أولًا) + ترتيب زمني
+    const seen = new Set<string>();
+    const fixtures = [...favList, ...leagueUpcoming, ...grouped]
+      .filter((f: any) => {
+        const k = String(f?.id || `${f?.home}-${f?.away}-${f?.dateEvent}`);
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      })
+      .sort((a: any, b: any) => String(a?.date || "").localeCompare(String(b?.date || "")))
+      .slice(0, max);
+    return {
+      source: "thesportsdb",
+      fetchedAt: new Date().toISOString(),
+      count: fixtures.length,
+      fixtures,
+      status: fixtures.length ? "LIVE" : "EMPTY",
+    };
+  })();
+  fixturesInFlight.set(cacheKey, job);
+  try {
+    const payload = await job;
+    setCache(cacheKey, payload, 15 * 60_000);
+    setServiceStatus("football", "LIVE", "thesportsdb", `fixtures: ${payload.status}`);
+    return res.json({ ...payload, cache: "MISS" });
+  } catch (error) {
+    const stale = getCache<any>(cacheKey, true);
+    if (stale) return res.json({ ...stale.value, status: "FALLBACK", stale: true });
+    return res.status(502).json({ source: "thesportsdb", fixtures: [], error: (error as Error)?.message });
+  } finally {
+    fixturesInFlight.delete(cacheKey);
   }
 });
 

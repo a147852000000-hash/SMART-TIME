@@ -654,7 +654,8 @@ export default function App() {
 
           {currentView === 'dashboard' && (
             <div className="mt-4">
-              <LiveNewsPanel language={language} compact />
+              {/* [tables-fixtures-tabs] تمرير بيانات المستخدم: تابا الجداول والمواعيد + فريقه المفضل */}
+              <LiveNewsPanel language={language} compact user={userProfile} />
             </div>
           )}
         </main>
