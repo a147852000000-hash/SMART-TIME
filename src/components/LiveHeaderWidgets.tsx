@@ -731,7 +731,7 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
               >
                 <Newspaper className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                 <span className="font-bold text-xs">{i === 0 ? catLabel : (catMeta?.emoji || '📰')}</span>
-                <span className="text-xs text-slate-800 dark:text-slate-200 font-medium max-w-[210px] truncate">
+                <span className="text-xs text-slate-800 dark:text-slate-200 font-medium">
                   {article.title}
                 </span>
               </button>
@@ -860,14 +860,19 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
 
   return (
     <>
-      {/* حاوية شريط الأخبار: زر الشعار الثابت على اليمين مع بقاء حركة الشريط */}
+      {/* حاوية شريط الأخبار: زر الشعار الثابت مع بقاء حركة الشريط
+          [ticker-direction] عند اختيار لليسار ينعكس الهيدر كاملاً: الشعار والسهم على اليسار */}
       <div
-        className="relative w-full overflow-hidden select-none flex items-center bg-slate-50/90 dark:bg-slate-900/90 border-y border-slate-200/70 dark:border-slate-800/70 rounded-xl"
+        className={`relative w-full overflow-hidden select-none flex items-center bg-slate-50/90 dark:bg-slate-900/90 border-y border-slate-200/70 dark:border-slate-800/70 rounded-xl ${
+          tickerDirection === 'left' ? 'flex-row-reverse' : ''
+        }`}
         id="live-ticker-strip-container"
         dir="rtl"
       >
-        {/* أيقونة الشعار الرسمية الفاخرة الثابتة على اليمين */}
-        <div className="z-20 shrink-0 flex items-center px-2 py-0.5 bg-slate-100/95 dark:bg-slate-900/95 border-l border-slate-200/80 dark:border-slate-800/80 shadow-2xs">
+        {/* أيقونة الشعار الرسمية الفاخرة الثابتة — يمين (افتراضي) أو يسار حسب الاتجاه المختار */}
+        <div className={`z-20 shrink-0 flex items-center px-2 py-0.5 bg-slate-100/95 dark:bg-slate-900/95 shadow-2xs ${
+          tickerDirection === 'left' ? 'border-r border-slate-200/80 dark:border-slate-800/80' : 'border-l border-slate-200/80 dark:border-slate-800/80'
+        }`}>
           <button
             onClick={onGoHome}
             className={`flex items-center justify-center p-1 px-2 rounded-xl transition-all shadow-xs active:scale-95 shrink-0 ${
@@ -886,12 +891,16 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
             />
           </button>
           
-          {/* سهم اتجاه الحركة متجهاً لليمين */}
+          {/* سهم اتجاه الحركة — يعكس اتجاهه حسب إعداد المستخدم */}
           <div
             className="me-1.5 flex items-center justify-center text-accent-500 font-bold select-none"
-            title={isAr ? 'حركة شريط الأخبار والأسعار لليمين' : 'Live news moving right'}
+            title={isAr
+              ? (tickerDirection === 'left' ? 'حركة شريط الأخبار والأسعار لليسار' : 'حركة شريط الأخبار والأسعار لليمين')
+              : (tickerDirection === 'left' ? 'Live news moving left' : 'Live news moving right')}
           >
-            <ArrowRight className="w-3.5 h-3.5 text-accent-500 animate-pulse shrink-0 stroke-[2.5]" />
+            {tickerDirection === 'left'
+              ? <ArrowLeft className="w-3.5 h-3.5 text-accent-500 animate-pulse shrink-0 stroke-[2.5]" />
+              : <ArrowRight className="w-3.5 h-3.5 text-accent-500 animate-pulse shrink-0 stroke-[2.5]" />}
           </div>
         </div>
 
@@ -924,9 +933,13 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
               : 'Customized Live Ticker — Press to hold, click any item for details'
           }
         >
-          {/* تدرج تلاشي ناعم بجانب زر الشعار في اليمين */}
+          {/* تدرج تلاشي ناعم بجانب الشعار — ينتقل معه لليسار عند عكس الاتجاه */}
           <div
-            className="absolute top-0 bottom-0 right-0 z-10 w-4 pointer-events-none bg-gradient-to-l from-slate-100 dark:from-slate-900 to-transparent"
+            className={`absolute top-0 bottom-0 z-10 w-4 pointer-events-none from-slate-100 dark:from-slate-900 to-transparent ${
+              tickerDirection === 'left'
+                ? 'left-0 bg-gradient-to-r'
+                : 'right-0 bg-gradient-to-l'
+            }`}
           />
 
           {/* شريط التحريك — [ticker-direction] الاتجاه حسب إعداد المستخدم: لليمين animate-marquee-right أو لليسار animate-marquee-left */}
