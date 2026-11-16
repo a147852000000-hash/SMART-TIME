@@ -378,6 +378,8 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
     favoriteTeam: userProfile.tickerPreferences?.favoriteTeam || userProfile.tickerPreferences?.favoriteEgyptianTeam || 'الأهلي',
     silverUnit: '999',
     goldUnit: '24',
+    // [gold-multi] اختيار متعدد للعيارات المعروضة في الشريط — القيمة المحفوظة تُطبّق بعدها
+    goldUnits: [],
     selectedCryptos: ['BTC', 'ETH', 'SOL'],
     // [news-categories] افتراضيًا كل تصنيفات الأخبار مفعّلة في الشريط (سياسية/عربية/مصرية/حوادث/الشرق الأوسط/رياضة)
     newsCategories: [...ALL_NEWS_CATEGORY_IDS],
@@ -393,6 +395,29 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
   };
 
   const [tickerPrefs, setTickerPrefs] = useState<TickerPreferences>(initialTicker);
+
+  // [gold-multi] اختيار متعدد لعيارات الذهب: أي عيار أو مجموعة أو جميعهم
+  // التوافق مع الإعداد القديم goldUnit: قائمة فارغة = عيار goldUnit الواحد، 'all' = جميع العيارات
+  const ALL_GOLD_IDS = MOCK_GOLD_KARAT_RATES.map((g) => g.id);
+  const goldUnitsSel: string[] = (tickerPrefs.goldUnits && tickerPrefs.goldUnits.length > 0)
+    ? tickerPrefs.goldUnits
+    : (tickerPrefs.goldUnit === 'all' ? [...ALL_GOLD_IDS] : [tickerPrefs.goldUnit || '24']);
+
+  const applyGoldUnits = (next: string[]) => {
+    const safe = next.length === 0 ? ['21'] : next; // عيار واحد على الأقل
+    setTickerPrefs({
+      ...tickerPrefs,
+      goldUnits: safe,
+      // مزامنة الحقل القديم لتوافق باقي أجزاء التطبيق
+      goldUnit: (safe.length === ALL_GOLD_IDS.length ? 'all' : safe[0]) as any,
+    });
+  };
+  const toggleGoldUnit = (id: string) => {
+    applyGoldUnits(goldUnitsSel.includes(id) ? goldUnitsSel.filter((g) => g !== id) : [...goldUnitsSel, id]);
+  };
+  const toggleAllGoldUnits = () => {
+    applyGoldUnits(goldUnitsSel.length === ALL_GOLD_IDS.length ? [] : [...ALL_GOLD_IDS]);
+  };
 
   // حالة البحث عن العملات الرقمية عبر الإنترنت
   const [cryptoSearchQuery, setCryptoSearchQuery] = useState('');
@@ -1447,53 +1472,67 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
 
                   {tickerPrefs.showGold && (
                     <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400 shrink-0">
-                          {isAr ? 'العيار المعتمد:' : 'Selected Unit:'}
+                      {/* [gold-multi] اختيار متعدد: أي عيار أو مجموعة أو جميعهم */}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400">
+                          {isAr
+                            ? `العيارات المعروضة في الشريط (${goldUnitsSel.length} من ${ALL_GOLD_IDS.length}):`
+                            : `Karats shown in ticker (${goldUnitsSel.length} of ${ALL_GOLD_IDS.length}):`}
                         </span>
-                        <select
-                          value={tickerPrefs.goldUnit || '24'}
-                          onChange={(e) =>
-                            setTickerPrefs({
-                              ...tickerPrefs,
-                              goldUnit: e.target.value as any,
-                            })
-                          }
-                          className="flex-1 p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-bold text-[11px] text-slate-900 dark:text-white"
+                        <button
+                          type="button"
+                          onClick={toggleAllGoldUnits}
+                          className="px-2 py-1 rounded-lg text-[10px] font-bold bg-accent-500/10 dark:bg-accent-500/20 text-accent-700 dark:text-accent-300 border border-accent-300 dark:border-accent-700 hover:bg-accent-500/20 transition-all shrink-0"
                         >
-                          <option value="all">{isAr ? '🌟 عرض كافة العيارات والجنيه (بالتناوب)' : '🌟 All Karats & Pound (Rotating)'}</option>
-                          {MOCK_GOLD_KARAT_RATES.map((g) => (
-                            <option key={g.id} value={g.id}>
-                              {isAr
-                                ? `${g.nameAr} (${g.priceEgp ? `${g.priceEgp.toLocaleString()} ج.م` : `$${g.priceUsd}`})`
-                                : `${g.nameEn} (${g.priceEgp ? `${g.priceEgp.toLocaleString()} EGP` : `$${g.priceUsd}`})`}
-                            </option>
-                          ))}
-                        </select>
+                          {isAr
+                            ? (goldUnitsSel.length === ALL_GOLD_IDS.length ? 'إلغاء الكل' : '🌟 اختيار الكل')
+                            : (goldUnitsSel.length === ALL_GOLD_IDS.length ? 'Clear all' : '🌟 Select all')}
+                        </button>
                       </div>
 
-                      {/* شارة توضيحية للعيار المختار */}
-                      {tickerPrefs.goldUnit !== 'all' && (
-                        <div className="p-2 rounded-xl bg-accent-50 dark:bg-accent-950/30 border border-accent-200 dark:border-accent-800/60 flex items-center justify-between text-[10px]">
-                          {(() => {
-                            const found = MOCK_GOLD_KARAT_RATES.find((g) => g.id === (tickerPrefs.goldUnit || '24'));
-                            if (!found) return null;
-                            return (
-                              <>
-                                <span className="font-bold text-accent-900 dark:text-accent-200 truncate">
-                                  {isAr ? found.nameAr : found.nameEn}
-                                </span>
-                                <span className="font-mono font-extrabold text-accent-700 dark:text-accent-300">
-                                  {found.priceEgp ? `${found.priceEgp.toLocaleString()} ج.م` : `$${found.priceUsd}`}
-                                  <span className="text-[9px] text-emerald-600 dark:text-emerald-400 ms-1 font-sans">
-                                    (+{found.change24h} ج.م)
-                                  </span>
-                                </span>
-                              </>
-                            );
-                          })()}
-                        </div>
-                      )}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                        {MOCK_GOLD_KARAT_RATES.map((g) => {
+                          const active = goldUnitsSel.includes(g.id);
+                          return (
+                            <button
+                              key={g.id}
+                              type="button"
+                              onClick={() => toggleGoldUnit(g.id)}
+                              className={`p-1.5 rounded-lg border text-start transition-all ${
+                                active
+                                  ? 'bg-accent-500/15 border-accent-500 shadow-xs'
+                                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-accent-400/60'
+                              }`}
+                              title={isAr ? g.titleAr : g.titleEn}
+                            >
+                              <span className={`flex items-center gap-1 text-[10px] font-bold truncate ${active ? 'text-accent-800 dark:text-accent-200' : 'text-slate-600 dark:text-slate-400'}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? 'bg-accent-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
+                                {isAr ? g.nameAr : g.nameEn}
+                              </span>
+                              <span className={`block text-[9px] font-mono mt-0.5 ${active ? 'text-accent-700 dark:text-accent-300' : 'text-slate-400'}`}>
+                                {g.priceEgp ? `${g.priceEgp.toLocaleString()} ج.م` : `$${g.priceUsd}`}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* ملخص ما سيظهر في الشريط */}
+                      <div className="p-2 rounded-xl bg-accent-50 dark:bg-accent-950/30 border border-accent-200 dark:border-accent-800/60 text-[10px]">
+                        {goldUnitsSel.length === ALL_GOLD_IDS.length ? (
+                          <span className="font-bold text-accent-900 dark:text-accent-200">
+                            {isAr ? '🌟 جميع العيارات والجنيهات والسبائك والأونصة معروضة في الشريط' : '🌟 All karats, coins, bars & ounce shown in the ticker'}
+                          </span>
+                        ) : (
+                          <span className="font-bold text-accent-900 dark:text-accent-200 truncate block">
+                            {isAr ? 'المعروض حالياً: ' : 'Currently shown: '}
+                            {goldUnitsSel.map((id) => {
+                              const found = MOCK_GOLD_KARAT_RATES.find((g) => g.id === id);
+                              return found ? (isAr ? found.nameAr : found.nameEn) : id;
+                            }).join('، ')}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

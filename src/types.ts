@@ -70,6 +70,7 @@ export interface TickerPreferences {
   }[];
   speed?: 'very_slow' | 'slow' | 'medium' | 'fast';
   direction?: 'right' | 'left'; // [ticker-direction] اتجاه انسياب حركة الشريط: لليمين (افتراضي) أو لليسار
+  goldUnits?: string[]; // [gold-multi] العيارات/المنتجات المعروضة في الشريط (اختيار متعدد: أي عيار أو جميعهم) — ids من MOCK_GOLD_KARAT_RATES
 }
 
 export interface VehiclePreferences {

@@ -349,19 +349,15 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
     return isAr ? 'متغير' : 'Variable';
   };
   
-  // أسعار الذهب حسب اختيار المستخدم مع دعم كافة العيارات والسبائك
-  const isAllGold = prefs.goldUnit === 'all';
-  const selectedGoldItems = isAllGold
-    ? [
-        liveGoldKaratRates.find((g) => g.id === '21')!,
-        liveGoldKaratRates.find((g) => g.id === '24')!,
-        liveGoldKaratRates.find((g) => g.id === '18')!,
-        liveGoldKaratRates.find((g) => g.id === 'pound')!,
-      ].filter(Boolean)
-    : [
-        liveGoldKaratRates.find((g) => g.id === (prefs.goldUnit || '21')) ||
-          MOCK_GOLD_KARAT_RATES[2],
-      ];
+  // [gold-multi] أسعار الذهب حسب اختيار المستخدم: أي عيار واحد أو مجموعة أو جميعهم
+  // التوافق مع الإعداد القديم goldUnit: 'all' = كل العيارات، أو عيار واحد — الترتيب الرسمي ثابت
+  const ALL_GOLD_IDS = MOCK_GOLD_KARAT_RATES.map((g) => g.id);
+  const goldUnitsSelected = (prefs.goldUnits && prefs.goldUnits.length > 0)
+    ? ALL_GOLD_IDS.filter((id) => prefs.goldUnits!.includes(id))
+    : (prefs.goldUnit === 'all' ? [...ALL_GOLD_IDS] : [prefs.goldUnit || '21']);
+  const selectedGoldItems = goldUnitsSelected
+    .map((id) => liveGoldKaratRates.find((g) => g.id === id))
+    .filter(Boolean) as typeof liveGoldKaratRates;
 
   // العملات المشفرة المختارة في تفضيلات المستخدم (تشمل العملات المضافة والمختارة من النت)
   const userCryptoSymbols = (prefs.selectedCryptos && prefs.selectedCryptos.length > 0)
@@ -603,7 +599,8 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
                   {isAr ? goldItem.nameAr : goldItem.nameEn}:
                 </span>
                 <span className="font-bold font-mono text-accent-950 dark:text-accent-200 text-xs sm:text-[13px]">
-                  {liveGoldGramEgp ? `${Math.round(liveGoldGramEgp * (goldItem.id === '24' ? 1 : goldItem.id === '21' ? 21/24 : goldItem.id === '18' ? 18/24 : 1)).toLocaleString()} ج.م` : (goldItem.priceEgp ? `${goldItem.priceEgp.toLocaleString()} ج.م` : `$${goldItem.priceUsd}`)}
+                  {/* [gold-multi] السعر من جدول العيارات المحسوب من التغذية الحية (صيغ صحيحة لكل عيار/منتج) */}
+                  {`${Math.round(goldItem.priceEgp || 0).toLocaleString()} ج.م`}
                 </span>
                 <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold">
                   +{goldItem.change24h}
@@ -1523,7 +1520,7 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
                   <div
                     key={item.id}
                     className={`p-2.5 rounded-2xl border transition-all flex items-center justify-between ${
-                      (prefs.goldUnit === item.id || (prefs.goldUnit === 'all' && ['24', '21', 'pound'].includes(item.id)))
+                      goldUnitsSelected.includes(item.id)
                         ? 'bg-accent-50/60 dark:bg-accent-950/30 border-accent-300 dark:border-accent-800 shadow-xs'
                         : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200/80 dark:border-slate-800'
                     }`}
@@ -1533,7 +1530,7 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
                         <span className="font-bold text-xs text-slate-900 dark:text-white">
                           {isAr ? item.nameAr : item.nameEn}
                         </span>
-                        {(prefs.goldUnit === item.id) && (
+                        {goldUnitsSelected.includes(item.id) && (
                           <span className="text-[9px] bg-accent-500 text-white font-bold px-1.5 py-0.2 rounded-md">
                             {isAr ? 'المختار' : 'Active'}
                           </span>
@@ -1561,8 +1558,8 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
               <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
               <span>
                 {isAr
-                  ? 'يمكنك تحديد العيار المفضل لديك (عيار 24، 21، 18 أو الجنيه الذهب) من نافذة الإعدادات ليظهر دائماً في الشريط.'
-                  : 'You can set your preferred gold karat or coin from settings to display permanently in the ticker.'}
+                  ? 'يمكنك تحديد أي عيار أو مجموعة عيارات أو جميعها (24، 21، 18، الجنيه الذهب، السبائك…) من نافذة الإعدادات لتظهر في الشريط.'
+                  : 'Select any karat, a group, or all of them (24K, 21K, 18K, sovereign, bars…) from settings to display in the ticker.'}
               </span>
             </div>
           </div>

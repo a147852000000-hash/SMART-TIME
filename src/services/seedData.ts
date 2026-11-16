@@ -64,6 +64,7 @@ export const DEFAULT_USER: UserProfile = {
     favoriteTeam: 'الأهلي',
     silverUnit: '999',
     goldUnit: '24',
+    goldUnits: [], // [gold-multi] فارغة = الاعتماد على goldUnit الواحد
     selectedCryptos: ['BTC', 'ETH', 'SOL'],
     speed: 'slow',
   },
