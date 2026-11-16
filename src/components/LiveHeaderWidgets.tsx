@@ -251,19 +251,40 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
     speed: 'slow',
   };
 
-  // سرعة حركة شريط الأخبار المريح
+  // [ticker-speed] سرعة الشريط مرتبطة فعلياً بمسمياتها من الهادئ إلى السريع:
+  // نتحكم في السرعة بوحدة (بكسل/ثانية) بدل المدة الثابتة، ونقيس عرض المحتوى الحقيقي
+  // ثم نحسب المدة = عرض الدورة ÷ السرعة — فلا تتغير السرعة المدركة مهما تغير عدد الأخبار
+  const TICKER_SPEED_PX_PER_SEC: Record<string, number> = {
+    very_slow: 15, // هادئ جداً — قراءة هادئة بلا استعجال
+    slow: 30,      // مريح / بطيء — سرعة القراءة المريحة
+    medium: 50,    // متوسط
+    fast: 80,      // سريع — بأسلوب شريط القنوات الإخبارية
+  };
+  const TICKER_MIN_DURATION_S = 10;      // حد أدنى لمدة الدورة
+  const TICKER_FALLBACK_DURATION_S = 60; // احتياطي قبل أول قياس للعرض
+
+  const marqueeTrackRef = useRef<HTMLDivElement | null>(null);
+  const [tickerLoopWidth, setTickerLoopWidth] = useState<number | null>(null);
+
+  // قياس دوري لعرض مسار الشريط (يتجدد تلقائياً عند تغير عدد الأخبار أو التصنيفات أو الخطوط)
+  useEffect(() => {
+    const el = marqueeTrackRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const measure = () => {
+      const w = el.scrollWidth / 2; // المحتوى مكرر مرتين (track-a + track-b) فالدورة = نصف العرض
+      if (w > 0) setTickerLoopWidth(Math.round(w));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const getTickerDuration = () => {
-    switch (prefs.speed) {
-      case 'very_slow':
-        return '55s';
-      case 'medium':
-        return '26s';
-      case 'fast':
-        return '17s';
-      case 'slow':
-      default:
-        return '38s';
-    }
+    const pxPerSec = TICKER_SPEED_PX_PER_SEC[prefs.speed || 'slow'] ?? TICKER_SPEED_PX_PER_SEC.slow;
+    if (!tickerLoopWidth || tickerLoopWidth < 50) return `${TICKER_FALLBACK_DURATION_S}s`;
+    const duration = Math.max(TICKER_MIN_DURATION_S, Math.round(tickerLoopWidth / pxPerSec));
+    return `${duration}s`;
   };
 
   const usdLive = liveMarket?.currencies?.EGP;
@@ -904,8 +925,9 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
             className="absolute top-0 bottom-0 right-0 z-10 w-4 pointer-events-none bg-gradient-to-l from-slate-100 dark:from-slate-900 to-transparent"
           />
 
-          {/* شريط التحريك المعكوس باتجاه اليمين */}
+          {/* شريط التحريك المعكوس باتجاه اليمين — [ticker-speed] مرجع القياس لضبط السرعة حسب عرض المحتوى */}
           <div
+            ref={marqueeTrackRef}
             className="flex items-center animate-marquee-right"
             style={{
               animationPlayState: isPaused ? 'paused' : 'running',
