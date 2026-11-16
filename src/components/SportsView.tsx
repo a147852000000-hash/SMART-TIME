@@ -44,6 +44,9 @@ import { StorageAdapter } from '../services/storageAdapter';
 
 interface SportsViewProps {
   user: UserProfile;
+  // [sports-nav] يسمح بفتح التاب مباشرة على قسم النتائج والجداول والأخبار
+  // (تاب الرياضة المخصص في شريط التنقل السفلي يفتح على 'news' بدل المركز الرياضي)
+  initialTab?: Tab;
 }
 
 interface ExerciseItem {
@@ -256,9 +259,10 @@ function readStorage<T>(key: string, fallback: T): T {
   }
 }
 
-export const SportsView: React.FC<SportsViewProps> = ({ user }) => {
+export const SportsView: React.FC<SportsViewProps> = ({ user, initialTab }) => {
   const isAr = user.language === 'ar';
-  const [activeTab, setActiveTab] = useState<Tab>('home');
+  // [sports-nav] initialTab='news' يفتح مباشرة على الرياضة — نتائج وجداول وأخبار
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab || 'home');
   const [exercises, setExercises] = useState<ExerciseItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [exerciseError, setExerciseError] = useState('');

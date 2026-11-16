@@ -1474,16 +1474,16 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
                     </div>
                     <input
                       type="checkbox"
-                      checked={tickerPrefs.showEgyptianLeague}
+                      checked={tickerPrefs.showFavoriteTeam !== false}
                       onChange={(e) =>
-                        setTickerPrefs({ ...tickerPrefs, showEgyptianLeague: e.target.checked })
+                        setTickerPrefs({ ...tickerPrefs, showFavoriteTeam: e.target.checked })
                       }
                       className="w-4 h-4 rounded text-emerald-600 cursor-pointer accent-emerald-500"
                     />
                   </div>
 
-                  {tickerPrefs.showEgyptianLeague && (
-                    <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2">
+                  {/* [sports-settings] إعدادات الفريق والمنتخب مرئية دائمًا — كانت مخفية خلف مفتاح الدوري المصري */}
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2">
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] font-bold text-slate-500 shrink-0">
                           {isAr ? 'فريقك المفضل:' : 'Favorite Team:'}
@@ -1568,6 +1568,27 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
                         <span className="text-[9px] opacity-75">⚽ نتائج حية في الشريط</span>
                       </div>
 
+                      {/* [sports-settings] مفتاح نتائج الدوري المصري — مستقل عن إعدادات الفريق المفضل */}
+                      <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">🇪🇬</span>
+                          <div>
+                            <span className="font-bold block text-[12px] text-slate-900 dark:text-white">
+                              {isAr ? 'نتائج الدوري المصري في الشريط' : 'Egyptian League in Ticker'}
+                            </span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                              {isAr ? 'أحدث نتائج مباريات الدوري المصري داخل شريط الأخبار' : 'Latest Egyptian league results inside the ticker'}
+                            </span>
+                          </div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={tickerPrefs.showEgyptianLeague !== false}
+                          onChange={(e) => setTickerPrefs({ ...tickerPrefs, showEgyptianLeague: e.target.checked })}
+                          className="w-4 h-4 rounded cursor-pointer accent-emerald-500"
+                        />
+                      </div>
+
                       {/* [national-team] إظهار منتخب البلد (منتخب مصر) في تاب الرياضة مع أخباره */}
                       <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
                         <div className="flex items-center gap-2">
@@ -1589,7 +1610,6 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
                         />
                       </div>
                     </div>
-                  )}
                 </div>
 
                 {/* 4. برج المستخدم اليومي */}

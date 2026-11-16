@@ -80,6 +80,7 @@ import {
   DollarSign,
   Navigation,
   Sparkles,
+  Trophy,
 } from 'lucide-react';
 
 export default function App() {
@@ -409,6 +410,8 @@ export default function App() {
     { view: 'ai' as AppView, label: language === 'ar' ? 'الذكاء' : 'AI', icon: Sparkles, highlight: true },
     { view: 'expenses' as AppView, label: language === 'ar' ? 'المصاريف' : 'Money', icon: DollarSign },
     { view: 'notes' as AppView, label: language === 'ar' ? 'الملاحظات' : 'Notes', icon: FileText },
+    // [sports-nav] تاب مخصص للرياضة — يفتح مباشرة على النتائج والجداول والأخبار
+    { view: 'sports' as AppView, label: language === 'ar' ? 'الرياضة' : 'Sports', icon: Trophy },
   ];
 
   if (servicePath === '/services/smart-ai') return <SmartAIServicePage />;
@@ -646,7 +649,7 @@ export default function App() {
           )}
 
           {currentView === 'sports' && (
-            <SportsView user={userProfile} />
+            <SportsView user={userProfile} initialTab="news" />
           )}
 
           {currentView === 'dashboard' && (
