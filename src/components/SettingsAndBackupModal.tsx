@@ -42,6 +42,8 @@ import {
   VolumeX,
   Play,
   PhoneCall,
+  ArrowRight,
+  ArrowLeft,
 } from 'lucide-react';
 import { PhonePermissionsManager } from './PhonePermissionsManager';
 import { CardCustomizerModal } from './CardCustomizerModal';
@@ -384,6 +386,8 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
     // [national-team] إظهار منتخب البلد في تاب الرياضة (افتراضيًا مفعّل)
     showNationalTeam: userProfile.tickerPreferences?.showNationalTeam ?? true,
     speed: 'slow',
+    // [ticker-direction] اتجاه حركة الشريط (افتراضيًا لليمين) — القيمة المحفوظة تُطبّق بعدها
+    direction: 'right',
     customCryptos: [],
     ...(userProfile.tickerPreferences || {}),
   };
@@ -1250,6 +1254,44 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
                       {isAr ? s.labelAr : s.labelEn}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* [ticker-direction] اختيار اتجاه حركة شريط الأخبار */}
+              <div className="p-3.5 rounded-2xl bg-accent-500/5 dark:bg-accent-500/10 border border-accent-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xl">↔️</span>
+                  <div>
+                    <span className="font-bold block text-slate-900 dark:text-white">
+                      {isAr ? 'اتجاه حركة شريط الأخبار' : 'Ticker Scroll Direction'}
+                    </span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      {isAr ? 'اختر اتجاه انسياب الأخبار والأسعار في الشريط: نحو اليمين أو نحو اليسار' : 'Choose whether the ticker flows to the right or to the left'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 self-start sm:self-auto">
+                  {[
+                    { id: 'right', labelAr: 'لليمين', labelEn: 'To the Right', Icon: ArrowRight },
+                    { id: 'left', labelAr: 'لليسار', labelEn: 'To the Left', Icon: ArrowLeft },
+                  ].map((d) => {
+                    const Icon = d.Icon;
+                    return (
+                      <button
+                        key={d.id}
+                        type="button"
+                        onClick={() => setTickerPrefs({ ...tickerPrefs, direction: d.id as any })}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 ${
+                          (tickerPrefs.direction || 'right') === d.id
+                            ? 'bg-accent-500 text-white shadow-xs'
+                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+                        }`}
+                      >
+                        <Icon className="w-3 h-3" />
+                        {isAr ? d.labelAr : d.labelEn}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 

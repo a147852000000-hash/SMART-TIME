@@ -249,6 +249,7 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
     goldUnit: '21',
     selectedCryptos: ['BTC', 'ETH', 'SOL'],
     speed: 'slow',
+    direction: 'right', // [ticker-direction] الافتراضي: الانسياب لليمين
   };
 
   // [ticker-speed] سرعة الشريط مرتبطة فعلياً بمسمياتها من الهادئ إلى السريع:
@@ -286,6 +287,9 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
     const duration = Math.max(TICKER_MIN_DURATION_S, Math.round(tickerLoopWidth / pxPerSec));
     return `${duration}s`;
   };
+
+  // [ticker-direction] اتجاه حركة الشريط حسب اختيار المستخدم: لليمين (افتراضي) أو لليسار
+  const tickerDirection = prefs.direction === 'left' ? 'left' : 'right';
 
   const usdLive = liveMarket?.currencies?.EGP;
   const usdRate = usdLive ? { ...MOCK_CURRENCY_GOLD_RATES[0], rate: usdLive } : MOCK_CURRENCY_GOLD_RATES[0];
@@ -925,10 +929,10 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
             className="absolute top-0 bottom-0 right-0 z-10 w-4 pointer-events-none bg-gradient-to-l from-slate-100 dark:from-slate-900 to-transparent"
           />
 
-          {/* شريط التحريك المعكوس باتجاه اليمين — [ticker-speed] مرجع القياس لضبط السرعة حسب عرض المحتوى */}
+          {/* شريط التحريك — [ticker-direction] الاتجاه حسب إعداد المستخدم: لليمين animate-marquee-right أو لليسار animate-marquee-left */}
           <div
             ref={marqueeTrackRef}
-            className="flex items-center animate-marquee-right"
+            className={`flex items-center ${tickerDirection === 'left' ? 'animate-marquee-left' : 'animate-marquee-right'}`}
             style={{
               animationPlayState: isPaused ? 'paused' : 'running',
               animationDuration: getTickerDuration(),

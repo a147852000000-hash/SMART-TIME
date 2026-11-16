@@ -69,6 +69,7 @@ export interface TickerPreferences {
     iconSymbol?: string;
   }[];
   speed?: 'very_slow' | 'slow' | 'medium' | 'fast';
+  direction?: 'right' | 'left'; // [ticker-direction] اتجاه انسياب حركة الشريط: لليمين (افتراضي) أو لليسار
 }
 
 export interface VehiclePreferences {
