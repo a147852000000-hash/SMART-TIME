@@ -27,6 +27,8 @@ import {
 } from "./backend/auth/webauthn.js";
 
 dotenv.config();
+// Local overrides (git-ignored): load after .env so real env vars keep priority.
+dotenv.config({ path: ".env.local" });
 
 const app = express();
 app.set("trust proxy", 1);
