@@ -453,6 +453,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
             <TextSearchLocationPicker
               mode={mode}
               onSelect={handleSelectAndClose}
+              onRequestMapPick={() => setActiveTab('map')}
               language={language}
             />
           )}

@@ -1,5 +1,6 @@
 import express from "express";
 import http from "node:http";
+import https from "node:https";
 import fs from "node:fs";
 import path from "path";
 import dotenv from "dotenv";
@@ -1707,17 +1708,68 @@ app.post("/api/transport/compare", handleTripCompare);
 // ----------------------------------------------------
 // 4B. Google Maps & Geolocation Proxy Endpoints
 // ----------------------------------------------------
+
+// Some upstream hosts (e.g. router.project-osrm.org) publish AAAA records while
+// the server has no IPv6 route — Node fetch then hangs until ETIMEDOUT instead
+// of falling back to IPv4. This helper forces IPv4 over node:https. Works the
+// same on IPv4-only production servers, so it is safe as the default path.
+function httpsGetJsonIPv4(url: string, timeoutMs = 12000, headers?: Record<string, string>): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      url,
+      { family: 4, timeout: timeoutMs, headers: { Accept: "application/json", ...headers } },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (c: Buffer) => chunks.push(c));
+        res.on("end", () => {
+          try {
+            const text = Buffer.concat(chunks).toString("utf8");
+            resolve(text ? JSON.parse(text) : null);
+          } catch (e) {
+            reject(e);
+          }
+        });
+      }
+    );
+    req.on("timeout", () => req.destroy(new Error("upstream timeout")));
+    req.on("error", reject);
+    req.end();
+  });
+}
+
 app.get("/api/maps/route", async (req, res) => {
   try {
     const from = String(req.query.from || "").trim();
     const to = String(req.query.to || "").trim();
+    const waypointsRaw = String(req.query.waypoints || "").trim();
     const valid = (v: string) => /^-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?$/.test(v);
-    if (!valid(from) || !valid(to)) return res.status(400).json({ error: "Valid from/to coordinates are required" });
 
+    // New: one request for the whole trip (pickup -> stops -> dropoff).
+    // Waypoints = "lat,lng;lat,lng;..." (2..10 points). Falls back to legacy from/to.
+    let pts: Array<[number, number]> = []; // [lat, lng]
+    if (waypointsRaw) {
+      pts = waypointsRaw
+        .split(";")
+        .map((s) => s.trim())
+        .filter((s) => valid(s))
+        .map((s) => s.split(",").map(Number) as [number, number]);
+    } else if (valid(from) && valid(to)) {
+      pts = [
+        from.split(",").map(Number) as [number, number],
+        to.split(",").map(Number) as [number, number],
+      ];
+    }
+    if (pts.length < 2 || pts.length > 10) {
+      return res.status(400).json({ error: "Valid from/to or waypoints (2..10 lat,lng points) are required" });
+    }
+
+    // TomTom (with live traffic) only for the classic 2-point trip while its key is unverified.
     const tomtomKey = process.env.TOMTOM_API_KEY;
-    if (tomtomKey) {
+    if (tomtomKey && pts.length === 2) {
       try {
-        const url = `https://api.tomtom.com/routing/1/calculateRoute/${encodeURIComponent(from)}:${encodeURIComponent(to)}/json?key=${encodeURIComponent(tomtomKey)}&routeType=fastest&traffic=true&travelMode=car&language=ar`;
+        const [fLat, fLng] = pts[0];
+        const [tLat, tLng] = pts[1];
+        const url = `https://api.tomtom.com/routing/1/calculateRoute/${fLat},${fLng}:${tLat},${tLng}/json?key=${encodeURIComponent(tomtomKey)}&routeType=fastest&traffic=true&travelMode=car&language=ar`;
         const rr = await fetch(url);
         const data = await rr.json();
         const summary = data?.routes?.[0]?.summary;
@@ -1733,14 +1785,12 @@ app.get("/api/maps/route", async (req, res) => {
       } catch {}
     }
 
-    // Development fallback: public OSRM routing. No API key required.
-    const [fromLat, fromLng] = from.split(',').map(Number);
-    const [toLat, toLng] = to.split(',').map(Number);
-    const osrm = `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson&steps=false`;
-    const or = await fetch(osrm, { headers: { "User-Agent": "SMART-TIME/25.7" } });
-    const od = await or.json();
+    // Free fallback: public OSRM routing, all waypoints in ONE request. No API key required.
+    const coordStr = pts.map(([lat, lng]) => `${lng},${lat}`).join(";");
+    const osrm = `https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&geometries=geojson&steps=false`;
+    const od = await httpsGetJsonIPv4(osrm, 15000, { "User-Agent": "SMART-TIME/25.7" });
     const route = od?.routes?.[0];
-    if (!or.ok || !route?.geometry?.coordinates?.length) return res.status(502).json({ error: "Route service unavailable" });
+    if (!route?.geometry?.coordinates?.length) return res.status(502).json({ error: "Route service unavailable" });
     res.json({
       coordinates: route.geometry.coordinates.map((p: [number, number]) => [p[1], p[0]]),
       distanceKm: Number(route.distance || 0) / 1000,
@@ -1757,7 +1807,29 @@ app.get("/api/maps/geocode", async (req, res) => {
     const address = String(req.query.address || "").trim();
     if (!address) return res.status(400).json({ error: "Address is required" });
 
-    // 1) Mapbox (مجاني بدون بطاقة دفع - أولوية أولى لو الـ Token موجود)
+    // 0) Geoapify (free 3000/day — validated in stage 1: Arabic, ~4m precision in Cairo)
+    const geoapifyKey = process.env.GEOAPIFY_API_KEY;
+    if (geoapifyKey) {
+      try {
+        const gUrl = `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(address)}&lang=ar&filter=countrycode:eg&limit=1&apiKey=${encodeURIComponent(geoapifyKey)}`;
+        const gr = await fetch(gUrl);
+        const gd = await gr.json();
+        const feat = gd?.features?.[0];
+        if (gr.ok && feat?.properties) {
+          return res.json({
+            address: feat.properties.formatted || feat.properties.name,
+            latitude: feat.properties.lat,
+            longitude: feat.properties.lon,
+            placeId: feat.properties.place_id?.toString(),
+            provider: "geoapify",
+          });
+        }
+      } catch {
+        // كمل للخيارات التانية
+      }
+    }
+
+    // 1) Mapbox (مجاني بدون بطاقة دفع - أولوية ثانية لو الـ Token موجود)
     const mapboxToken = process.env.MAPBOX_ACCESS_TOKEN || process.env.VITE_MAPBOX_ACCESS_TOKEN;
     if (mapboxToken) {
       try {
@@ -1817,6 +1889,30 @@ app.get("/api/maps/reverse-geocode", async (req, res) => {
     const lat = parseFloat(String(req.query.lat));
     const lng = parseFloat(String(req.query.lng));
     if (isNaN(lat) || isNaN(lng)) return res.status(400).json({ error: "Valid lat and lng required" });
+
+    // 0) Geoapify (free 3000/day — Arabic addresses validated in stage 1)
+    const geoapifyKey = process.env.GEOAPIFY_API_KEY;
+    if (geoapifyKey) {
+      try {
+        const gUrl = `https://api.geoapify.com/v1/geocode/reverse?lat=${lat}&lon=${lng}&lang=ar&apiKey=${encodeURIComponent(geoapifyKey)}`;
+        const gr = await fetch(gUrl);
+        const gd = await gr.json();
+        const feat = gd?.features?.[0];
+        if (gr.ok && feat?.properties) {
+          // Geoapify may prefix a placeholder house number like "0" on squares/areas — drop it.
+          const rawAddr = String(feat.properties.formatted || feat.properties.name || "").replace(/^0\s+/, "");
+          return res.json({
+            address: rawAddr,
+            latitude: lat,
+            longitude: lng,
+            placeId: feat.properties.place_id?.toString(),
+            provider: "geoapify",
+          });
+        }
+      } catch {
+        // كمل للخيارات التانية
+      }
+    }
 
     // 1) Mapbox
     const mapboxToken = process.env.MAPBOX_ACCESS_TOKEN || process.env.VITE_MAPBOX_ACCESS_TOKEN;
@@ -1881,6 +1977,30 @@ app.get("/api/maps/places-search", async (req, res) => {
   try {
     const query = String(req.query.query || "").trim();
     if (!query) return res.json({ results: [] });
+
+    // 0) Geoapify (free 3000/day — plain search costs 1 credit, cheaper than autocomplete)
+    const geoapifyKey = process.env.GEOAPIFY_API_KEY;
+    if (geoapifyKey) {
+      try {
+        const gUrl = `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(query)}&lang=ar&filter=countrycode:eg&limit=8&apiKey=${encodeURIComponent(geoapifyKey)}`;
+        const gr = await fetch(gUrl);
+        const gd = await gr.json();
+        if (gr.ok && Array.isArray(gd?.features) && gd.features.length) {
+          const results = gd.features
+            .filter((f: any) => f?.properties)
+            .map((f: any) => ({
+              address: f.properties.formatted || f.properties.name,
+              name: f.properties.name || f.properties.formatted,
+              latitude: f.properties.lat,
+              longitude: f.properties.lon,
+              placeId: f.properties.place_id?.toString(),
+            }));
+          if (results.length) return res.json({ results, provider: "geoapify" });
+        }
+      } catch {
+        // كمل للخيارات التانية
+      }
+    }
 
     // 1) Mapbox
     const mapboxToken = process.env.MAPBOX_ACCESS_TOKEN || process.env.VITE_MAPBOX_ACCESS_TOKEN;

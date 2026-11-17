@@ -69,13 +69,30 @@ export const TripsMap: React.FC<TripsMapProps> = ({
   const routeLayer = useRef<L.Polyline | null>(null);
   const clickPopupRef = useRef<L.Popup | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
-  const [mapMode, setMapMode] = useState<'street' | 'satellite' | 'terrain'>('street');
+  const [mapMode, setMapMode] = useState<'street' | 'satellite' | 'hybrid' | 'terrain' | 'dark'>('street');
   const [modeOpen, setModeOpen] = useState(false);
   const [routeInfo, setRouteInfo] = useState<{ distanceKm?: number; durationMins?: number } | null>(null);
   const isRtl = language === 'ar';
   const maptilerKey = import.meta.env.VITE_MAPTILER_API_KEY || '';
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const userLocationMarkerRef = useRef<L.CircleMarker | null>(null);
+
+  // Free-tier MapTiler styles validated on 2026-11-17 (HTTP 200 with domain allowlist):
+  // streets-v2 / satellite (pure imagery) / hybrid (imagery + labels) / outdoor-v2 / streets-v2-dark
+  const buildTileUrl = (mode: 'street' | 'satellite' | 'hybrid' | 'terrain' | 'dark') => {
+    if (!maptilerKey) {
+      if (mode === 'satellite' || mode === 'hybrid') return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+      return 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+    }
+    const styles: Record<typeof mode, string> = {
+      street: 'streets-v2',
+      satellite: 'satellite',
+      hybrid: 'hybrid',
+      terrain: 'outdoor-v2',
+      dark: 'streets-v2-dark',
+    };
+    return `https://api.maptiler.com/maps/${styles[mode]}/{z}/{x}/{y}.png?key=${maptilerKey}`;
+  };
 
   const handlersRef = useRef({ onSetPickup, onSetDropoff, onSetStop, onEditStop, onRemoveStop, isRtl });
   handlersRef.current = { onSetPickup, onSetDropoff, onSetStop, onEditStop, onRemoveStop, isRtl };
@@ -96,6 +113,7 @@ export const TripsMap: React.FC<TripsMapProps> = ({
     const tileUrl = maptilerKey
       ? `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${maptilerKey}`
       : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+    // NOTE: initial layer = buildTileUrl('street') equivalent; kept explicit here for clarity
 
     tileLayerRef.current = L.tileLayer(tileUrl, {
       maxZoom: 20,
@@ -251,9 +269,15 @@ export const TripsMap: React.FC<TripsMapProps> = ({
 
       const titleEl = document.createElement('div');
       titleEl.style.cssText = 'font-weight: 900; margin-bottom: 6px; color: #b45309; font-size: 12px;';
-      titleEl.innerHTML = `🛑 <strong>${isRtl ? 'نقطة توقف' : 'Stop'} ${idx + 1}</strong>: <span style="color:#0f172a; font-weight:600; display:block; margin-top:2px; font-size:11px;">${
-        stop.address || stop.name || ''
-      }</span>`;
+      // XSS fix: address text comes from geocoders/user input — render with textContent, never innerHTML.
+      const emojiEl = document.createElement('span');
+      emojiEl.textContent = '🛑 ';
+      const strongEl = document.createElement('strong');
+      strongEl.textContent = `${isRtl ? 'نقطة توقف' : 'Stop'} ${idx + 1}`;
+      const addrEl = document.createElement('span');
+      addrEl.style.cssText = 'color:#0f172a; font-weight:600; display:block; margin-top:2px; font-size:11px;';
+      addrEl.textContent = stop.address || stop.name || '';
+      titleEl.append(emojiEl, strongEl, document.createTextNode(': '), addrEl);
       popupDiv.appendChild(titleEl);
 
       const btnRow = document.createElement('div');
@@ -299,7 +323,7 @@ export const TripsMap: React.FC<TripsMapProps> = ({
     }
   }, [pickup, dropoff, stops, isRtl]);
 
-  // Calculate & draw route through Pickup -> Stops -> Dropoff
+  // Calculate & draw route through Pickup -> Stops -> Dropoff in ONE request
   useEffect(() => {
     const map = leafletMap.current;
     if (!map) return;
@@ -309,38 +333,21 @@ export const TripsMap: React.FC<TripsMapProps> = ({
 
     if (!pickup || !dropoff) return;
 
-    const routeLegs: Array<{ from: TripLocation; to: TripLocation }> = [];
     const allPoints = [pickup, ...stops, dropoff];
-
-    for (let i = 0; i < allPoints.length - 1; i++) {
-      routeLegs.push({ from: allPoints[i], to: allPoints[i + 1] });
-    }
+    const waypointsParam = allPoints.map((p) => `${p.latitude},${p.longitude}`).join(';');
 
     let cancelled = false;
     setRouteLoading(true);
 
-    const fetchLegs = async () => {
+    const fetchRoute = async () => {
       try {
-        let combinedCoords: [number, number][] = [];
-        let totalDistanceKm = 0;
-        let totalDurationMins = 0;
+        // One backend call for the whole trip — saves free-tier quota vs per-leg calls.
+        const res = await fetch(apiUrl(`/api/maps/route?waypoints=${encodeURIComponent(waypointsParam)}`));
+        if (!res.ok) throw new Error('Routing failed');
+        const data = await res.json();
+        if (cancelled || !data.coordinates?.length) return;
 
-        for (const leg of routeLegs) {
-          const res = await fetch(
-            apiUrl(`/api/maps/route?from=${leg.from.latitude},${leg.from.longitude}&to=${leg.to.latitude},${leg.to.longitude}`)
-          );
-          if (!res.ok) throw new Error('Leg routing failed');
-          const data = await res.json();
-          if (data.coordinates?.length) {
-            combinedCoords = [...combinedCoords, ...(data.coordinates as [number, number][])];
-            totalDistanceKm += Number(data.distanceKm || 0);
-            totalDurationMins += Number(data.durationMins || 0);
-          }
-        }
-
-        if (cancelled || !combinedCoords.length) return;
-
-        const line = L.polyline(combinedCoords, {
+        const line = L.polyline(data.coordinates as [number, number][], {
           color: '#08a7d8',
           weight: 6,
           opacity: 0.88,
@@ -350,8 +357,8 @@ export const TripsMap: React.FC<TripsMapProps> = ({
 
         routeLayer.current = line;
         map.fitBounds(line.getBounds(), { padding: [45, 45] });
-        const dist = Math.round(totalDistanceKm * 10) / 10;
-        const dur = Math.round(totalDurationMins);
+        const dist = Math.round(Number(data.distanceKm || 0) * 10) / 10;
+        const dur = Math.round(Number(data.durationMins || 0));
         setRouteInfo({
           distanceKm: dist,
           durationMins: dur,
@@ -374,32 +381,23 @@ export const TripsMap: React.FC<TripsMapProps> = ({
       }
     };
 
-    fetchLegs();
+    fetchRoute();
 
     return () => {
       cancelled = true;
     };
   }, [pickup?.latitude, pickup?.longitude, dropoff?.latitude, dropoff?.longitude, stops]);
 
-  const changeMapMode = (mode: 'street' | 'satellite' | 'terrain') => {
+  const changeMapMode = (mode: 'street' | 'satellite' | 'hybrid' | 'terrain' | 'dark') => {
     const map = leafletMap.current;
     if (!map) return;
     tileLayerRef.current?.remove();
-    const urls: Record<typeof mode, string> = maptilerKey
-      ? {
-          street: `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${maptilerKey}`,
-          satellite: `https://api.maptiler.com/maps/hybrid/{z}/{x}/{y}.jpg?key=${maptilerKey}`,
-          terrain: `https://api.maptiler.com/maps/outdoor-v2/{z}/{x}/{y}.png?key=${maptilerKey}`,
-        }
-      : {
-          street: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-          satellite: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-          terrain: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-        };
-    tileLayerRef.current = L.tileLayer(urls[mode], {
+    tileLayerRef.current = L.tileLayer(buildTileUrl(mode), {
       maxZoom: 20,
       attribution: maptilerKey
         ? '&copy; MapTiler &copy; OpenStreetMap contributors'
+        : mode === 'satellite' || mode === 'hybrid'
+        ? 'Imagery &copy; Esri, Maxar, Earthstar Geographics'
         : '&copy; OpenStreetMap contributors',
     }).addTo(map);
     setMapMode(mode);
@@ -552,13 +550,19 @@ export const TripsMap: React.FC<TripsMapProps> = ({
         {modeOpen && (
           <div className="smart-map-mode-menu">
             <button className={mapMode === 'street' ? 'active' : ''} onClick={() => changeMapMode('street')}>
-              {isRtl ? 'الخريطة' : 'Street'}
+              🗺️ {isRtl ? 'خريطة' : 'Street'}
             </button>
             <button className={mapMode === 'satellite' ? 'active' : ''} onClick={() => changeMapMode('satellite')}>
-              {isRtl ? 'القمر الصناعي' : 'Satellite'}
+              🛰️ {isRtl ? 'ساتالايت صافي' : 'Satellite'}
+            </button>
+            <button className={mapMode === 'hybrid' ? 'active' : ''} onClick={() => changeMapMode('hybrid')}>
+              🌍 {isRtl ? 'هجين (صور + أسماء)' : 'Hybrid'}
             </button>
             <button className={mapMode === 'terrain' ? 'active' : ''} onClick={() => changeMapMode('terrain')}>
-              {isRtl ? 'التضاريس' : 'Terrain'}
+              ⛰️ {isRtl ? 'تضاريس' : 'Terrain'}
+            </button>
+            <button className={mapMode === 'dark' ? 'active' : ''} onClick={() => changeMapMode('dark')}>
+              🌙 {isRtl ? 'ليلي' : 'Dark'}
             </button>
           </div>
         )}

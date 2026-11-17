@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MapPin, Loader2, X, Compass, CheckCircle2 } from 'lucide-react';
+import { Search, MapPin, Loader2, X, Compass } from 'lucide-react';
 import { TripLocation, LocationPickerMode } from './types';
 import type { Language } from '../../types';
 import { apiUrl } from '../../services/apiConfig';
@@ -7,12 +7,14 @@ import { apiUrl } from '../../services/apiConfig';
 interface TextSearchLocationPickerProps {
   mode: LocationPickerMode;
   onSelect: (location: TripLocation) => void;
+  onRequestMapPick?: () => void;
   language?: Language;
 }
 
 export const TextSearchLocationPicker: React.FC<TextSearchLocationPickerProps> = ({
   mode,
   onSelect,
+  onRequestMapPick,
   language = 'ar',
 }) => {
   const isRtl = language === 'ar';
@@ -167,15 +169,17 @@ export const TextSearchLocationPicker: React.FC<TextSearchLocationPickerProps> =
               {isRtl ? 'لم نجد مكاناً مطابقاً' : 'No places found'}
             </div>
             <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
-              {isRtl ? 'جرّب كتابة اسم معلم رئيسي أو اختر التحديد من على الخريطة' : 'Try searching with another landmark or use the map'}
+              {isRtl ? 'جرّب كتابة اسم معلم رئيسي، أو حدّد المكان بنفسك من على الخريطة' : 'Try another landmark or pick the spot on the map'}
             </p>
-            <button
-              onClick={() => handleSelectResult({ name: query, address: `${query}، القاهرة`, latitude: 30.0444, longitude: 31.2357 })}
-              className="mt-2 px-4 py-2 rounded-xl bg-accent-500/20 text-accent-300 border border-accent-500/40 text-xs font-bold hover:bg-accent-500 hover:text-white transition-all inline-flex items-center gap-1.5"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>{isRtl ? `استخدام "${query}" كعنوان` : `Use "${query}" as address`}</span>
-            </button>
+            {onRequestMapPick && (
+              <button
+                onClick={onRequestMapPick}
+                className="mt-2 px-4 py-2 rounded-xl bg-accent-500/20 text-accent-300 border border-accent-500/40 text-xs font-bold hover:bg-accent-500 hover:text-white transition-all inline-flex items-center gap-1.5"
+              >
+                <MapPin className="w-3.5 h-3.5" />
+                <span>{isRtl ? 'حدّد المكان على الخريطة' : 'Pick on map instead'}</span>
+              </button>
+            )}
           </div>
         )}
 
