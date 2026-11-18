@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, Navigation, Crosshair, Route, Loader2, Layers, Maximize2, PlusCircle, ExternalLink } from 'lucide-react';
+import { MapPin, Navigation, Crosshair, Route, Loader2, Layers, Maximize2, PlusCircle, ExternalLink, RotateCcw } from 'lucide-react';
 import { TripLocation } from './types';
 import type { Language } from '../../types';
 import { apiUrl } from '../../services/apiConfig';
@@ -18,6 +18,7 @@ interface TripsMapProps {
   onSetStop?: (location: TripLocation) => void;
   onEditStop?: (index: number) => void;
   onRemoveStop?: (index: number) => void;
+  onResetTrip?: () => void;
   onCurrentLocation?: (location: TripLocation) => void;
   onOpenGoogleMaps?: () => void;
   onRouteCalculated?: (info: { distanceKm: number; durationMins: number }) => void;
@@ -36,6 +37,15 @@ const dropoffIcon = L.divIcon({
   html: '<div class="smart-trip-marker-pin smart-trip-marker-dropoff">🏁</div>',
   iconSize: [42, 42],
   iconAnchor: [21, 38],
+});
+
+// Floating draggable "picker" pin — stays on the map as a tool; the user drags
+// it anywhere then taps it to open the set-point popup (pickup / stop / dropoff).
+const floatPinIcon = L.divIcon({
+  className: 'smart-trip-marker',
+  html: '<div style="font-size:32px; line-height:44px; text-align:center; filter: drop-shadow(0 5px 7px rgba(15,23,42,0.45)); cursor: grab;">📌</div>',
+  iconSize: [44, 44],
+  iconAnchor: [22, 42],
 });
 
 const createStopIcon = (index: number) =>
@@ -58,6 +68,7 @@ export const TripsMap: React.FC<TripsMapProps> = ({
   onSetStop,
   onEditStop,
   onRemoveStop,
+  onResetTrip,
   onCurrentLocation,
   onOpenGoogleMaps,
   onRouteCalculated,
@@ -76,6 +87,7 @@ export const TripsMap: React.FC<TripsMapProps> = ({
   const maptilerKey = import.meta.env.VITE_MAPTILER_API_KEY || '';
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const userLocationMarkerRef = useRef<L.CircleMarker | null>(null);
+  const floatPinRef = useRef<L.Marker | null>(null);
 
   // Free-tier MapTiler styles validated on 2026-11-17 (HTTP 200 with domain allowlist):
   // streets-v2 / satellite (pure imagery) / hybrid (imagery + labels) / outdoor-v2 / streets-v2-dark
@@ -125,10 +137,8 @@ export const TripsMap: React.FC<TripsMapProps> = ({
     markers.current = L.layerGroup().addTo(map);
     leafletMap.current = map;
 
-    // Interactive map click for setting pickup / stop / dropoff
-    map.on('click', async (e: L.LeafletMouseEvent) => {
-      const lat = e.latlng.lat;
-      const lng = e.latlng.lng;
+    // Shared popup for both map clicks and the floating pin — pickup / stop / dropoff.
+    const openPointPopup = async (lat: number, lng: number) => {
       let address = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 
       const container = document.createElement('div');
@@ -225,12 +235,34 @@ export const TripsMap: React.FC<TripsMapProps> = ({
       } catch {
         /* fallback to coordinates */
       }
+    };
+
+    map.on('click', (e: L.LeafletMouseEvent) => {
+      void openPointPopup(e.latlng.lat, e.latlng.lng);
     });
+
+    // Floating draggable pin — drag it anywhere, then tap it to open the set-point popup.
+    const floatPin = L.marker(center, {
+      icon: floatPinIcon,
+      draggable: true,
+      zIndexOffset: 1000,
+    }).addTo(map);
+    floatPin.bindTooltip(
+      isRtl ? 'اسحبني لأي مكان واضغط عليا لتحديد النقطة' : 'Drag me anywhere, then tap to set a point',
+      { direction: 'top', offset: [0, -36] }
+    );
+    floatPin.on('click', () => {
+      const ll = floatPin.getLatLng();
+      void openPointPopup(ll.lat, ll.lng);
+    });
+    floatPinRef.current = floatPin;
 
     setTimeout(() => map.invalidateSize(), 150);
 
     return () => {
       userLocationMarkerRef.current?.remove();
+      floatPinRef.current?.remove();
+      floatPinRef.current = null;
       map.remove();
       leafletMap.current = null;
       markers.current = null;
@@ -543,6 +575,16 @@ export const TripsMap: React.FC<TripsMapProps> = ({
               title={isRtl ? 'إضافة نقطة توقف' : 'Add Stop'}
             >
               <PlusCircle className="w-4 h-4" />
+            </button>
+          )}
+          {onResetTrip && (
+            <button
+              onClick={onResetTrip}
+              className="smart-map-tool !bg-rose-500 hover:!bg-rose-600 !text-white"
+              title={isRtl ? 'مسح النقاط وإعادة التحديد' : 'Clear points & restart'}
+              aria-label={isRtl ? 'مسح النقاط وإعادة التحديد' : 'Clear points & restart'}
+            >
+              <RotateCcw className="w-4 h-4" />
             </button>
           )}
         </div>

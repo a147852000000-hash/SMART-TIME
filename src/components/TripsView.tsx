@@ -476,6 +476,14 @@ export const TripsView: React.FC<TripsViewProps> = ({
               }}
               onEditStop={openEditStop}
               onRemoveStop={removeStop}
+              onResetTrip={() => {
+                setPickupLocation(DEFAULT_HOME);
+                setDropoffLocation(DEFAULT_WORK);
+                setStops([]);
+                setEditingStopIndex(null);
+                setComparisonData(null);
+                setComparisonError('');
+              }}
               onCurrentLocation={(loc) => {
                 setPickupLocation({
                   ...loc,
