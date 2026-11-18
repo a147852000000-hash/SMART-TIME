@@ -120,7 +120,7 @@ export const TripsMap: React.FC<TripsMapProps> = ({
       zoomControl: true,
       attributionControl: true,
       scrollWheelZoom: true,
-    }).setView(center, 12);
+    }).setView(center, 13);
 
     const tileUrl = maptilerKey
       ? `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${maptilerKey}`
@@ -129,6 +129,8 @@ export const TripsMap: React.FC<TripsMapProps> = ({
 
     tileLayerRef.current = L.tileLayer(tileUrl, {
       maxZoom: 20,
+      // Retina tiles: request z+1 and downscale — crisp Google-like rendering on high-DPI phones.
+      detectRetina: true,
       attribution: maptilerKey
         ? '&copy; MapTiler &copy; OpenStreetMap contributors'
         : '&copy; OpenStreetMap contributors',
@@ -426,6 +428,7 @@ export const TripsMap: React.FC<TripsMapProps> = ({
     tileLayerRef.current?.remove();
     tileLayerRef.current = L.tileLayer(buildTileUrl(mode), {
       maxZoom: 20,
+      detectRetina: true,
       attribution: maptilerKey
         ? '&copy; MapTiler &copy; OpenStreetMap contributors'
         : mode === 'satellite' || mode === 'hybrid'
