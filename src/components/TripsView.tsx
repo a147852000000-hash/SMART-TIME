@@ -504,7 +504,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
                 <span className="smart-trip-step-no">١</span>
                 <div>
                   <h3>نقاط الرحلة</h3>
-                  <small>اضغط أي نقطة لتعديلها · التوقفات تُحفظ مع المسار</small>
+                  <small>اضغط أي نقطة لتعديلها</small>
                 </div>
               </div>
               <div className="smart-points-flow">
@@ -528,43 +528,31 @@ export const TripsView: React.FC<TripsViewProps> = ({
               {stops.map((stop, index) => (
                 <div
                   key={stop.id || `stop-${index}`}
-                  className="relative flex items-center justify-between gap-2 p-3 rounded-2xl bg-amber-500/10 border-2 border-amber-500/40 hover:border-amber-500 text-amber-950 dark:text-amber-100 transition-all shadow-sm"
+                  className="smart-stop-row"
                   dir="rtl"
                 >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <span className="w-8 h-8 rounded-xl bg-amber-500 text-slate-950 font-black text-sm flex items-center justify-center shadow-md shrink-0">
-                      {index + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <strong className="block text-xs font-black text-amber-900 dark:text-amber-300 truncate">
-                        {stop.name || `نقطة توقف ${index + 1}`}
-                      </strong>
-                      <small className="block text-[11px] text-slate-600 dark:text-slate-300 truncate" title={stop.address}>
-                        {stop.address?.split(',')[0] || 'موقع محدد'}
-                      </small>
-                    </div>
+                  <span className="smart-stop-badge">{index + 1}</span>
+                  <div className="smart-stop-copy">
+                    <strong>{stop.name || `نقطة توقف ${index + 1}`}</strong>
+                    <small title={stop.address}>{stop.address?.split(',')[0] || 'موقع محدد'}</small>
                   </div>
-
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="smart-stop-actions">
                     <button
                       type="button"
                       onClick={() => openEditStop(index)}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-sky-500/15 hover:bg-sky-500 text-sky-700 hover:text-white border border-sky-500/30 text-xs font-black transition-all shadow-xs"
                       title={isRtl ? 'تعديل مكان نقطة التوقف' : 'Edit stop'}
+                      aria-label={isRtl ? 'تعديل نقطة التوقف' : 'Edit stop'}
                     >
-                      <Edit3 className="w-3.5 h-3.5" />
-                      <span>{isRtl ? 'تعديل' : 'Edit'}</span>
+                      <Edit3 className="w-4 h-4" />
                     </button>
-
                     <button
                       type="button"
                       onClick={() => removeStop(index)}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500 text-rose-700 hover:text-white border border-rose-500/30 text-xs font-black transition-all shadow-xs"
+                      className="danger"
                       title={isRtl ? 'حذف هذه النقطة من المسار' : 'Remove stop'}
                       aria-label={isRtl ? 'حذف نقطة التوقف' : 'Remove stop'}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>{isRtl ? 'حذف' : 'Delete'}</span>
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
@@ -574,11 +562,11 @@ export const TripsView: React.FC<TripsViewProps> = ({
               <button
                 type="button"
                 onClick={openAddStop}
-                className="flex items-center justify-center gap-2 p-3 rounded-2xl border-2 border-dashed border-amber-400 bg-amber-50/70 hover:bg-amber-100/80 text-amber-900 dark:bg-amber-950/20 dark:border-amber-600 dark:text-amber-300 font-black text-xs transition-all active:scale-98"
+                className="smart-add-stop"
                 dir="rtl"
               >
-                <Plus className="w-4 h-4 text-amber-600" />
-                <span>+ إضافة نقطة توقف إضافية</span>
+                <Plus className="w-4 h-4" />
+                <span>إضافة نقطة توقف</span>
               </button>
 
               {/* 4. نقطة النزول / الوصول */}
@@ -647,9 +635,6 @@ export const TripsView: React.FC<TripsViewProps> = ({
               </div>
               </div>
 
-              <div className="smart-hint-line">
-                أماكنك المحفوظة والتوقفات تُستخدم فورًا في أي مشوار.
-              </div>
             </section>
 
             {savingPlace && (
@@ -661,13 +646,13 @@ export const TripsView: React.FC<TripsViewProps> = ({
               </div>
             )}
 
-            {/* نوع العربة والأسعار — بطاقة خطوة ٢ */}
-            <section className="smart-trip-card mt-3" aria-label="نوع العربة والأسعار">
+            {/* العربة والأسعار + برامج النقل — بطاقة موحدة خطوة ٢ */}
+            <section className="smart-trip-card mt-3" aria-label="العربة والأسعار">
               <div className="smart-trip-card-head">
                 <span className="smart-trip-step-no">٢</span>
                 <div>
-                  <h3>نوع العربة والأسعار</h3>
-                  <small>نفس المسار · مقارنة فورية بين البرامج</small>
+                  <h3>العربة والأسعار</h3>
+                  <small>مقارنة فورية · ليست أسعارًا رسمية</small>
                 </div>
               </div>
               <div className="smart-ride-tabs">
@@ -711,36 +696,13 @@ export const TripsView: React.FC<TripsViewProps> = ({
                   <ExternalLink className="w-3.5 h-3.5 opacity-80" />
                 </button>
               </div>
-            </section>
-
-            {comparisonError && (
-              <div className="smart-trip-alert">
-                {comparisonError}
-              </div>
-            )}
-
-            {/* Provider table */}
-            <section className="smart-provider-table-card">
-              <div className="smart-provider-table-head">
-                <span className="smart-trip-step-no">٣</span>
-                <div>
-                  <h2>
-                    <Car className="inline w-5 h-5" /> برامج النقل والأسعار
-                  </h2>
-                  <p>
-                    {selectedRideType === 'Scooter'
-                      ? 'inDrive للموتوسيكل فقط'
-                      : 'أسعار تقديرية من SMART TIME وليست أسعارًا رسمية من الشركات'}
-                  </p>
+              {comparisonError && (
+                <div className="smart-trip-alert">
+                  {comparisonError}
                 </div>
-                {comparisonData && (
-                  <span>
-                    {Number(comparisonData.distanceKm || 0).toFixed(1)} كم ·{' '}
-                    {Math.round(Number(comparisonData.estimatedDurationMins || 0))} دقيقة
-                  </span>
-                )}
-              </div>
-              <div className="smart-provider-list">
+              )}
+
+              <div className="smart-provider-list smart-provider-list-merged">
                 {displayedOptions.length > 0 ? (
                   displayedOptions.map((opt) => (
                     <div className="smart-provider-row" key={opt.providerId}>

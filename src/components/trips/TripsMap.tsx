@@ -523,11 +523,11 @@ export const TripsMap: React.FC<TripsMapProps> = ({
             <p>
               {stops.length > 0
                 ? isRtl
-                  ? `المسار يمر عبر ${stops.length} نقطة توقف إضافية`
-                  : `Route includes ${stops.length} stop point(s)`
+                  ? `عبر ${stops.length} محطات توقف`
+                  : `Via ${stops.length} stop(s)`
                 : isRtl
-                ? 'خريطة تفاعلية لتحديد المسار ومحطات التوقف بدقة'
-                : 'Interactive map for routing and stops'}
+                ? 'حدد الانطلاق والوصول والمحطات بدقة'
+                : 'Plan pickup, stops and dropoff'}
             </p>
           </div>
         </div>
@@ -542,8 +542,8 @@ export const TripsMap: React.FC<TripsMapProps> = ({
       <div className="smart-map-canvas-wrap">
         <div ref={mapRef} className="smart-map-canvas" />
 
-        {/* Top Floating Controls */}
-        <div className="smart-map-top-controls smart-map-top-controls-clean">
+        {/* Side control stack — single calm column, Google-Maps-like */}
+        <div className="smart-map-side-stack">
           <button
             onClick={() => setModeOpen((v) => !v)}
             className="smart-map-tool"
@@ -561,8 +561,9 @@ export const TripsMap: React.FC<TripsMapProps> = ({
           {onAddStop && (
             <button
               onClick={onAddStop}
-              className="smart-map-tool !bg-amber-500 hover:!bg-amber-600 !text-white"
+              className="smart-map-tool"
               title={isRtl ? 'إضافة نقطة توقف' : 'Add Stop'}
+              aria-label={isRtl ? 'إضافة نقطة توقف' : 'Add Stop'}
             >
               <PlusCircle className="w-4 h-4" />
             </button>
@@ -570,7 +571,7 @@ export const TripsMap: React.FC<TripsMapProps> = ({
           {onResetTrip && (
             <button
               onClick={onResetTrip}
-              className="smart-map-tool !bg-rose-500 hover:!bg-rose-600 !text-white"
+              className="smart-map-tool"
               title={isRtl ? 'مسح النقاط وإعادة التحديد' : 'Clear points & restart'}
               aria-label={isRtl ? 'مسح النقاط وإعادة التحديد' : 'Clear points & restart'}
             >
