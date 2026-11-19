@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, Navigation, Crosshair, Route, Loader2, Layers, Maximize2, PlusCircle, ExternalLink, RotateCcw } from 'lucide-react';
+import { MapPin, Navigation, Crosshair, Route, Loader2, Layers, Maximize2, PlusCircle, RotateCcw } from 'lucide-react';
 import { TripLocation } from './types';
 import type { Language } from '../../types';
 import { apiUrl } from '../../services/apiConfig';
@@ -533,19 +533,6 @@ export const TripsMap: React.FC<TripsMapProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {onOpenGoogleMaps && (
-            <button
-              type="button"
-              onClick={onOpenGoogleMaps}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs shadow-md transition-transform active:scale-95"
-              title={isRtl ? 'فتح في تطبيق Google Maps GPS' : 'Open in Google Maps GPS'}
-            >
-              <span className="text-sm">🧭</span>
-              <span>Google Maps</span>
-              <ExternalLink className="w-3.5 h-3.5 opacity-80" />
-            </button>
-          )}
-
           <span className="smart-map-live">
             <span /> {maptilerKey ? 'MapTiler Live' : 'OpenStreetMap Live'}
           </span>

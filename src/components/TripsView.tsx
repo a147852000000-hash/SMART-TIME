@@ -21,7 +21,6 @@ import {
   Trash2,
   Edit3,
   Share2,
-  Compass,
 } from 'lucide-react';
 import { FavoritePlace, RecentTrip, TransportComparisonResult, RideType, Language } from '../types';
 import { translations } from '../services/i18n';
@@ -499,57 +498,16 @@ export const TripsView: React.FC<TripsViewProps> = ({
               language={language}
             />
 
-            {/* شريط أدوات وملاحة سريعة مع زر Google Map البارز */}
-            <section className="mt-3 flex flex-wrap items-center justify-between gap-2.5 p-3 rounded-2xl bg-slate-900 border border-slate-800 text-white shadow-xl">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
-                  <Compass className="w-5 h-5 animate-pulse" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-black text-sm text-white">{isRtl ? 'الملاحة والتطبيق' : 'Navigation & GPS'}</span>
-                    {stops.length > 0 && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold">
-                        {stops.length} {isRtl ? 'نقاط توقف إضافية' : 'stops'}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-slate-400 truncate">
-                    {isRtl ? 'انتقل إلى تطبيق Google Maps بكامل البيانات المحددة على الخريطة' : 'Open live GPS navigation in Google Maps app'}
-                  </p>
+            {/* نقاط المسار — بطاقة خطوة ١ */}
+            <section className="smart-trip-card mt-3" aria-label="نقاط الرحلة">
+              <div className="smart-trip-card-head">
+                <span className="smart-trip-step-no">١</span>
+                <div>
+                  <h3>نقاط الرحلة</h3>
+                  <small>اضغط أي نقطة لتعديلها · التوقفات تُحفظ مع المسار</small>
                 </div>
               </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={openAddStop}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs shadow-md transition-transform active:scale-95"
-                  title={isRtl ? 'إضافة نقطة توقف في المسار' : 'Add intermediate stop'}
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>{isRtl ? 'إضافة نقطة' : 'Add Stop'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={openGoogleMaps}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs shadow-lg shadow-blue-600/30 transition-transform active:scale-95 border border-blue-400/40"
-                  title={isRtl ? 'فتح المسار في تطبيق Google Maps GPS' : 'Open in Google Maps'}
-                >
-                  <span className="text-sm">🗺️</span>
-                  <span>Google map</span>
-                  <ExternalLink className="w-3.5 h-3.5 opacity-90" />
-                </button>
-              </div>
-            </section>
-
-            {/* نقاط المسار: الانطلاق، نقاط التوقف المضافة، والنزول */}
-            <section
-              className="smart-trip-search-points smart-trip-all-points mt-3"
-              dir="ltr"
-              aria-label="نقاط الرحلة ومحطات التوقف والمنزل والعمل"
-            >
+              <div className="smart-points-flow">
               {/* 1. نقطة الانطلاق */}
               <button
                 className="smart-trip-point-tab pickup"
@@ -638,8 +596,10 @@ export const TripsView: React.FC<TripsViewProps> = ({
                 </span>
                 <Crosshair className="smart-trip-point-arrow" />
               </button>
+              </div>
 
               {/* المنزل والعمل */}
+              <div className="smart-quick-places">
               <div className="smart-saved-place-wrap">
                 <button
                   className={`smart-saved-place home ${homeLocation ? 'saved' : ''}`}
@@ -685,11 +645,12 @@ export const TripsView: React.FC<TripsViewProps> = ({
                   </div>
                 )}
               </div>
-            </section>
+              </div>
 
-            <div className="smart-saved-hint">
-              المنزل والعمل ونقاط التوقف محفوظة باختيارك ويمكن إضافة أي عدد من محطات التوقف على المسار.
-            </div>
+              <div className="smart-hint-line">
+                أماكنك المحفوظة والتوقفات تُستخدم فورًا في أي مشوار.
+              </div>
+            </section>
 
             {savingPlace && (
               <div className="smart-save-action">
@@ -700,8 +661,15 @@ export const TripsView: React.FC<TripsViewProps> = ({
               </div>
             )}
 
-            {/* Three equal ride tabs + Google Map Tab */}
-            <section className="smart-ride-tabs-section">
+            {/* نوع العربة والأسعار — بطاقة خطوة ٢ */}
+            <section className="smart-trip-card mt-3" aria-label="نوع العربة والأسعار">
+              <div className="smart-trip-card-head">
+                <span className="smart-trip-step-no">٢</span>
+                <div>
+                  <h3>نوع العربة والأسعار</h3>
+                  <small>نفس المسار · مقارنة فورية بين البرامج</small>
+                </div>
+              </div>
               <div className="smart-ride-tabs">
                 {tabs.map((tab) => (
                   <button
@@ -717,44 +685,31 @@ export const TripsView: React.FC<TripsViewProps> = ({
                     <span>{tab.label}</span>
                   </button>
                 ))}
-
-                {/* تاب Google Map المباشر */}
-                <button
-                  type="button"
-                  onClick={openGoogleMaps}
-                  className="!border-blue-500/50 !bg-blue-600/10 hover:!bg-blue-600/20 !text-blue-700 dark:!text-blue-300 flex items-center justify-center gap-1.5 font-black"
-                  title="فتح تطبيق Google Maps GPS بكامل البيانات"
-                >
-                  <span className="text-base">🧭</span>
-                  <span>Google map</span>
-                </button>
               </div>
 
-              <div className="smart-ride-actions">
-                <div className="smart-ride-caption">
-                  {selectedRideType === 'Scooter'
-                    ? 'الموتوسيكل متاح عبر inDrive فقط'
-                    : 'الأسعار تقديرية من SMART TIME حسب المسافة والزمن وحالة الطريق'}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={openGoogleMaps}
-                    type="button"
-                    className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs shadow-lg shadow-blue-600/20 transition-transform active:scale-95"
-                  >
-                    <Compass className="w-4 h-4" />
-                    <span>ملاحة Google Map</span>
-                  </button>
-
-                  <button
-                    onClick={handleRunComparison}
-                    disabled={isComparing}
-                    className="smart-compare-button"
-                  >
-                    {isComparing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Car className="w-4 h-4" />}
-                    {isComparing ? 'جاري تحديث الأسعار...' : 'عرض الأسعار'}
-                  </button>
-                </div>
+              <div className="smart-ride-caption">
+                {selectedRideType === 'Scooter'
+                  ? 'الموتوسيكل متاح عبر inDrive فقط'
+                  : 'الأسعار تقديرية حسب المسافة والزمن وحالة الطريق'}
+              </div>
+              <div className="smart-cta-row">
+                <button
+                  onClick={handleRunComparison}
+                  disabled={isComparing}
+                  className="smart-compare-button"
+                >
+                  {isComparing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Car className="w-4 h-4" />}
+                  {isComparing ? 'جاري تحديث الأسعار...' : 'عرض الأسعار'}
+                </button>
+                <button
+                  onClick={openGoogleMaps}
+                  type="button"
+                  className="smart-nav-secondary"
+                  title="فتح تطبيق Google Maps GPS بكامل البيانات"
+                >
+                  🧭 ملاحة Google
+                  <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                </button>
               </div>
             </section>
 
@@ -767,9 +722,10 @@ export const TripsView: React.FC<TripsViewProps> = ({
             {/* Provider table */}
             <section className="smart-provider-table-card">
               <div className="smart-provider-table-head">
+                <span className="smart-trip-step-no">٣</span>
                 <div>
                   <h2>
-                    <Car className="inline w-5 h-5" /> برامج النقل الذكي والأسعار
+                    <Car className="inline w-5 h-5" /> برامج النقل والأسعار
                   </h2>
                   <p>
                     {selectedRideType === 'Scooter'
@@ -802,7 +758,6 @@ export const TripsView: React.FC<TripsViewProps> = ({
                             {opt.estimatedFareMin} - {opt.estimatedFareMax}
                           </b>
                           <small>{currency}</small>
-                          <em>تقديري</em>
                         </div>
                       </div>
                       <a

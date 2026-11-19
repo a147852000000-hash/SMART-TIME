@@ -396,6 +396,23 @@ html[class*="theme-"] nav button[class*="text-accent-600"] {
 .leaflet-container{font-family:inherit}.leaflet-control-attribution{font-size:9px}.leaflet-tooltip{font-family:inherit;font-weight:700}
 /* Google-like vivid rendering: boost tile saturation/contrast (scoped to trip map + location picker only) */
 .smart-map-canvas .leaflet-tile-pane,.smart-picker-map .leaflet-tile-pane{filter:saturate(1.35) contrast(1.1) brightness(1.02)}
+
+/* Trips — professional step-card layout (design pass 2026-11-18) */
+.smart-trip-card{background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:13px;display:flex;flex-direction:column;gap:10px;box-shadow:0 5px 16px rgba(15,23,42,.05)}
+.smart-trip-card-head{display:flex;align-items:center;gap:10px;padding-bottom:9px;border-bottom:1px dashed #e2e8f0}
+.smart-trip-step-no{width:27px;height:27px;flex:0 0 27px;border-radius:9px;background:#e9fbff;color:#087f9e;font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center;border:1px solid #bdebf4}
+.smart-trip-card-head h3{margin:0;font-size:14px;font-weight:950;color:#0f172a;line-height:1.2}
+.smart-trip-card-head small{display:block;font-size:10px;color:#94a3b8;font-weight:700;margin-top:2px}
+.smart-points-flow{display:flex;flex-direction:column;gap:8px}
+.smart-points-flow>*{width:100%}
+.smart-points-flow .smart-trip-point-tab,.smart-points-flow>button{cursor:pointer}
+.smart-quick-places{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.smart-hint-line{text-align:center;color:#94a3b8;font-size:10px;font-weight:700;padding-top:2px}
+.smart-cta-row{display:flex;gap:9px}
+.smart-cta-row .smart-compare-button{flex:1;justify-content:center;min-height:47px;border-radius:14px;font-size:13px}
+.smart-nav-secondary{display:flex;align-items:center;justify-content:center;gap:7px;border:1.5px solid #bfdbfe;background:#eff6ff;color:#1d4ed8;border-radius:14px;padding:10px 14px;font-size:12px;font-weight:900;white-space:nowrap;cursor:pointer;transition:transform .05s}
+.smart-nav-secondary:active{transform:scale(.97)}
+@media(max-width:640px){.smart-trip-card{padding:11px;border-radius:18px;gap:9px}.smart-cta-row{flex-direction:column}.smart-cta-row .smart-compare-button{width:100%}.smart-nav-secondary{width:100%}.smart-trip-step-no{width:24px;height:24px;flex-basis:24px;font-size:12px}}
 @media (max-width:640px){.smart-trips-map-head{padding:14px}.smart-trips-map-head h2{font-size:16px}.smart-map-live{font-size:9px}.smart-map-canvas-wrap{height:330px}.smart-picker{height:520px}.smart-picker-footer{flex-direction:column;align-items:stretch}.smart-picker-footer button{width:100%}}
 
 /* SMART TIME Trips — simplified light UX */
