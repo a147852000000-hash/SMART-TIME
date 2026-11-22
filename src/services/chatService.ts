@@ -148,6 +148,12 @@ class ChatService {
     }
   }
 
+  // Current connection state — lets views initialize from the real state
+  // instead of missing the one-shot connection_status event emitted at page load.
+  isConnected(): boolean {
+    return !!(this.ws && this.ws.readyState === WebSocket.OPEN);
+  }
+
   // API helper
   private async request(path: string, options: RequestInit = {}) {
     const headers: Record<string, string> = {

@@ -19,7 +19,6 @@ import {
   UserPlus,
   X,
   Hash,
-  Lock,
   Globe,
   Pin,
   VolumeX,
@@ -43,8 +42,6 @@ import {
   Play,
   UserCheck,
   Contact,
-  ArrowRight,
-  ArrowLeft,
   Navigation2,
   ShieldCheck,
   Shield,
@@ -85,6 +82,23 @@ import { SavedMessagesModal } from './SavedMessagesModal';
 import { AddMemberModal } from './AddMemberModal';
 import { chatService } from '../services/chatService';
 import { getStoredSession } from '../services/authService';
+
+// Fallback avatar used when a room image fails to load (prevents broken alt-text overlay)
+const FALLBACK_ROOM_AVATAR =
+  'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=120&auto=format&fit=crop&q=80';
+
+// Unified chat time formatter — deterministic "10:10 م" / "10:10 PM" with Latin
+// digits. Fixes the broken RTL output ("PM ١٠:١٠") caused by locale-dependent
+// toLocaleTimeString on Arabic systems.
+export const formatChatTime = (value?: string | number | Date, isAr = true): string => {
+  if (!value) return '';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return '';
+  const h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2, '0');
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return isAr ? `${h12}:${m} ${h < 12 ? 'ص' : 'م'}` : `${h12}:${m} ${h < 12 ? 'AM' : 'PM'}`;
+};
 
 interface HotChatViewProps {
   language: Language;
@@ -136,7 +150,10 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
   // Rooms State
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [loadingRooms, setLoadingRooms] = useState(true);
-  const [activeRoomId, setActiveRoomId] = useState<string>('room_family');
+  // Empty by default: the real first room is selected after loadRooms() resolves.
+  // Previously defaulted to 'room_family' which triggered 403 fetch errors on
+  // every startup when that legacy room no longer exists.
+  const [activeRoomId, setActiveRoomId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [messageSearchQuery, setMessageSearchQuery] = useState('');
   const [showMessageSearch, setShowMessageSearch] = useState(false);
@@ -180,6 +197,8 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
 
   // Typing debounce timer
   const typingTimerRef = useRef<any>(null);
+  // Auto-clear timers for "user is typing" indicators (room.id -> timeout handle)
+  const typingTimeoutsRef = useRef<Record<string, any>>({});
 
   // Messages Stream container ref
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -282,7 +301,15 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
   // Window state
   const [isFloating, setIsFloating] = useState(false);
   const [mobileShowChat, setMobileShowChat] = useState(false);
-  const [isWsConnected, setIsWsConnected] = useState(false);
+  // Initialize from the service's real state: the connection_status event fires
+  // once at page load, before this view mounts, so it would otherwise be missed.
+  const [isWsConnected, setIsWsConnected] = useState<boolean>(() => {
+    try {
+      return chatService.isConnected();
+    } catch {
+      return false;
+    }
+  });
 
   const presetAvatars = [
     { url: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=120&auto=format&fit=crop&q=80', label: 'عائلة 🏡' },
@@ -384,10 +411,7 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
             return {
               ...r,
               lastMessage: message.text || message.body || 'رسالة جديدة',
-              lastMessageTime: new Date(message.timestamp || message.createdAt).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              }),
+              lastMessageTime: formatChatTime(message.timestamp || message.createdAt, isAr),
               unreadCount: isCurrentActive ? 0 : (r.unreadCount || 0) + 1,
             };
           }
@@ -465,8 +489,13 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
       });
     });
 
-    // User typing
+    // User typing — with auto-clear guard: if the "stopped typing" event is
+    // lost (tab closed, network drop), the indicator must not stay forever.
     const unsubTyping = chatService.on('user_typing', ({ roomId, userName, isTyping }) => {
+      if (typingTimeoutsRef.current[roomId]) {
+        clearTimeout(typingTimeoutsRef.current[roomId]);
+        delete typingTimeoutsRef.current[roomId];
+      }
       setTypingUsers((prev) => {
         if (!isTyping) {
           const next = { ...prev };
@@ -475,6 +504,16 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
         }
         return { ...prev, [roomId]: userName };
       });
+      if (isTyping) {
+        typingTimeoutsRef.current[roomId] = setTimeout(() => {
+          setTypingUsers((prev) => {
+            const next = { ...prev };
+            delete next[roomId];
+            return next;
+          });
+          delete typingTimeoutsRef.current[roomId];
+        }, 6000);
+      }
     });
 
     // Room created / updated / deleted
@@ -527,6 +566,9 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
       unsubRoomCreated();
       unsubRoomDeleted();
       unsubPresence();
+      // Clear any pending typing auto-clear timers
+      Object.values(typingTimeoutsRef.current).forEach((tm) => clearTimeout(tm));
+      typingTimeoutsRef.current = {};
     };
   }, [activeRoomId, isAr]);
 
@@ -961,8 +1003,18 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
                 <h2 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white tracking-wide">
                   {isAr ? 'المحادثات المباشرة' : 'Live Chat Suite'}
                 </h2>
-                <div className="flex items-center gap-1.5 text-[10px] text-emerald-500 font-semibold">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <div
+                  className={`flex items-center gap-1.5 text-[10px] font-semibold ${
+                    isWsConnected
+                      ? 'text-emerald-500'
+                      : 'text-amber-500'
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      isWsConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+                    }`}
+                  />
                   <span>
                     {isWsConnected
                       ? isAr
@@ -1056,21 +1108,8 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
             />
           </div>
 
-          {/* Back to Home Button */}
-          {onNavigateHome && (
-            <button
-              type="button"
-              onClick={() => onNavigateHome()}
-              id="chat-back-to-home-btn"
-              className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-white dark:bg-slate-900 border border-sky-500/30 text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-slate-800 hover:border-sky-500/60 text-xs font-bold transition-all active:scale-[0.98]"
-              title={isAr ? 'الرجوع إلى الواجهة الرئيسية' : 'Back to Home'}
-            >
-              {isAr ? <ArrowRight className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4" />}
-              <span>{isAr ? 'الرجوع إلى الواجهة الرئيسية' : 'Back to Home'}</span>
-            </button>
-          )}
-
-          {/* Tabs: الكل | الخاص | الغرف */}
+          {/* Tabs: الكل | الخاص | الغرف — زر "الرجوع للرئيسية" أُزيل لأنه مكرر:
+              التنقل للرئيسية متاح عبر شريط التنقل السفلي */}
           <div className="grid grid-cols-3 gap-1 bg-slate-200/60 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
             {[
               { id: 'all', label: isAr ? 'الكل' : 'All' },
@@ -1117,7 +1156,14 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
                   <div className="relative shrink-0">
                     <img
                       src={room.avatar}
-                      alt={room.title || room.name}
+                      alt={room.title || room.name || (isAr ? 'غرفة محادثة' : 'Chat room')}
+                      onError={(e) => {
+                        const img = e.currentTarget;
+                        if (!img.dataset.fbk) {
+                          img.dataset.fbk = '1';
+                          img.src = FALLBACK_ROOM_AVATAR;
+                        }
+                      }}
                       className="w-12 h-12 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shadow-xs"
                     />
                     {room.isOnline && (
@@ -1190,7 +1236,14 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
             <div className="relative shrink-0">
               <img
                 src={activeRoom.avatar}
-                alt={activeRoom.title || activeRoom.name}
+                alt={activeRoom.title || activeRoom.name || (isAr ? 'غرفة محادثة' : 'Chat room')}
+                onError={(e) => {
+                  const img = e.currentTarget;
+                  if (!img.dataset.fbk) {
+                    img.dataset.fbk = '1';
+                    img.src = FALLBACK_ROOM_AVATAR;
+                  }
+                }}
                 className="w-10 h-10 rounded-2xl object-cover border border-sky-500/30 shadow-xs"
               />
               {activeRoom.isOnline && (
@@ -1198,25 +1251,33 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
               )}
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-sm text-slate-900 dark:text-white truncate">
-                  {activeRoom.title || activeRoom.name}
-                </h3>
-                <span className="px-1.5 py-0.5 rounded text-[9px] bg-sky-500/15 text-sky-600 dark:text-sky-400 font-bold border border-sky-500/30 flex items-center gap-1 shrink-0">
-                  <Lock className="w-2.5 h-2.5" />
-                  <span>Realtime DB</span>
-                </span>
-              </div>
-              <p className="text-[11px] text-emerald-500 font-semibold flex items-center gap-1.5 truncate">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white truncate">
+                {activeRoom.title || activeRoom.name}
+              </h3>
+              {/* حالة صادقة مرتبطة باتصال الـWS الفعلي — أُزيلت شارة "Realtime DB" الخاصة بالمطوّر
+                  وعبارات "حفظ لحظي / Real-time DB sync" المضللة */}
+              <p
+                className={`text-[11px] font-semibold flex items-center gap-1.5 truncate ${
+                  isWsConnected ? 'text-emerald-500' : 'text-amber-500'
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    isWsConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+                  }`}
+                />
                 <span>
                   {typingUsers[activeRoomId]
                     ? isAr
                       ? `${typingUsers[activeRoomId]} يكتب الآن... ✍️`
                       : `${typingUsers[activeRoomId]} is typing... ✍️`
+                    : isWsConnected
+                    ? isAr
+                      ? 'متصل الآن'
+                      : 'Connected'
                     : isAr
-                    ? 'متصل الآن • حفظ لحظي'
-                    : 'Online • Real-time DB sync'}
+                    ? 'جاري إعادة الاتصال...'
+                    : 'Reconnecting...'}
                 </span>
               </p>
             </div>
@@ -1635,10 +1696,7 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
                             <span className="opacity-75">{isAr ? '(معدلة)' : '(edited)'}</span>
                           )}
                           <span>
-                            {new Date(msg.timestamp || msg.createdAt || '').toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
+                            {formatChatTime(msg.timestamp || msg.createdAt, isAr)}
                           </span>
                           {msg.isOutgoing && (
                             <span title={msg.status === 'read' ? 'مقروءة' : 'تم الإرسال'}>

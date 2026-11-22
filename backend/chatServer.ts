@@ -27,6 +27,19 @@ export function isUserOnline(userId: string): boolean {
   return onlineUserIds.has(userId);
 }
 
+// Unified chat time display — deterministic "10:10 م" style with Latin digits.
+// Replaced locale-dependent toLocaleTimeString('ar-EG') which produced
+// Arabic-Indic digits that broke RTL rendering alongside the client formatter.
+function formatChatTime(d: Date = new Date()): string {
+  const h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2, '0');
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${m} ${h < 12 ? 'ص' : 'م'}`;
+}
+
+// Hard limit for message text length (protects SQLite rows & WS broadcast size)
+const MAX_MESSAGE_LENGTH = 4000;
+
 // Helpers to broadcast
 export function broadcastToRoom(roomId: string, payload: any, excludeWs?: WebSocket) {
   const clients = roomSubscriptions.get(roomId);
@@ -808,6 +821,14 @@ chatRouter.post('/rooms/:roomId/messages', (req, res) => {
       return res.status(400).json({ error: 'نص الرسالة أو المرفق مطلوب' });
     }
 
+    // [SECURITY] Enforce server-side message length limit — previously unlimited,
+    // allowing arbitrarily large payloads into SQLite and WS broadcasts.
+    if (messageText.length > MAX_MESSAGE_LENGTH) {
+      return res.status(400).json({
+        error: `الرسالة طويلة جدًا — الحد الأقصى ${MAX_MESSAGE_LENGTH} حرف`,
+      });
+    }
+
     const access = verifyConversationAccess(user.id, roomId);
     if (!access.allowed && !access.isPublic) {
       return res.status(403).json({ error: 'ليس لديك صلاحية الإرسال في هذه الغرفة' });
@@ -842,9 +863,9 @@ chatRouter.post('/rooms/:roomId/messages', (req, res) => {
       now
     );
 
-    // Update conversation last message
-    const previewText = type === 'image' ? '📷 صورة' : type === 'voice' ? '🎙️ رسالة صوتية' : type === 'file' ? '📁 ملف' : messageText;
-    const timeDisplay = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    // Update conversation last message (preview truncated for a clean sidebar)
+    const previewText = type === 'image' ? '📷 صورة' : type === 'voice' ? '🎙️ رسالة صوتية' : type === 'file' ? '📁 ملف' : messageText.slice(0, 140);
+    const timeDisplay = formatChatTime();
     db.prepare(`
       UPDATE conversations
       SET last_message = ?, last_message_time = ?, updated_at = ?
@@ -1090,6 +1111,18 @@ chatRouter.post('/saved-messages/:messageId', (req, res) => {
 
     const { messageId } = req.params;
     const now = new Date().toISOString();
+
+    // [SECURITY] Access check: a user may only save messages from conversations
+    // they actually have access to. Previously any authenticated user could save
+    // an arbitrary message id and later read its content via their saved list.
+    const msg = db.prepare('SELECT conversation_id FROM messages WHERE id = ?').get(messageId) as any;
+    if (!msg) {
+      return res.status(404).json({ error: 'الرسالة غير موجودة' });
+    }
+    const access = verifyConversationAccess(user.id, msg.conversation_id);
+    if (!access.allowed && !access.isPublic) {
+      return res.status(403).json({ error: 'لا تملك صلاحية حفظ رسائل هذه المحادثة' });
+    }
 
     db.prepare(`
       INSERT OR IGNORE INTO saved_messages (user_id, message_id, saved_at)

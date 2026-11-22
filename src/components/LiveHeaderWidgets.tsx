@@ -46,6 +46,18 @@ import {
   getGregorianDate,
 } from '../utils/liveInfoHelpers';
 
+// Deterministic number formatting for ticker values — kills raw floats like
+// "71.13045920679839" / "SAR:14.361600000000001" in the UI.
+const fmtRate = (v: number | undefined | null): string => {
+  if (v == null || !Number.isFinite(Number(v))) return '—';
+  return Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 });
+};
+const fmtPct = (v: number | undefined | null): string => {
+  if (v == null || !Number.isFinite(Number(v))) return '—%';
+  const n = Number(v);
+  return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
+};
+
 interface LiveHeaderWidgetsProps {
   user: UserProfile;
   language: Language;
@@ -574,7 +586,7 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
               {isAr ? 'الفضة' : 'Silver'} ({selectedSilver.karat}):
             </span>
             <span className="font-bold font-mono text-slate-900 dark:text-white text-xs sm:text-[13px]">
-              {prefs.silverUnit === 'ounce' ? `$${selectedSilver.rateUsd}` : `${selectedSilver.rateEgp} ج.م`}
+              {prefs.silverUnit === 'ounce' ? `$${fmtRate(selectedSilver.rateUsd)}` : `${fmtRate(selectedSilver.rateEgp)} ج.م`}
             </span>
             <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold">
               +{selectedSilver.change}%
@@ -762,7 +774,7 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
                       : 'text-rose-500'
                   }`}
                 >
-                  {cryptoCoin.change24h >= 0 ? `+${cryptoCoin.change24h}%` : `${cryptoCoin.change24h}%`}
+                  {fmtPct(cryptoCoin.change24h)}
                 </span>
               </button>
               <span className="text-slate-300 dark:text-slate-700 font-normal">/</span>
@@ -784,7 +796,7 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
               USD:
             </span>
             <span className="font-bold font-mono text-slate-900 dark:text-white text-xs sm:text-[13px]">
-              {usdRate.rate}
+              {fmtRate(usdRate.rate)}
             </span>
           </button>
 
@@ -799,7 +811,7 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
               SAR:
             </span>
             <span className="font-bold font-mono text-slate-900 dark:text-white text-xs sm:text-[13px]">
-              {sarRate.rate}
+              {fmtRate(sarRate.rate)}
             </span>
           </button>
 
@@ -814,7 +826,7 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
               AED:
             </span>
             <span className="font-bold font-mono text-slate-900 dark:text-white text-xs sm:text-[13px]">
-              {aedRate.rate}
+              {fmtRate(aedRate.rate)}
             </span>
           </button>
 
@@ -1002,10 +1014,10 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
                   </div>
                   <div className="text-end">
                     <div className="font-bold font-mono text-xs text-slate-900 dark:text-white">
-                      {item.rateUsd ? `$${item.rateUsd}` : `${item.rateEgp} ج.م`}
+                      {item.rateUsd ? `$${fmtRate(item.rateUsd)}` : `${fmtRate(item.rateEgp)} ج.م`}
                     </div>
                     <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-mono">
-                      +{item.change}% اليوم
+                      +{fmtPct(item.change)} اليوم
                     </span>
                   </div>
                 </div>
@@ -1029,7 +1041,7 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
                 />
                 <span className="text-slate-500">{isAr ? 'جرام فضة 999 =' : 'grams 999 ='}</span>
                 <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400 text-sm">
-                  {(silverCalcGrams * silverRate999.rateEgp).toLocaleString()} ج.م
+                  {fmtRate(silverCalcGrams * silverRate999.rateEgp)} ج.م
                 </span>
               </div>
             </div>
@@ -1537,16 +1549,16 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
                         )}
                       </div>
                       <span className="text-[9px] text-slate-400 block mt-0.5">
-                        {item.priceUsd ? `عالمي: $${item.priceUsd}` : 'محلي معتمد'}
+                        {item.priceUsd ? `عالمي: $${fmtRate(item.priceUsd)}` : 'محلي معتمد'}
                       </span>
                     </div>
 
                     <div className="text-end">
                       <span className="font-mono font-extrabold text-xs text-accent-600 dark:text-accent-400 block">
-                        {item.priceEgp ? `${item.priceEgp.toLocaleString()} ج.م` : `$${item.priceUsd}`}
+                        {item.priceEgp ? `${fmtRate(item.priceEgp)} ج.م` : `$${fmtRate(item.priceUsd)}`}
                       </span>
                       <span className="text-[9px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
-                        +{item.change24h} ج.م
+                        +{fmtPct(item.change24h)} ج.م
                       </span>
                     </div>
                   </div>
@@ -1588,8 +1600,8 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
                   </h3>
                   <p className="text-[10px] text-slate-400">
                     {isAr
-                      ? `أسعار حية بالدولار والجنيه المصري (سعر الصرف: ${usdRate.rate} ج.م)`
-                      : `Live prices in USD & EGP (Pegged at ${usdRate.rate} EGP)`}
+                      ? `أسعار حية بالدولار والجنيه المصري (سعر الصرف: ${fmtRate(usdRate.rate)} ج.م)`
+                      : `Live prices in USD & EGP (Pegged at ${fmtRate(usdRate.rate)} EGP)`}
                   </p>
                 </div>
               </div>
@@ -1660,7 +1672,7 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
                               : 'text-rose-500'
                           }`}
                         >
-                          {coin.change24h >= 0 ? `+${coin.change24h}%` : `${coin.change24h}%`}
+                          {fmtPct(coin.change24h)}
                         </span>
                       </div>
                     </div>
@@ -1718,7 +1730,7 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
               </div>
               <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
                 <span className="text-slate-500">{isAr ? 'الفضة عيار 999' : 'Silver 999'}</span>
-                <span className="font-mono font-bold text-slate-400">{silverRate999.rateEgp} ج.م</span>
+                <span className="font-mono font-bold text-slate-400">{fmtRate(silverRate999.rateEgp)} ج.م</span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
                 <span className="text-slate-500">Bitcoin (BTC)</span>
@@ -1734,15 +1746,15 @@ export const LiveHeaderWidgets: React.FC<LiveHeaderWidgetsProps> = ({
               </div>
               <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
                 <span className="text-slate-500">USD / EGP</span>
-                <span className="font-mono font-bold text-emerald-600">{usdRate.rate}</span>
+                <span className="font-mono font-bold text-emerald-600">{fmtRate(usdRate.rate)}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
                 <span className="text-slate-500">SAR / EGP</span>
-                <span className="font-mono font-bold text-emerald-600">{sarRate.rate}</span>
+                <span className="font-mono font-bold text-emerald-600">{fmtRate(sarRate.rate)}</span>
               </div>
               <div className="flex justify-between py-1">
                 <span className="text-slate-500">AED / EGP</span>
-                <span className="font-mono font-bold text-emerald-600">{aedRate.rate}</span>
+                <span className="font-mono font-bold text-emerald-600">{fmtRate(aedRate.rate)}</span>
               </div>
             </div>
           </div>
