@@ -733,6 +733,42 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
       reader.readAsDataURL(file);
     });
 
+  // [free-tier] ضغط الصور محلياً في المتصفح (canvas) قبل تخزينها base64 في
+  // SQLite: صورة 10 ميجا تصبح ~200-400 كيلوبايت — صفر تكلفة، بدون أي خدمة
+  // خارجية. GIF/SVG تمر كما هي، وفي حال أي فشل نرجع للبيانات الأصلية.
+  const compressImageFile = async (
+    file: File,
+    maxDim = 1280,
+    quality = 0.82
+  ): Promise<string> => {
+    const dataUrl = await fileToDataUrl(file);
+    if (/^data:image\/(gif|svg)/i.test(dataUrl)) return dataUrl;
+    try {
+      // ملاحظة: لا نستخدم new Image() هنا — الاسم Image مُستورد كأيقونة من
+      // lucide-react في هذا الملف، و new Image() كانت ترمي TypeError صامتاً
+      // فتعود الصورة الأصلية دون ضغط. document.createElement('img') محصّنة.
+      const el = document.createElement('img');
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        el.onload = () => resolve(el);
+        el.onerror = reject;
+        el.src = dataUrl;
+      });
+      const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+      // أصغر أصلاً في الأبعاد والحجم — نتركها كما هي
+      if (scale >= 1 && file.size < 300 * 1024) return dataUrl;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return dataUrl;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const out = canvas.toDataURL('image/jpeg', quality);
+      return out.length < dataUrl.length ? out : dataUrl;
+    } catch {
+      return dataUrl;
+    }
+  };
+
   const handleFileAttachment = async (file: File, kind: 'image' | 'video' | 'file') => {
     setShowAttachMenu(false);
     if (file.size > 10 * 1024 * 1024) {
@@ -740,7 +776,9 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
       return;
     }
     try {
-      const dataUrl = await fileToDataUrl(file);
+      // الصور فقط تمر عبر الضغط المحلي — الفيديو والملفات كما هي
+      const dataUrl =
+        kind === 'image' ? await compressImageFile(file) : await fileToDataUrl(file);
       const label =
         kind === 'image' ? `🖼️ ${file.name}` : kind === 'video' ? `🎬 ${file.name}` : `📄 ${file.name}`;
       handleSendMessage(undefined, label, kind, undefined, dataUrl);
@@ -751,7 +789,8 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
 
   const handleLiveCameraCapture = async (file: File, caption?: string) => {
     try {
-      const dataUrl = await fileToDataUrl(file);
+      // صور الكاميرا عادة كبيرة — الضغط المحلي يقلل حجمها في قاعدة البيانات
+      const dataUrl = await compressImageFile(file);
       handleSendMessage(
         undefined,
         caption || (isAr ? '📷 صورة بالكاميرا' : '📷 Camera photo'),
