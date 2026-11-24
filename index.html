@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Remix SMART TIME — وقتك من ذهب</title>
     <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0f172a" />
     <meta name="description" content="تطبيق Super App شخصي متكامل لإدارة الحياة اليومية: الملاحظات، الحسابات والمصروفات، السيارات، التعليم، الطعام، الرحلات، الدردشة، الوسائط، الخزنة الرقمية، الذكاء الاصطناعي والبحث الصوتي." />
     <meta property="og:title" content="Remix SMART TIME — وقتك من ذهب" />
     <meta property="og:description" content="تطبيق Super App شخصي متكامل لإدارة الحياة اليومية: الملاحظات، الحسابات والمصروفات، السيارات، التعليم، الطعام، الرحلات، الدردشة، الوسائط، الخزنة الرقمية، الذكاء الاصطناعي والبحث الصوتي." />
@@ -18,6 +20,14 @@
   <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased selection:bg-amber-500 selection:text-white min-h-screen">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // تسجيل Service Worker لكل الصفحات — يدعم التثبيت كـ PWA ويعمل أوفلاين (خدمة مجانية 100%).
+      if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/service-worker.js', { scope: '/' }).catch(function () {});
+        });
+      }
+    </script>
   </body>
 </html>
 

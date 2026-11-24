@@ -8,7 +8,8 @@ export default function ReligiousPwaSetup() {
   });
 
   useEffect(() => {
-    const manifest = document.querySelector<HTMLLinkElement>('link[rel="manifest"][data-religious-manifest]');
+    // المانيفست والثيم بقا مسجلين في index.html بشكل ثابت — لو موجودين مش محتاجين إضافة.
+    const manifest = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
     if (!manifest) {
       const link = document.createElement('link');
       link.rel = 'manifest';
@@ -16,7 +17,7 @@ export default function ReligiousPwaSetup() {
       link.setAttribute('data-religious-manifest', 'true');
       document.head.appendChild(link);
     }
-    const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"][data-religious-theme]');
+    const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
     if (!themeColor) {
       const meta = document.createElement('meta');
       meta.name = 'theme-color';
@@ -35,7 +36,7 @@ export default function ReligiousPwaSetup() {
   useEffect(() => {
     document.documentElement.classList.toggle('religious-light-mode', lightMode);
     try { localStorage.setItem(THEME_KEY, lightMode ? 'light' : 'dark'); } catch { /* تفضيل المظهر اختياري */ }
-    const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"][data-religious-theme]');
+    const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
     if (themeColor) themeColor.content = lightMode ? '#f8fafc' : '#0f172a';
   }, [lightMode]);
 

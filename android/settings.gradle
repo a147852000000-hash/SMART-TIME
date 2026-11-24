@@ -1,3 +1,21 @@
+pluginManagement {
+    repositories {
+        google()
+        // ميرورات مجانية لتحل مشكلة 429 من repo.maven.apache.org
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        maven { url 'https://repo.huaweicloud.com/repository/maven/' }
+        gradlePluginPortal()
+    }
+}
+
+// حقن نفس الميرورات في buildscript بتاع كل المشاريع (بما فيها مشاريع node_modules بتاعة Capacitor)
+gradle.beforeProject { project ->
+    project.buildscript.repositories {
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        maven { url 'https://repo.huaweicloud.com/repository/maven/' }
+    }
+}
+
 include ':app'
 include ':capacitor-cordova-android-plugins'
 project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')

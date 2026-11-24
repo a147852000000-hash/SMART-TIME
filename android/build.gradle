@@ -4,6 +4,9 @@ buildscript {
     
     repositories {
         google()
+        // ميرورات مجانية لـ Maven Central — بتحل مشكلة 429 من repo.maven.apache.org
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        maven { url 'https://repo.huaweicloud.com/repository/maven/' }
         mavenCentral()
     }
     dependencies {
@@ -20,6 +23,8 @@ apply from: "variables.gradle"
 allprojects {
     repositories {
         google()
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        maven { url 'https://repo.huaweicloud.com/repository/maven/' }
         mavenCentral()
     }
 }
