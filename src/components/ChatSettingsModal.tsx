@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   X,
   Info,
@@ -44,6 +44,11 @@ interface ChatSettingsModalProps {
   onExportChat?: () => void;
   onLeaveRoom?: () => void;
   onDeleteRoom?: () => void;
+  // API-backed member actions — role/remove changes made inside the Members tab
+  // are persisted immediately via these callbacks (the room PUT endpoint ignores
+  // `members`, so without them role edits were silently lost on save).
+  onChangeRole?: (memberId: string, role: ChatMember['role']) => Promise<void> | void;
+  onRemoveMember?: (memberId: string) => Promise<void> | void;
 }
 
 export const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
@@ -58,6 +63,8 @@ export const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
   onExportChat,
   onLeaveRoom,
   onDeleteRoom,
+  onChangeRole,
+  onRemoveMember,
 }) => {
   const isAr = language === 'ar';
 
@@ -137,6 +144,79 @@ export const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const bgInputRef = useRef<HTMLInputElement | null>(null);
 
+  // ── Stale-room-state fix (Phase 2) ────────────────────────────────────────
+  // All form state above initializes ONCE from the first `room` prop. The modal
+  // stays mounted between opens, so switching rooms (or reopening after external
+  // changes) showed the PREVIOUS room's title/members/permissions. Reset all of
+  // it whenever the room identity or open-state changes.
+  useEffect(() => {
+    if (!isOpen) return;
+    setTitle(room.title || room.name || '');
+    setDescription(room.description || '');
+    setAvatar(room.avatar || '');
+    setIsPinned(!!room.pinned);
+    setPrefs({
+      disappearing: room.settings?.disappearing || 'off',
+      muted: !!room.settings?.muted,
+      readReceipts: room.settings?.readReceipts ?? true,
+      typingIndicator: room.settings?.typingIndicator ?? true,
+      linkPreviews: room.settings?.linkPreviews ?? true,
+      mediaAutoSave: room.settings?.mediaAutoSave ?? false,
+      enterToSend: room.settings?.enterToSend ?? true,
+      slowModeSeconds: room.settings?.slowModeSeconds ?? 0,
+      approvalRequired: room.settings?.approvalRequired ?? false,
+    });
+    setBackground(room.background || '');
+    setBackgroundUrl(room.backgroundUrl || '');
+    setSelectedRoleForPerms('member');
+    setMemberPermissions({
+      sendMessages: room.permissions?.sendMessages ?? true,
+      sendMedia: room.permissions?.sendMedia ?? true,
+      addMembers: room.permissions?.addMembers ?? true,
+      pinMessages: room.permissions?.pinMessages ?? false,
+      editRoom: room.permissions?.editRoom ?? false,
+      deleteMessages: room.permissions?.deleteMessages ?? false,
+      startCalls: room.permissions?.startCalls ?? true,
+      mentionEveryone: room.permissions?.mentionEveryone ?? false,
+    });
+    setAdminPermissions({
+      sendMessages: true,
+      sendMedia: true,
+      addMembers: true,
+      pinMessages: true,
+      editRoom: true,
+      deleteMessages: true,
+      startCalls: true,
+      mentionEveryone: true,
+      ...(room.adminPermissions || {}),
+    });
+    setModeratorPermissions({
+      sendMessages: true,
+      sendMedia: true,
+      addMembers: true,
+      pinMessages: true,
+      editRoom: false,
+      deleteMessages: true,
+      startCalls: true,
+      mentionEveryone: true,
+      ...(room.moderatorPermissions || {}),
+    });
+    setMembersList(room.members || []);
+    setActiveTab('general');
+    setMemberSearch('');
+    setShowAddMemberDialog(false);
+    setNewMemberName('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, room?.id]);
+
+  // Keep the members tab in sync with the parent's authoritative members state
+  // (e.g. role changed via the members sidebar while this modal is open).
+  useEffect(() => {
+    if (!isOpen) return;
+    setMembersList(room.members || []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, room.members]);
+
   if (!isOpen) return null;
 
   const handleCopyInviteLink = () => {
@@ -186,13 +266,27 @@ export const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
   };
 
   const handleRoleChange = (memberId: string, newRole: ChatMember['role']) => {
+    // Optimistic local update, then persist immediately through the API-backed
+    // callback. Revert on failure so the UI never shows a role the server refused.
+    const prevList = membersList;
     setMembersList((prev) =>
       prev.map((m) => (m.id === memberId ? { ...m, role: newRole } : m))
     );
+    Promise.resolve(
+      onChangeRole?.(memberId, newRole)
+    ).catch(() => {
+      setMembersList(prevList);
+    });
   };
 
   const handleRemoveMember = (memberId: string) => {
+    const prevList = membersList;
     setMembersList((prev) => prev.filter((m) => m.id !== memberId));
+    Promise.resolve(
+      onRemoveMember?.(memberId)
+    ).catch(() => {
+      setMembersList(prevList);
+    });
   };
 
   const handleAddCustomMember = () => {

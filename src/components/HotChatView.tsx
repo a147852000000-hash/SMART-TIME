@@ -100,19 +100,50 @@ export const formatChatTime = (value?: string | number | Date, isAr = true): str
   return isAr ? `${h12}:${m} ${h < 12 ? 'ص' : 'م'}` : `${h12}:${m} ${h < 12 ? 'AM' : 'PM'}`;
 };
 
+// Local-day grouping key (YYYY-MM-DD) for chat date separators. Deterministic —
+// no locale output; empty string when the value is missing/invalid.
+const AR_MONTHS = [
+  'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+  'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
+];
+const EN_MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+export const chatDayKey = (value?: string | number | Date): string => {
+  if (!value) return '';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate()
+  ).padStart(2, '0')}`;
+};
+
+// WhatsApp-style separator label: "اليوم" / "أمس" / "25 نوفمبر 2026" (Arabic)
+// or "Today" / "Yesterday" / "25 Nov 2026" (English). Latin digits, no locale.
+export const formatChatDaySeparator = (
+  value?: string | number | Date,
+  isAr = true
+): string => {
+  if (!value) return '';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return '';
+  const today = new Date();
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diffDays = Math.round((startOfDay(today) - startOfDay(d)) / 86400000);
+  if (diffDays === 0) return isAr ? 'اليوم' : 'Today';
+  if (diffDays === 1) return isAr ? 'أمس' : 'Yesterday';
+  return isAr
+    ? `${d.getDate()} ${AR_MONTHS[d.getMonth()]} ${d.getFullYear()}`
+    : `${d.getDate()} ${EN_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+};
+
 interface HotChatViewProps {
   language: Language;
   theme?: ThemeMode;
   iconStyle?: IconStyle;
   onNavigateHome?: () => void;
-}
-
-interface StoryItem {
-  id: string;
-  name: string;
-  avatar: string;
-  hasNew: boolean;
-  time: string;
 }
 
 export const HotChatView: React.FC<HotChatViewProps> = ({
@@ -158,37 +189,8 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
   const [messageSearchQuery, setMessageSearchQuery] = useState('');
   const [showMessageSearch, setShowMessageSearch] = useState(false);
 
-  // Stories List
-  const [stories, setStories] = useState<StoryItem[]>([
-    {
-      id: 's1',
-      name: isAr ? 'حالتي' : 'My Status',
-      avatar: currentUserAvatar,
-      hasNew: false,
-      time: isAr ? 'إضافة حالة' : 'Add Status',
-    },
-    {
-      id: 's2',
-      name: isAr ? 'محمد علي' : 'Mohamed Ali',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80',
-      hasNew: true,
-      time: 'منذ 25 دقيقة',
-    },
-    {
-      id: 's3',
-      name: isAr ? 'ساره أحمد' : 'Sara Ahmed',
-      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&auto=format&fit=crop&q=80',
-      hasNew: true,
-      time: 'منذ ساعتين',
-    },
-    {
-      id: 's4',
-      name: isAr ? 'مهندس خالد' : 'Eng. Khaled',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80',
-      hasNew: false,
-      time: 'منذ 4 ساعات',
-    },
-  ]);
+  // NOTE: demo Stories row was removed in the Phase 2 header merge — it was
+  // hardcoded fake data occupying a full prime row of the chat sidebar.
 
   // Messages State per room
   const [messagesMap, setMessagesMap] = useState<Record<string, ChatMessage[]>>({});
@@ -198,7 +200,7 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
   // Typing debounce timer
   const typingTimerRef = useRef<any>(null);
   // Auto-clear timers for "user is typing" indicators (room.id -> timeout handle)
-  const typingTimeoutsRef = useRef<Record<string, any>>({});
+  const typingTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   // Messages Stream container ref
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -567,7 +569,9 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
       unsubRoomDeleted();
       unsubPresence();
       // Clear any pending typing auto-clear timers
-      Object.values(typingTimeoutsRef.current).forEach((tm) => clearTimeout(tm));
+      Object.values(typingTimeoutsRef.current).forEach((tm) =>
+        clearTimeout(tm as ReturnType<typeof setTimeout>)
+      );
       typingTimeoutsRef.current = {};
     };
   }, [activeRoomId, isAr]);
@@ -922,6 +926,21 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
     }
   };
 
+  // Member actions shared by the members sidebar and the settings modal —
+  // persisted server-side immediately (PUT members/:id/role) then reflected in
+  // the authoritative roomMembers state.
+  const persistMemberRole = async (memberId: string, role: ChatMember['role']) => {
+    await chatService.updateMemberRole(activeRoomId, memberId, role);
+    setRoomMembers((prev) =>
+      prev.map((m) => (m.id === memberId ? { ...m, role } : m))
+    );
+  };
+
+  const persistRemoveMember = async (memberId: string) => {
+    await chatService.removeMember(activeRoomId, memberId);
+    setRoomMembers((prev) => prev.filter((m) => m.id !== memberId));
+  };
+
   const handleClearRoomHistory = async () => {
     if (!window.confirm(isAr ? 'مسح جميع الرسائل في هذه الغرفة؟' : 'Clear all messages in room?')) return;
     try {
@@ -1072,62 +1091,37 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
             </div>
           </div>
 
-          {/* Stories / Status Bar */}
-          <div className="flex items-center gap-3 overflow-x-auto pb-1 scrollbar-none">
-            {stories.map((story) => (
-              <div key={story.id} className="flex flex-col items-center gap-1 shrink-0 cursor-pointer group">
-                <div
-                  className={`w-12 h-12 rounded-full p-0.5 bg-gradient-to-tr ${
-                    story.hasNew
-                      ? 'from-sky-500 via-cyan-400 to-emerald-400'
-                      : 'from-slate-400 to-slate-500 dark:from-slate-700 dark:to-slate-600'
-                  } group-hover:scale-105 transition-transform`}
+          {/* Search + Tabs — merged into ONE row (Phase 2 header merge: 4 rows → 3) */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 min-w-0">
+              <Search className="w-4 h-4 text-slate-400 absolute start-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={isAr ? 'بحث...' : 'Search...'}
+                className="w-full ps-9 pe-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-sky-500"
+              />
+            </div>
+            <div className="flex items-center gap-1 bg-slate-200/60 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800 shrink-0">
+              {[
+                { id: 'all', label: isAr ? 'الكل' : 'All' },
+                { id: 'private', label: isAr ? 'خاص' : 'DMs' },
+                { id: 'rooms', label: isAr ? 'غرف' : 'Rooms' },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                    activeTab === tab.id
+                      ? 'bg-sky-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-850'
+                  }`}
                 >
-                  <img
-                    src={story.avatar}
-                    alt={story.name}
-                    className="w-full h-full rounded-full object-cover border-2 border-white dark:border-[#161616]"
-                  />
-                </div>
-                <span className="text-[10px] text-slate-600 dark:text-slate-300 font-medium truncate max-w-[56px]">
-                  {story.name}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {/* Search Bar */}
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute start-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={isAr ? 'بحث في المحادثات والغرف...' : 'Search chats & rooms...'}
-              className="w-full ps-9 pe-4 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-sky-500"
-            />
-          </div>
-
-          {/* Tabs: الكل | الخاص | الغرف — زر "الرجوع للرئيسية" أُزيل لأنه مكرر:
-              التنقل للرئيسية متاح عبر شريط التنقل السفلي */}
-          <div className="grid grid-cols-3 gap-1 bg-slate-200/60 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
-            {[
-              { id: 'all', label: isAr ? 'الكل' : 'All' },
-              { id: 'private', label: isAr ? 'الخاص' : 'Private' },
-              { id: 'rooms', label: isAr ? 'الغرف' : 'Rooms' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  activeTab === tab.id
-                    ? 'bg-sky-600 text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-850'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -1422,18 +1416,14 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
             onStartCall={(kind) => setActiveCall(kind)}
             onChangeRole={async (id, role) => {
               try {
-                await chatService.updateMemberRole(activeRoomId, id, role);
-                setRoomMembers((prev) =>
-                  prev.map((m) => (m.id === id ? { ...m, role } : m))
-                );
+                await persistMemberRole(id, role);
               } catch (err: any) {
                 alert(err.message || 'فشل تحديث الدور');
               }
             }}
             onRemoveMember={async (id) => {
               try {
-                await chatService.removeMember(activeRoomId, id);
-                setRoomMembers((prev) => prev.filter((m) => m.id !== id));
+                await persistRemoveMember(id);
               } catch (err: any) {
                 alert(err.message || 'فشل إزالة العضو');
               }
@@ -1475,10 +1465,26 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
                   </p>
                 </div>
               ) : (
-                displayedMessages.map((msg) => {
+                displayedMessages.flatMap((msg, idx) => {
                   const isHighlighted = highlightedMessageId === msg.id;
 
-                  return (
+                  // Date separator: insert once per local day change (WhatsApp-style)
+                  const dayKey = chatDayKey(msg.timestamp || msg.createdAt);
+                  const prevMsg = idx > 0 ? displayedMessages[idx - 1] : null;
+                  const prevKey = prevMsg
+                    ? chatDayKey(prevMsg.timestamp || prevMsg.createdAt)
+                    : null;
+                  const showDaySep = !!dayKey && dayKey !== prevKey;
+
+                  return [
+                    showDaySep ? (
+                      <div
+                        key={`daysep-${msg.id}`}
+                        className="w-fit mx-auto px-3 py-1 rounded-full bg-black/10 dark:bg-white/10 text-[10px] font-bold text-slate-500 dark:text-slate-300 backdrop-blur-xs select-none"
+                      >
+                        {formatChatDaySeparator(msg.timestamp || msg.createdAt, isAr)}
+                      </div>
+                    ) : null,
                     <div
                       key={msg.id}
                       id={`chat-msg-${msg.id}`}
@@ -1709,8 +1715,8 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
                           )}
                         </div>
                       </div>
-                    </div>
-                  );
+                    </div>,
+                  ];
                 })
               )}
               <div ref={messagesEndRef} />
@@ -2214,6 +2220,20 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
         language={language}
         isDark={isDark}
         onSave={handleSaveRoomSettings}
+        onChangeRole={async (id, role) => {
+          try {
+            await persistMemberRole(id, role);
+          } catch (err: any) {
+            alert(err.message || 'فشل تحديث الدور');
+          }
+        }}
+        onRemoveMember={async (id) => {
+          try {
+            await persistRemoveMember(id);
+          } catch (err: any) {
+            alert(err.message || 'فشل إزالة العضو');
+          }
+        }}
         onClearHistory={handleClearRoomHistory}
         onExportChat={() => {
           const msgs = messagesMap[activeRoomId] || [];
