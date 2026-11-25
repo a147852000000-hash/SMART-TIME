@@ -247,8 +247,20 @@ export async function verifyChatOtp(phone: string, code: string): Promise<AuthSe
 }
 
 export async function logout() {
-  try { await api('/api/auth/logout', { method: 'POST', headers: authHeaders() }); } catch {}
+  // [FIX logout-2026-11] "تسجيل الخروج غير مفعل": الكود القديم كان ينتظر رد
+  // الخادم *قبل* مسح الجلسة — على شبكة موبايل بطيئة أو مقطوعة كان الـ fetch
+  // يعلّق بلا مهلة (حتى 30-60 ثانية) فيبدو الزر ميتاً والجلسة باقية.
+  // الآن: نحفظ الترويسات ثم نمسح الجلسة محلياً فوراً (خروج لحظي)، وإبطال
+  // التوكن على الخادم يحدث في الخلفية بأفضل جهد (best-effort مع مهلة 4 ثوان).
+  const headers = authHeaders();
   clearSession();
+  try {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 4_000);
+    void fetch(apiUrl('/api/auth/logout'), { method: 'POST', headers, signal: controller.signal })
+      .catch(() => {})
+      .finally(() => window.clearTimeout(timer));
+  } catch {}
 }
 
 

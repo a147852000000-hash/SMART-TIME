@@ -110,6 +110,10 @@ app.use((req, res, next) => {
   }
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+  // [FIX perf-2026-11] كبّل preflight لمدة 24 ساعة: بدون هذا الترويسة كان WebView
+  // في الـ APK يرسل OPTIONS قبل *كل* طلب (كل عملية = رحلتان ذهاب وعودة) —
+  // السبب الرئيسي لبطء "الحفظ يأخذ أكثر من 6 ثوان" و"الشات بطيء" على الموبايل.
+  res.setHeader("Access-Control-Max-Age", "86400");
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });

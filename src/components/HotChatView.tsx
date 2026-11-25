@@ -10,6 +10,7 @@ import {
   MoreVertical,
   CheckCheck,
   Check,
+  Loader2,
   Search,
   Phone,
   Video,
@@ -677,6 +678,33 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
     setReplyingTo(null);
     chatService.sendTyping(activeRoomId, false);
 
+    // [FIX chat-perf-2026-11] مؤشر إرسال فوري: كان المستخدم يضغط ولا يرى أي
+    // تغيير حتى يرجع رد الخادم (ثوانٍ على شبكة الموبايل) فيبدو التطبيق "بطيئاً
+    // جداً" أو "متجمداً". الآن تظهر الرسالة فوراً بحالة "جاري الإرسال".
+    const tempId = `pending_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const pendingMsg = {
+      id: tempId,
+      roomId: activeRoomId,
+      senderId: 'me',
+      senderName: 'أنت',
+      text: textToSend,
+      body: textToSend,
+      type,
+      mediaUrl: customMediaUrl,
+      extra,
+      status: 'sending',
+      isPinned: false,
+      isEdited: false,
+      isDeleted: false,
+      isSaved: false,
+      timestamp: new Date().toISOString(),
+    } as unknown as import('../types').ChatMessage;
+    setMessagesMap((prev) => ({
+      ...prev,
+      [activeRoomId]: [...(prev[activeRoomId] || []), pendingMsg],
+    }));
+    scrollToBottom();
+
     try {
       const sentMsg = await chatService.sendMessage(activeRoomId, {
         text: textToSend,
@@ -686,19 +714,32 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
         extra,
       });
 
-      // Optimistic addition
+      // Replace pending with the real server message
       setMessagesMap((prev) => {
         const currentList = prev[activeRoomId] || [];
-        if (currentList.some((m) => m.id === sentMsg.id)) return prev;
+        if (currentList.some((m) => m.id === sentMsg.id)) {
+          return { ...prev, [activeRoomId]: currentList.filter((m) => m.id !== tempId) };
+        }
         return {
           ...prev,
-          [activeRoomId]: [...currentList, sentMsg],
+          [activeRoomId]: currentList.map((m) => (m.id === tempId ? sentMsg : m)),
         };
       });
 
       scrollToBottom();
     } catch (err: any) {
-      alert(err.message || 'فشل إرسال الرسالة');
+      // أعد الرسالة المعلقة لصندوق الكتابة حتى لا تضيع على المستخدم
+      setInputText((prev) => (prev ? prev : textToSend));
+      setMessagesMap((prev) => ({
+        ...prev,
+        [activeRoomId]: (prev[activeRoomId] || []).filter((m) => m.id !== tempId),
+      }));
+      const networkFailed = err instanceof TypeError || /fetch|network|Failed/i.test(String(err?.message || ''));
+      alert(
+        networkFailed
+          ? 'تعذر الاتصال بالخادم — تحقق من الإنترنت وحاول مرة أخرى. لم تُحذف رسالتك.'
+          : (err?.message || 'فشل إرسال الرسالة — حاول مرة أخرى.')
+      );
     }
   };
 
@@ -1744,8 +1785,10 @@ export const HotChatView: React.FC<HotChatViewProps> = ({
                             {formatChatTime(msg.timestamp || msg.createdAt, isAr)}
                           </span>
                           {msg.isOutgoing && (
-                            <span title={msg.status === 'read' ? 'مقروءة' : 'تم الإرسال'}>
-                              {msg.status === 'read' ? (
+                            <span title={msg.status === 'sending' ? 'جاري الإرسال…' : msg.status === 'read' ? 'مقروءة' : 'تم الإرسال'}>
+                              {msg.status === 'sending' ? (
+                                <Loader2 className="w-3.5 h-3.5 text-slate-300 animate-spin" />
+                              ) : msg.status === 'read' ? (
                                 <CheckCheck className="w-3.5 h-3.5 text-cyan-300" />
                               ) : (
                                 <Check className="w-3.5 h-3.5 text-sky-200" />

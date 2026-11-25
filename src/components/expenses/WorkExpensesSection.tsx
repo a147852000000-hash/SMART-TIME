@@ -38,6 +38,8 @@ export const WorkExpensesSection: React.FC<WorkExpensesSectionProps> = ({
     const rows = await financeService.getExpenses({ type: 'work' });
     setCanonicalExpenses(rows.map((x) => ({ id: String(x.id), section: 'work', type: String(x.title || x.category || 'مصروف عمل'), amount: Number(x.amount) || 0, date: String(x.date || '').slice(0, 10), notes: x.notes ? String(x.notes) : undefined })));
   };
+  // [FIX perf-2026-11] الحفظ/الحذف يحدّثان canonicalExpenses محلياً من رد الخادم
+  // بدل إعادة جلب overview كاملة بعد كل عملية — توفير ~3 ثوانٍ على شبكة الموبايل.
   useEffect(() => { void loadCanonicalExpenses(); }, []);
   const BackIcon = isAr ? ArrowRight : ArrowLeft;
 
@@ -114,12 +116,12 @@ export const WorkExpensesSection: React.FC<WorkExpensesSectionProps> = ({
     };
 
     try {
-      if (editingId) {
-        await financeService.updateCanonicalFinanceExpense(editingId, { type: 'work', title: newItem.type, category: newItem.type, amount: newItem.amount, date: newItem.date, notes: newItem.notes });
-      } else {
-        await financeService.addExpense({ type: 'work', title: newItem.type, category: newItem.type, amount: newItem.amount, date: newItem.date, notes: newItem.notes });
-      }
-      await loadCanonicalExpenses();
+      const record = editingId
+        ? await financeService.updateCanonicalFinanceExpense(editingId, { type: 'work', title: newItem.type, category: newItem.type, amount: newItem.amount, date: newItem.date, notes: newItem.notes })
+        : await financeService.addExpense({ type: 'work', title: newItem.type, category: newItem.type, amount: newItem.amount, date: newItem.date, notes: newItem.notes });
+      // [FIX perf-2026-11] تحديث محلي فوري من رد الخادم بدل إعادة جلب overview كاملة
+      const mapped: SpecializedExpense = { id:String(record.id||newItem.id), section:'work', type:String(record.title||record.category||newItem.type), customType:newItem.customType, amount:Number(record.amount)||newItem.amount, date:String(record.date||newItem.date).slice(0,10), notes:newItem.notes };
+      setCanonicalExpenses(prev => editingId ? prev.map(x => x.id===mapped.id ? mapped : x) : [mapped, ...prev]);
       setIsModalOpen(false);
     } catch (error) {
       window.alert(error instanceof Error ? error.message : 'تعذر حفظ المصروف.');
@@ -130,7 +132,7 @@ export const WorkExpensesSection: React.FC<WorkExpensesSectionProps> = ({
     if (window.confirm(isAr ? 'هل أنت متأكد من حذف هذا المصروف؟' : 'Delete this expense?')) {
       try {
         await financeService.deleteCanonicalFinanceExpense(id);
-        await loadCanonicalExpenses();
+        setCanonicalExpenses(prev => prev.filter(x => x.id !== id));
       } catch (error) {
         window.alert(error instanceof Error ? error.message : 'تعذر حذف المصروف.');
       }

@@ -685,7 +685,8 @@ export interface ChatMessage {
   body?: string;
   mediaUrl?: string;
   type?: 'text' | 'image' | 'video' | 'voice' | 'file' | 'location' | 'poll';
-  status?: 'sent' | 'delivered' | 'read';
+  // [FIX chat-perf-2026-11] 'sending' حالة محلية للرسالة المعلّقة قبل تأكيد الخادم
+  status?: 'sending' | 'sent' | 'delivered' | 'read';
   isOutgoing?: boolean;
   isPinned?: boolean;
   pinnedBy?: string;

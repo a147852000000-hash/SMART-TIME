@@ -126,6 +126,22 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
+  // [FIX back-2026-11] "زر الرجوع بتاع الموبايل بيخرج البرنامج": بدون مستمع
+  // backButton من @capacitor/app يخرج النظام التطبيق فوراً من أول ضغطة.
+  // الآن: أي نافذة مفتوحة تُغلق أولاً، ثم رجوع خطوة داخل التطبيق، ولا يخرج
+  // التطبيق إلا من الشاشة الرئيسية بلا أي نافذة مفتوحة (السلوك المتوقع).
+  useEffect(() => {
+    (window as unknown as { __smartTimeHardwareBack?: () => boolean }).__smartTimeHardwareBack = () => {
+      if (isSearchOpen) { setIsSearchOpen(false); return true; }
+      if (isVoiceOpen) { setIsVoiceOpen(false); setVoiceTranscript(''); return true; }
+      if (isSettingsOpen) { setIsSettingsOpen(false); return true; }
+      if (isNotificationsOpen) { setIsNotificationsOpen(false); return true; }
+      if (currentView !== 'dashboard' || viewHistory.length > 0) { handleBack(); return true; }
+      return false; // الشاشة الرئيسية ← اسمح بالخروج من التطبيق
+    };
+    return () => { delete (window as unknown as { __smartTimeHardwareBack?: () => boolean }).__smartTimeHardwareBack; };
+  }, [isSearchOpen, isVoiceOpen, isSettingsOpen, isNotificationsOpen, currentView, viewHistory]);
+
   // App Data Layers using Repositories
   const [userProfile, setUserProfile] = useState<UserProfile>(() => UserRepository.getProfile());
   const [notes, setNotes] = useState<Note[]>(() => NotesRepository.getNotes());

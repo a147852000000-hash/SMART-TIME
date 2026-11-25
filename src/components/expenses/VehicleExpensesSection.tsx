@@ -212,9 +212,13 @@ export const VehicleExpensesSection: React.FC<VehicleExpensesSectionProps> = ({
 
     try {
       const notes=JSON.stringify({liters,unit:EGYPT_FUEL_PRICES[fuelType]?.unit,odometer:item.odometer,odometerPhotoUrl:item.odometerPhotoUrl});
-      if(editingFuelId) await financeService.updateCanonicalFinanceExpense(editingFuelId,{type:'vehicle_fuel',title:item.fuelType,category:item.fuelType,amount:item.price,date:item.dateTime.slice(0,10),notes});
-      else await financeService.addExpense({type:'vehicle_fuel',title:item.fuelType,category:item.fuelType,amount:item.price,date:item.dateTime.slice(0,10),notes});
-      await loadCanonicalVehicleExpenses(); setIsFuelModalOpen(false);
+      const record = editingFuelId
+        ? await financeService.updateCanonicalFinanceExpense(editingFuelId,{type:'vehicle_fuel',title:item.fuelType,category:item.fuelType,amount:item.price,date:item.dateTime.slice(0,10),notes})
+        : await financeService.addExpense({type:'vehicle_fuel',title:item.fuelType,category:item.fuelType,amount:item.price,date:item.dateTime.slice(0,10),notes});
+      // [FIX perf-2026-11] تحديث محلي فوري من رد الخادم بدل إعادة جلب overview كاملة
+      const mappedFuel: VehicleFuelRecord = { id:String(record.id||item.id), fuelType:String(record.title||item.fuelType), price:Number(record.amount)||item.price, liters, unit:EGYPT_FUEL_PRICES[fuelType]?.unit, odometer:item.odometer, dateTime:item.dateTime, odometerPhotoUrl:item.odometerPhotoUrl };
+      setFuelList(prev => editingFuelId ? prev.map(x => x.id===mappedFuel.id ? mappedFuel : x) : [mappedFuel, ...prev]);
+      setIsFuelModalOpen(false);
     } catch(error){window.alert(error instanceof Error?error.message:'تعذر حفظ الوقود.');}
   };
 
@@ -265,9 +269,13 @@ export const VehicleExpensesSection: React.FC<VehicleExpensesSectionProps> = ({
     };
     try {
       const notes=JSON.stringify({oilIntervalKm:item.oilIntervalKm,oilBrand:item.oilBrand,productName:item.productName,quantity:item.quantity,odometer:item.odometer,odometerPhotoUrl:item.odometerPhotoUrl,notes:item.notes});
-      if(editingOilId) await financeService.updateCanonicalFinanceExpense(editingOilId,{type:'vehicle_oil',title:item.serviceType,category:item.serviceType,amount:item.price,date:item.date,notes});
-      else await financeService.addExpense({type:'vehicle_oil',title:item.serviceType,category:item.serviceType,amount:item.price,date:item.date,notes});
-      await loadCanonicalVehicleExpenses(); setIsOilModalOpen(false);
+      const record = editingOilId
+        ? await financeService.updateCanonicalFinanceExpense(editingOilId,{type:'vehicle_oil',title:item.serviceType,category:item.serviceType,amount:item.price,date:item.date,notes})
+        : await financeService.addExpense({type:'vehicle_oil',title:item.serviceType,category:item.serviceType,amount:item.price,date:item.date,notes});
+      // [FIX perf-2026-11] تحديث محلي فوري من رد الخادم بدل إعادة جلب overview كاملة
+      const mappedOil: VehicleOilFilterRecord = { id:String(record.id||item.id), serviceType:String(record.title||item.serviceType), oilIntervalKm:item.oilIntervalKm, oilBrand:item.oilBrand, productName:item.productName, quantity:item.quantity, price:Number(record.amount)||item.price, odometer:item.odometer, odometerPhotoUrl:item.odometerPhotoUrl, notes:item.notes, date:String(record.date||item.date).slice(0,10) };
+      setOilFilterList(prev => editingOilId ? prev.map(x => x.id===mappedOil.id ? mappedOil : x) : [mappedOil, ...prev]);
+      setIsOilModalOpen(false);
     } catch(error){window.alert(error instanceof Error?error.message:'تعذر حفظ الزيوت والفلاتر.');}
   };
 
@@ -293,9 +301,13 @@ export const VehicleExpensesSection: React.FC<VehicleExpensesSectionProps> = ({
 
     try {
       const notes=JSON.stringify({description:item.description,supplyName:item.supplyName,supplyPrice:item.supplyPrice,laborDescription:item.laborDescription,laborPrice:item.laborPrice});
-      if(editingMaintId) await financeService.updateCanonicalFinanceExpense(editingMaintId,{type:'vehicle_maint',title:item.maintenanceType,category:item.maintenanceType,amount:item.total,date:item.date,notes});
-      else await financeService.addExpense({type:'vehicle_maint',title:item.maintenanceType,category:item.maintenanceType,amount:item.total,date:item.date,notes});
-      await loadCanonicalVehicleExpenses(); setIsMaintModalOpen(false);
+      const record = editingMaintId
+        ? await financeService.updateCanonicalFinanceExpense(editingMaintId,{type:'vehicle_maint',title:item.maintenanceType,category:item.maintenanceType,amount:item.total,date:item.date,notes})
+        : await financeService.addExpense({type:'vehicle_maint',title:item.maintenanceType,category:item.maintenanceType,amount:item.total,date:item.date,notes});
+      // [FIX perf-2026-11] تحديث محلي فوري من رد الخادم بدل إعادة جلب overview كاملة
+      const mappedMaint: VehicleMaintenanceRecord = { id:String(record.id||item.id), maintenanceType:String(record.title||item.maintenanceType), description:item.description, supplyName:item.supplyName, supplyPrice:item.supplyPrice, laborDescription:item.laborDescription, laborPrice:item.laborPrice, total:Number(record.amount)||item.total, date:String(record.date||item.date).slice(0,10) };
+      setMaintList(prev => editingMaintId ? prev.map(x => x.id===mappedMaint.id ? mappedMaint : x) : [mappedMaint, ...prev]);
+      setIsMaintModalOpen(false);
     } catch(error){window.alert(error instanceof Error?error.message:'تعذر حفظ الصيانة.');}
   };
 
@@ -498,7 +510,7 @@ export const VehicleExpensesSection: React.FC<VehicleExpensesSectionProps> = ({
               <div className="flex items-center gap-2 shrink-0">
                 <div className="text-left"><div className="font-black text-teal-600">{formatMoney(f.price)} {currency}</div><div className="text-[10px] text-slate-400">المبلغ المدفوع</div></div>
                 <button onClick={() => openFuelForm(f)} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 hover:text-teal-600" title="تعديل"><Edit2 className="w-4 h-4" /></button>
-                <button onClick={() => void financeService.deleteCanonicalFinanceExpense(f.id).then(loadCanonicalVehicleExpenses).catch(error=>window.alert(error instanceof Error?error.message:'تعذر حذف الوقود.'))} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 hover:text-rose-600" title="حذف"><Trash2 className="w-4 h-4" /></button>
+                <button onClick={() => void financeService.deleteCanonicalFinanceExpense(f.id).then(() => setFuelList(prev => prev.filter(x => x.id !== f.id))).catch(error=>window.alert(error instanceof Error?error.message:'تعذر حذف الوقود.'))} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 hover:text-rose-600" title="حذف"><Trash2 className="w-4 h-4" /></button>
               </div>
             </div>
           ))}
@@ -514,7 +526,7 @@ export const VehicleExpensesSection: React.FC<VehicleExpensesSectionProps> = ({
                 <div className="text-xs text-slate-500 mt-1">{o.serviceType === 'تغيير زيت المحرك' && o.oilIntervalKm ? `زيت ${o.oilIntervalKm.toLocaleString()} كم • ${o.oilBrand || ''}` : (o.productName || o.oilBrand || 'خدمة زيوت وفلاتر')}</div>
                 <div className="text-[11px] text-slate-400">{o.date}{o.odometer ? ` • العداد: ${o.odometer.toLocaleString()} كم` : ''}</div>{o.odometerPhotoUrl && <div className="text-[10px] text-emerald-600 font-bold mt-0.5">✓ صورة العداد مرفقة</div>}
               </div>
-              <div className="flex items-center gap-2 shrink-0"><div className="font-black text-cyan-600">{formatMoney(o.price)} {currency}</div><button onClick={() => openOilForm(o)} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 hover:text-cyan-600" title="تعديل"><Edit2 className="w-4 h-4" /></button><button onClick={() => void financeService.deleteCanonicalFinanceExpense(o.id).then(loadCanonicalVehicleExpenses).catch(error=>window.alert(error instanceof Error?error.message:'تعذر حذف خدمة الزيت.'))} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 hover:text-rose-600" title="حذف"><Trash2 className="w-4 h-4" /></button></div>
+              <div className="flex items-center gap-2 shrink-0"><div className="font-black text-cyan-600">{formatMoney(o.price)} {currency}</div><button onClick={() => openOilForm(o)} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 hover:text-cyan-600" title="تعديل"><Edit2 className="w-4 h-4" /></button><button onClick={() => void financeService.deleteCanonicalFinanceExpense(o.id).then(() => setOilFilterList(prev => prev.filter(x => x.id !== o.id))).catch(error=>window.alert(error instanceof Error?error.message:'تعذر حذف خدمة الزيت.'))} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 hover:text-rose-600" title="حذف"><Trash2 className="w-4 h-4" /></button></div>
             </div>
           ))}
         </div>
@@ -525,7 +537,7 @@ export const VehicleExpensesSection: React.FC<VehicleExpensesSectionProps> = ({
           ) : filteredMaint.map((m) => (
             <div key={m.id} className="p-4 border-b last:border-b-0 border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0"><div className="w-10 h-10 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 flex items-center justify-center shrink-0"><Wrench className="w-5 h-5" /></div><div className="min-w-0"><div className="font-black text-slate-900 dark:text-white">{m.maintenanceType}</div><div className="text-xs text-slate-500 truncate">{m.description || m.supplyName || 'صيانة'}</div><div className="text-[11px] text-slate-400">{m.date} • قطع: {formatMoney(m.supplyPrice)} + مصنعية: {formatMoney(m.laborPrice)} {currency}</div></div></div>
-              <div className="flex items-center gap-2 shrink-0"><div className="font-black text-cyan-600">{formatMoney(m.total)} {currency}</div><button onClick={() => openMaintenanceForm(m)} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 hover:text-cyan-600" title="تعديل"><Edit2 className="w-4 h-4" /></button><button onClick={() => void financeService.deleteCanonicalFinanceExpense(m.id).then(loadCanonicalVehicleExpenses).catch(error=>window.alert(error instanceof Error?error.message:'تعذر حذف الصيانة.'))} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 hover:text-rose-600" title="حذف"><Trash2 className="w-4 h-4" /></button></div>
+              <div className="flex items-center gap-2 shrink-0"><div className="font-black text-cyan-600">{formatMoney(m.total)} {currency}</div><button onClick={() => openMaintenanceForm(m)} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 hover:text-cyan-600" title="تعديل"><Edit2 className="w-4 h-4" /></button><button onClick={() => void financeService.deleteCanonicalFinanceExpense(m.id).then(() => setMaintList(prev => prev.filter(x => x.id !== m.id))).catch(error=>window.alert(error instanceof Error?error.message:'تعذر حذف الصيانة.'))} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 hover:text-rose-600" title="حذف"><Trash2 className="w-4 h-4" /></button></div>
             </div>
           ))}
         </div>

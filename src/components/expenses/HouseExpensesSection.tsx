@@ -166,15 +166,19 @@ export const HouseExpensesSection: React.FC<HouseExpensesSectionProps> = ({
 
     try {
       const notesPayload = JSON.stringify({ customType: newItem.customType, paymentType: newItem.paymentType, notes: newItem.notes });
-      if (editingId) await financeService.updateCanonicalFinanceExpense(editingId,{type:'house',title:newItem.type,category:newItem.type,amount:newItem.amount,date:newItem.date,notes:notesPayload});
-      else await financeService.addExpense({type:'house',title:newItem.type,category:newItem.type,amount:newItem.amount,date:newItem.date,notes:notesPayload});
-      await loadCanonicalExpenses(); setIsModalOpen(false);
+      const record = editingId
+        ? await financeService.updateCanonicalFinanceExpense(editingId,{type:'house',title:newItem.type,category:newItem.type,amount:newItem.amount,date:newItem.date,notes:notesPayload})
+        : await financeService.addExpense({type:'house',title:newItem.type,category:newItem.type,amount:newItem.amount,date:newItem.date,notes:notesPayload});
+      // [FIX perf-2026-11] تحديث محلي فوري من رد الخادم بدل إعادة جلب overview كاملة
+      const mapped: SpecializedExpense = { id:String(record.id||newItem.id), section:'house', type:String(record.title||record.category||newItem.type), customType:newItem.customType, amount:Number(record.amount)||newItem.amount, paymentType:newItem.paymentType, date:String(record.date||newItem.date).slice(0,10), notes:newItem.notes };
+      setExpenses(prev => editingId ? prev.map(x => x.id===mapped.id ? mapped : x) : [mapped, ...prev]);
+      setIsModalOpen(false);
     } catch(error){ window.alert(error instanceof Error?error.message:'تعذر حفظ المصروف المنزلي.'); }
   };
 
   const handleDelete = async (id: string) => {
     if (window.confirm(isAr ? 'هل أنت متأكد من حذف هذا المصروف؟' : 'Delete this expense?')) {
-      try { await financeService.deleteCanonicalFinanceExpense(id); await loadCanonicalExpenses(); }
+      try { await financeService.deleteCanonicalFinanceExpense(id); setExpenses(prev => prev.filter(x => x.id !== id)); }
       catch(error){ window.alert(error instanceof Error?error.message:'تعذر حذف المصروف.'); }
     }
   };
@@ -206,14 +210,18 @@ export const HouseExpensesSection: React.FC<HouseExpensesSectionProps> = ({
     };
     try {
       const notesPayload=JSON.stringify({familyMember:item.familyMember,facilityName:item.facilityName,facilityType:item.facilityType,conditionDescription:item.conditionDescription,doctorDiagnosis:item.doctorDiagnosis,examinationCost:item.examinationCost,medicationCost:item.medicationCost,notes:item.notes});
-      if(editingMedicalId) await financeService.updateCanonicalFinanceExpense(editingMedicalId,{type:'medical',title:item.familyMember,category:item.facilityType,amount:item.examinationCost+item.medicationCost,date:item.date,notes:notesPayload});
-      else await financeService.addExpense({type:'medical',title:item.familyMember,category:item.facilityType,amount:item.examinationCost+item.medicationCost,date:item.date,notes:notesPayload});
-      await loadCanonicalExpenses(); setIsMedicalModalOpen(false);
+      const record = editingMedicalId
+        ? await financeService.updateCanonicalFinanceExpense(editingMedicalId,{type:'medical',title:item.familyMember,category:item.facilityType,amount:item.examinationCost+item.medicationCost,date:item.date,notes:notesPayload})
+        : await financeService.addExpense({type:'medical',title:item.familyMember,category:item.facilityType,amount:item.examinationCost+item.medicationCost,date:item.date,notes:notesPayload});
+      // [FIX perf-2026-11] تحديث محلي فوري من رد الخادم بدل إعادة جلب overview كاملة
+      const mappedItem: MedicalExpenseRecord = { id:String(record.id||item.id), familyMember:String(record.title||item.familyMember), facilityName:item.facilityName, facilityType:item.facilityType, conditionDescription:item.conditionDescription, doctorDiagnosis:item.doctorDiagnosis, examinationCost:item.examinationCost, medicationCost:item.medicationCost, date:String(record.date||item.date).slice(0,10), notes:item.notes };
+      setMedicalExpenses(prev => editingMedicalId ? prev.map(x => x.id===mappedItem.id ? mappedItem : x) : [mappedItem, ...prev]);
+      setIsMedicalModalOpen(false);
     } catch(error){ window.alert(error instanceof Error?error.message:'تعذر حفظ المصروف الطبي.'); }
   };
 
   const deleteMedical = async (id: string) => {
-    if (window.confirm(isAr ? 'هل أنت متأكد من حذف المصروف الطبي؟' : 'Delete this medical expense?')) { try { await financeService.deleteCanonicalFinanceExpense(id); await loadCanonicalExpenses(); } catch(error){ window.alert(error instanceof Error?error.message:'تعذر حذف المصروف الطبي.'); } }
+    if (window.confirm(isAr ? 'هل أنت متأكد من حذف المصروف الطبي؟' : 'Delete this medical expense?')) { try { await financeService.deleteCanonicalFinanceExpense(id); setMedicalExpenses(prev => prev.filter(x => x.id !== id)); } catch(error){ window.alert(error instanceof Error?error.message:'تعذر حذف المصروف الطبي.'); } }
   };
 
   const exportMedical = (mode: 'excel' | 'print') => {
