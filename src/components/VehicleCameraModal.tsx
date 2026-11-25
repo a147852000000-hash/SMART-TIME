@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { VehicleAccidentRecord, Language } from '../types';
 import { VehiclesRepository } from '../services';
+import { readOdometerFromImage } from '../services/odometerOcr';
 
 interface VehicleCameraModalProps {
   isOpen: boolean;
@@ -73,9 +74,51 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
   // Odometer detected value
   const [detectedOdometer, setDetectedOdometer] = useState<string>('');
 
+  // [v1.4] قراءة العداد التلقائية على الجهاز (OCR مجاني 100%) — اقتراح يُراجَع، لا رقم وهمي
+  const [ocrStatus, setOcrStatus] = useState<'idle' | 'running' | 'ok' | 'low' | 'fail'>('idle');
+  const [ocrCandidates, setOcrCandidates] = useState<string[]>([]);
+  const ocrRunIdRef = useRef(0);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // [v1.4] تشغيل قراءة العداد التلقائية بعد التقاط/رفع الصورة (وضع العداد فقط).
+  // مهلة أمان 30 ثانية — أي فشل يرجع الإدخال اليدوي بهدوء.
+  const runOdometerAutoRead = (photoDataUrl: string) => {
+    if (mode !== 'odometer' || !photoDataUrl) return;
+    const runId = ++ocrRunIdRef.current;
+    setOcrStatus('running');
+    setOcrCandidates([]);
+    void (async () => {
+      try {
+        const result = await Promise.race([
+          readOdometerFromImage(photoDataUrl),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 30000)),
+        ]);
+        if (runId !== ocrRunIdRef.current) return;
+        if (!result) { setOcrStatus('fail'); return; }
+        const candidates = result.candidates.filter(Boolean);
+        setOcrCandidates(candidates);
+        if (result.confident && result.best) {
+          setDetectedOdometer(result.best);
+          setOcrStatus('ok');
+        } else if (candidates.length) {
+          setOcrStatus('low');
+        } else {
+          setOcrStatus('fail');
+        }
+      } catch {
+        if (runId === ocrRunIdRef.current) setOcrStatus('fail');
+      }
+    })();
+  };
+
+  const resetOdometerOcr = () => {
+    ocrRunIdRef.current += 1;
+    setOcrStatus('idle');
+    setOcrCandidates([]);
+  };
 
   // Quick chips for accidents
   const accidentTypes = [
@@ -94,6 +137,8 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
       setCapturedPhotoUrl(null);
       setIsCountingDown(false);
       setCountdownRemaining(0);
+      setDetectedOdometer('');
+      resetOdometerOcr();
 
       // Set current date & time
       const now = new Date();
@@ -234,6 +279,7 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
     setTimeout(() => setTriggerFlash(false), 250);
 
     let photoDataUrl = '';
+    let usedFallback = false;
 
     if (videoRef.current && videoRef.current.videoWidth > 0) {
       const canvas = document.createElement('canvas');
@@ -259,15 +305,18 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
     } else {
       // Fallback simulated realistic snapshot
       photoDataUrl = createFallbackImage(mode);
+      usedFallback = true;
     }
 
     setCapturedPhotoUrl(photoDataUrl);
     stopCamera();
 
     if (mode === 'odometer') {
-      // [FIX batch8] No fake OCR: the app must never invent a reading.
-      // The photo is evidence; the user types the real number themselves.
+      // [v1.4] OCR حقيقي على الجهاز: تعبئة تلقائية مقترحة + مراجعة يدوية دائماً.
       setDetectedOdometer('');
+      resetOdometerOcr();
+      if (!usedFallback) runOdometerAutoRead(photoDataUrl);
+      else setOcrStatus('fail');
     }
   };
 
@@ -321,8 +370,10 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
         setCapturedPhotoUrl(result);
         stopCamera();
         if (mode === 'odometer') {
-          // [FIX batch8] نفس المبدأ: لا قراءة وهمية — الإدخال اليدوي بعد التصوير.
+          // [v1.4] نفس القراءة التلقائية للصور المرفوعة من المعرض
           setDetectedOdometer('');
+          resetOdometerOcr();
+          runOdometerAutoRead(result);
         }
       };
       reader.readAsDataURL(file);
@@ -332,6 +383,8 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
   // Retake photo
   const handleRetake = () => {
     setCapturedPhotoUrl(null);
+    setDetectedOdometer('');
+    resetOdometerOcr();
     startCamera(facingMode);
   };
 
@@ -871,10 +924,34 @@ export const VehicleCameraModal: React.FC<VehicleCameraModalProps> = ({
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-400 mt-1">
-                      {isAr
-                        ? 'التطبيق لا يخمّن الأرقام — اقرأ العداد من الصورة واكتبه بدقة.'
-                        : 'The app never guesses numbers — read the odometer and type it exactly.'}
+                      {ocrStatus === 'running' && (isAr
+                        ? '⏳ جارٍ قراءة الرقم من الصورة تلقائياً (OCR على الجهاز)…'
+                        : '⏳ Reading the number from the photo on-device…')}
+                      {ocrStatus === 'ok' && (isAr
+                        ? '✅ تمت قراءة الرقم تلقائياً — راجعه وصحّحه إن لزم قبل الاعتماد.'
+                        : '✅ Auto-read complete — review and correct before applying.')}
+                      {ocrStatus === 'low' && (isAr
+                        ? '🔍 قراءة غير مؤكدة — جرّب الاقتراحات بالأسفل أو اكتب الرقم يدوياً.'
+                        : '🔍 Low confidence — try the suggestions below or type it manually.')}
+                      {(ocrStatus === 'fail' || ocrStatus === 'idle') && (isAr
+                        ? 'لم تكتمل القراءة التلقائية — اقرأ العداد من الصورة واكتبه بدقة (القراءة التلقائية محاولة مساعدة فقط لا أكثر).'
+                        : 'Auto-read unavailable — read the odometer from the photo and type it exactly.')}
                     </p>
+
+                    {ocrCandidates.length > 0 && ocrStatus !== 'ok' && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {ocrCandidates.map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => { setDetectedOdometer(c); setOcrStatus('ok'); }}
+                            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-accent-500/20 border border-slate-700 text-accent-500 font-mono font-bold text-sm transition-colors"
+                          >
+                            {c}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <button

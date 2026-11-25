@@ -35,6 +35,16 @@ function readSavedServer(): string {
   try { return window.localStorage.getItem(RUNTIME_API_KEY) || ''; } catch { return ''; }
 }
 
+/** هل نعمل داخل الغلاف الأصلي (APK)؟ — لعرض خيار تغيير السيرفر في الإعدادات. */
+export function isNativeShellPublic(): boolean {
+  return isNativeShell();
+}
+
+/** العنوان المحفوظ حالياً (أو الفارغ) — لعرضه في شاشة الإعدادات. */
+export function readSavedServerUrl(): string {
+  return readSavedServer();
+}
+
 /** يبني بطاقة الحوار ويعيد العناصر المهمة. */
 function buildDialog(initial: string, allowSkip: boolean): {
   root: HTMLDivElement; input: HTMLInputElement; msg: HTMLDivElement;
@@ -117,21 +127,31 @@ async function testServer(value: string, msg: HTMLDivElement): Promise<boolean> 
   }
 }
 
-function showSetupDialog(allowSkip: boolean, onDone: () => void): void {
+interface SetupDialogOptions {
+  allowSkip: boolean;
+  /** عنوان زر الإلغاء في وضع الفتح من الإعدادات (يختلف عن "تخطي" أول تشغيل). */
+  cancelLabel?: string;
+  onDone: (saved: boolean) => void;
+}
+
+function showSetupDialog(opts: SetupDialogOptions): void {
   if (document.getElementById(NATIVE_FLAG)) return;
+  const { allowSkip, cancelLabel, onDone } = opts;
   // تعبئة ذكية: العنوان المحفوظ أولاً، وإلا العنوان المثبت وقت البناء (بضغطة واحدة يشتغل)
   const prefill = readSavedServer() || BAKED_API_URL;
   const { root, input, msg, save, test, skip } = buildDialog(prefill, allowSkip);
   if (prefill && !readSavedServer()) {
     setMessage(msg, 'العنوان الافتراضي معبّأ مسبقاً — اضغط "حفظ وتشغيل" للمتابعة.', 'info');
   }
+  if (cancelLabel && skip) skip.textContent = cancelLabel;
 
   save.addEventListener('click', () => {
     const value = input.value.trim();
     if (!isHttpUrl(value)) { setMessage(msg, 'أدخل رابطاً صحيحاً يبدأ بـ https:// أو http://', 'err'); return; }
+    const changed = value !== readSavedServer();
     setRuntimeApiUrl(value);
     root.remove();
-    onDone();
+    onDone(changed);
   });
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') save.click(); });
 
@@ -141,28 +161,23 @@ function showSetupDialog(allowSkip: boolean, onDone: () => void): void {
     void testServer(value, msg);
   });
 
-  skip?.addEventListener('click', () => { root.remove(); onDone(); });
+  skip?.addEventListener('click', () => { root.remove(); onDone(false); });
 }
 
-/** زر عائم صغير لإعادة فتح شاشة إعداد السيرفر من داخل التطبيق. */
-function mountResetButton(): void {
-  if (document.getElementById('st-server-gear')) return;
-  const gear = document.createElement('button');
-  gear.id = 'st-server-gear';
-  gear.title = 'إعدادات السيرفر';
-  gear.textContent = '⚙';
-  gear.setAttribute('aria-label', 'إعدادات السيرفر');
-  gear.style.cssText = [
-    'position:fixed', 'bottom:14px', 'left:14px', 'z-index:2147483646',
-    'width:34px', 'height:34px', 'border-radius:50%', 'border:0',
-    'background:rgba(15,23,42,.55)', 'color:#fff', 'font-size:16px',
-    'cursor:pointer', 'opacity:.45',
-  ].join(';');
-  gear.addEventListener('click', () => {
-    showSetupDialog(false, () => window.location.reload());
+/**
+ * فتح شاشة تغيير السيرفر من داخل الإعدادات (بدل زر ⚙ العائم السابق
+ * الذي كان متراكباً مع أزرار الواجهة في الوضع العربي ويسبب فتحاً بالخطأ).
+ * تعيد true إذا حُفظ عنوان جديد (وفيها إعادة تحميل الصفحة من المنادي).
+ */
+export function openServerSetupDialog(): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    showSetupDialog({ allowSkip: true, cancelLabel: 'إلغاء', onDone: (saved) => resolve(saved) });
   });
-  document.body.appendChild(gear);
 }
+
+// [v1.4] أُزيل زر ⚙ العائم السابق: كان ثابتاً في أسفل يسار الشاشة فوق نفس
+// موضع زر الإرسال في واجهة الشات العربية (RTL) — أي ضغطة إرسال تفتح شاشة
+// السيرفر بالخطأ. بابه يبقى الآن من الإعدادات ← النسخ الاحتياطي فقط.
 
 /**
  * داخل الغلاف الأصلي نعطّل الـ service-worker المسجل من الأصل المحلي:
@@ -188,7 +203,6 @@ export function ensureServerConfig(): Promise<void> {
   try {
     if (typeof window === 'undefined' || !isNativeShell()) return Promise.resolve();
     disableServiceWorkerInNative();
-    mountResetButton();
     const saved = readSavedServer();
     const forced = window.location.hash === '#server-setup';
     // بدون أي عِرقلة: لو العنوان مثبت وقت البناء يشتغل التطبيق فوراً —
@@ -196,7 +210,7 @@ export function ensureServerConfig(): Promise<void> {
     if (saved && isHttpUrl(saved)) return Promise.resolve();
     if (BAKED_API_URL && !forced) return Promise.resolve();
     return new Promise<void>((resolve) => {
-      showSetupDialog(!saved, () => resolve());
+      showSetupDialog({ allowSkip: !saved, onDone: () => resolve() });
     });
   } catch {
     return Promise.resolve();

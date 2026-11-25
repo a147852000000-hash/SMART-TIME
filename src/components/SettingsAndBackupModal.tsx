@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { isNativeShellPublic, readSavedServerUrl, openServerSetupDialog } from '../mobileServerSetup';
 import { enablePasskeyOnThisDevice, listAccountPasskeys, removeAccountPasskey, fingerprintLoginAvailable, switchSessionRole, getStoredSession } from '../services/authService';
 import {
   Settings,
@@ -2670,6 +2671,26 @@ export const SettingsAndBackupModal: React.FC<SettingsAndBackupModalProps> = ({
                   <input type="file" accept=".json" onChange={handleImportBackup} className="hidden" />
                 </label>
               </div>
+
+              {/* [v1.4] إعدادات السيرفر داخل التطبيق — بدل زر ⚙ العائم السابق
+                  الذي كان متراكباً مع أزرار الواجهة (يُعرض داخل غلاف الأندرويد فقط) */}
+              {isNativeShellPublic() && (
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+                  <h4 className="font-bold text-slate-900 dark:text-white">
+                    {isAr ? 'إعدادات السيرفر (تطبيق الموبايل)' : 'Server Settings (Mobile App)'}
+                  </h4>
+                  <p className="text-slate-500 leading-relaxed" dir="ltr" style={{ textAlign: 'left', wordBreak: 'break-all' }}>
+                    {readSavedServerUrl() || 'https://smart-time-ai.duckdns.org'}
+                  </p>
+                  <button
+                    onClick={() => { void openServerSetupDialog().then((saved) => { if (saved) window.location.reload(); }); }}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent-500 hover:bg-accent-600 text-slate-950 font-bold transition-all shadow-xs"
+                  >
+                    <Settings className="w-4 h-4" />
+                    <span>{isAr ? 'تغيير عنوان السيرفر' : 'Change Server URL'}</span>
+                  </button>
+                </div>
+              )}
 
               <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
                 <span className="text-slate-400">

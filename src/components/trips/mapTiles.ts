@@ -19,13 +19,27 @@ let maptilerDisabled = false;
 let validationPromise: Promise<boolean> | null = null;
 
 /**
+ * داخل غلاف الأندرويد (Capacitor) مصدر الصفحة https://localhost — نطاق غير
+ * مسموح في مفتاح MapTiler المقيّد دومينياً، فنعطل MapTiler نهائياً من البداية
+ * ونعرض المصادر المجانية مباشرة (OSM / Esri) — قرار حاسم بلا أي فحص شبكة.
+ */
+export function isNativeShell(): boolean {
+  try {
+    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    return typeof cap?.isNativePlatform === 'function' && cap.isNativePlatform() === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * MapTiler يرجع صورة الخطأ ("Invalid key") بحالة 403 **مع محتوى صورة PNG صالح**،
  * ووسم <img> داخل Leaflet يعتبر أي محتوى قابل للفك تحميلًا ناجحًا —
  * لذلك لا يُطلق tileerror أبدًا ولا يمكن الاعتماد عليه للكشف.
  * الحل: تحقق استباقي واحد لكل جلسة عبر fetch (يرى حالة HTTP الحقيقية).
  */
 export function ensureMapTilerValid(key: string): Promise<boolean> {
-  if (!key || maptilerDisabled) return Promise.resolve(false);
+  if (!key || maptilerDisabled || isNativeShell()) return Promise.resolve(false);
   if (!validationPromise) {
     validationPromise = fetch(
       `https://api.maptiler.com/maps/streets-v2/0/0/0.png?key=${encodeURIComponent(key)}`,
@@ -67,7 +81,9 @@ export interface TileConfig {
 }
 
 export function getTileConfig(mode: TileMode, key: string): TileConfig {
-  if (key && !maptilerDisabled) {
+  // داخل الغلاف الأصلي (APK) نستخدم المصادر المجانية مباشرة — مفتاح MapTiler
+  // مقيّد بنطاق الموقع ولا يُقبل من origin المطبّق (https://localhost).
+  if (key && !maptilerDisabled && !isNativeShell()) {
     return {
       url: `https://api.maptiler.com/maps/${STYLE_MAP[mode]}/{z}/{x}/{y}.png?key=${key}`,
       attribution: '&copy; MapTiler &copy; OpenStreetMap contributors',

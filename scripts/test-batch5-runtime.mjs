@@ -168,9 +168,10 @@ await withServer({}, async (baseA) => {
       headers: { Authorization: `Bearer ${token}` },
     });
     const sportsBody = await sportsAuth.json().catch(() => ({}));
+    // [ticker-fresh] بدون مفتاح مدفوع السيرفر يرجع مصدر TheSportsDB المجاني (أو unconfigured لو الشبكة مقطوعة) — الاتنين سلوك صحيح
     check(
-      sportsAuth.status === 200 && sportsBody.source === 'unconfigured',
-      `B-7 authed /api/live/sports passes gate -> 200 unconfigured (${sportsAuth.status})`
+      sportsAuth.status === 200 && (sportsBody.source === 'unconfigured' || sportsBody.source === 'thesportsdb') && Array.isArray(sportsBody.matches),
+      `B-7 authed /api/live/sports passes gate -> 200 free source, matches[] (source=${sportsBody.source})`
     );
 
     const newsAuth = await fetchT(`${baseA}/api/live/news?lang=ar`, {
