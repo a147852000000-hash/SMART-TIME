@@ -38,4 +38,15 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- الكاميرا: تصوير عداد الكيلومترات وصور الشات (getUserMedia داخل WebView) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- الميكروفون: البحث الصوتي والمحادثات الصوتية والذكري -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!-- الموقع: زر "موقعي" في خريطة الرحلات -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 </manifest>

@@ -5,6 +5,7 @@ import type { Language } from '../../types';
 import { apiUrl } from '../../services/apiConfig';
 import { Crosshair, Check, Loader2, Plus, Trash2, CheckCircle2, GripVertical } from 'lucide-react';
 import { TripLocation, LocationPickerMode } from './types';
+import { getTileConfig, attachTileErrorFallback } from './mapTiles';
 
 interface MapLocationPickerProps {
   mode: LocationPickerMode;
@@ -155,13 +156,12 @@ export const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
   useEffect(() => {
     if (!mapRef.current || map.current) return;
     const m = L.map(mapRef.current, { zoomControl: true }).setView([selectedPos.lat, selectedPos.lng], 14);
-    const tileUrl = key
-      ? `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${key}`
-      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-    L.tileLayer(tileUrl, {
+    const tileCfg = getTileConfig('street', key);
+    const tileLayer = L.tileLayer(tileCfg.url, {
       maxZoom: 20,
-      attribution: key ? '&copy; MapTiler &copy; OpenStreetMap' : '&copy; OpenStreetMap contributors',
+      attribution: tileCfg.attribution,
     }).addTo(m);
+    attachTileErrorFallback(tileLayer, 'street', key);
 
     const activeIcon = currentMode === 'pickup' ? pickupDivIcon : currentMode === 'stop' ? stopDivIcon : dropoffDivIcon;
     const initialMarker = L.marker([selectedPos.lat, selectedPos.lng], {

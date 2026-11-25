@@ -119,7 +119,12 @@ async function testServer(value: string, msg: HTMLDivElement): Promise<boolean> 
 
 function showSetupDialog(allowSkip: boolean, onDone: () => void): void {
   if (document.getElementById(NATIVE_FLAG)) return;
-  const { root, input, msg, save, test, skip } = buildDialog(readSavedServer(), allowSkip);
+  // تعبئة ذكية: العنوان المحفوظ أولاً، وإلا العنوان المثبت وقت البناء (بضغطة واحدة يشتغل)
+  const prefill = readSavedServer() || BAKED_API_URL;
+  const { root, input, msg, save, test, skip } = buildDialog(prefill, allowSkip);
+  if (prefill && !readSavedServer()) {
+    setMessage(msg, 'العنوان الافتراضي معبّأ مسبقاً — اضغط "حفظ وتشغيل" للمتابعة.', 'info');
+  }
 
   save.addEventListener('click', () => {
     const value = input.value.trim();

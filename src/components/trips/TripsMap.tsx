@@ -5,6 +5,7 @@ import { MapPin, Navigation, Crosshair, Route, Loader2, Layers, Maximize2, PlusC
 import { TripLocation } from './types';
 import type { Language } from '../../types';
 import { apiUrl } from '../../services/apiConfig';
+import { getTileConfig, attachTileErrorFallback, type TileMode } from './mapTiles';
 
 interface TripsMapProps {
   pickup: TripLocation | null;
@@ -89,22 +90,9 @@ export const TripsMap: React.FC<TripsMapProps> = ({
   const userLocationMarkerRef = useRef<L.CircleMarker | null>(null);
   const floatPinRef = useRef<L.Marker | null>(null);
 
-  // Free-tier MapTiler styles validated on 2026-11-17 (HTTP 200 with domain allowlist):
-  // streets-v2 / satellite (pure imagery) / hybrid (imagery + labels) / outdoor-v2 / streets-v2-dark
-  const buildTileUrl = (mode: 'street' | 'satellite' | 'hybrid' | 'terrain' | 'dark') => {
-    if (!maptilerKey) {
-      if (mode === 'satellite' || mode === 'hybrid') return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-      return 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-    }
-    const styles: Record<typeof mode, string> = {
-      street: 'streets-v2',
-      satellite: 'satellite',
-      hybrid: 'hybrid',
-      terrain: 'outdoor-v2',
-      dark: 'streets-v2-dark',
-    };
-    return `https://api.maptiler.com/maps/${styles[mode]}/{z}/{x}/{y}.png?key=${maptilerKey}`;
-  };
+  // عند فشل MapTiler (مفتاح غير صالح / مقيد بنطاق آخر / تجاوز الحد المجاني)
+  // نتحول تلقائياً للمصدر المجاني (OSM / Esri) عبر attachTileErrorFallback.
+  const buildTileConfig = (mode: TileMode) => getTileConfig(mode, maptilerKey);
 
   const handlersRef = useRef({ onSetPickup, onSetDropoff, onSetStop, onEditStop, onRemoveStop, isRtl });
   handlersRef.current = { onSetPickup, onSetDropoff, onSetStop, onEditStop, onRemoveStop, isRtl };
@@ -122,19 +110,14 @@ export const TripsMap: React.FC<TripsMapProps> = ({
       scrollWheelZoom: true,
     }).setView(center, 13);
 
-    const tileUrl = maptilerKey
-      ? `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${maptilerKey}`
-      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-    // NOTE: initial layer = buildTileUrl('street') equivalent; kept explicit here for clarity
-
-    tileLayerRef.current = L.tileLayer(tileUrl, {
+    const tileCfg = buildTileConfig('street');
+    tileLayerRef.current = L.tileLayer(tileCfg.url, {
       maxZoom: 20,
       // Retina tiles: request z+1 and downscale — crisp Google-like rendering on high-DPI phones.
       detectRetina: true,
-      attribution: maptilerKey
-        ? '&copy; MapTiler &copy; OpenStreetMap contributors'
-        : '&copy; OpenStreetMap contributors',
+      attribution: tileCfg.attribution,
     }).addTo(map);
+    attachTileErrorFallback(tileLayerRef.current, 'street', maptilerKey);
 
     markers.current = L.layerGroup().addTo(map);
     leafletMap.current = map;
@@ -425,16 +408,14 @@ export const TripsMap: React.FC<TripsMapProps> = ({
   const changeMapMode = (mode: 'street' | 'satellite' | 'hybrid' | 'terrain' | 'dark') => {
     const map = leafletMap.current;
     if (!map) return;
+    const tileCfg = buildTileConfig(mode);
     tileLayerRef.current?.remove();
-    tileLayerRef.current = L.tileLayer(buildTileUrl(mode), {
+    tileLayerRef.current = L.tileLayer(tileCfg.url, {
       maxZoom: 20,
       detectRetina: true,
-      attribution: maptilerKey
-        ? '&copy; MapTiler &copy; OpenStreetMap contributors'
-        : mode === 'satellite' || mode === 'hybrid'
-        ? 'Imagery &copy; Esri, Maxar, Earthstar Geographics'
-        : '&copy; OpenStreetMap contributors',
+      attribution: tileCfg.attribution,
     }).addTo(map);
+    attachTileErrorFallback(tileLayerRef.current, mode, maptilerKey);
     setMapMode(mode);
     setModeOpen(false);
   };
