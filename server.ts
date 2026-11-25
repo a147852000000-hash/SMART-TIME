@@ -12,7 +12,10 @@ import { getServiceStatuses, seedServiceStatuses, setServiceStatus } from "./bac
 import { chatRouter, setupChatWebSocket } from "./backend/chatServer.js";
 import { createCanonicalExpense, deleteCanonicalExpense, getCanonicalExpense, updateCanonicalExpense, FINANCE_EXPENSE_TYPES, type FinanceExpenseType } from "./backend/ai/finance/financeRepository.js";
 import { getAiCanonicalState } from "./backend/ai/finance/aiCanonicalProjection.js";
+import { importExpensesForUser } from "./backend/ai/finance/expenseMigration.js";
 import { acknowledgeEventReminder, listPendingEventReminders, queueDueEventReminders } from "./backend/ai/calendar/reminderScheduler.js";
+import { createCalendarEvent, deleteCalendarEvent, listCalendarEvents, updateCalendarEvent } from "./backend/ai/calendar/eventExecutor.js";
+import { groqProvider, isGroqConfigured } from "./backend/ai/providers/groqProvider.js";
 import { estimateProviderPrice, type RideProvider, type RideCategory } from "./src/services/ridePriceEstimator.js";
 import { askSmartAiCore } from "./backend/ai/smartAiCore.js";
 import { isLocalSmartAiConfigured } from "./backend/ai/localInference.js";
@@ -228,6 +231,23 @@ function rateLimitGuard(kind: string, max: number, windowMinutes: number, keyPar
     }
     next();
   };
+}
+
+// [FIX review-2026-11] STT quota + payload contract — restored from the
+// documented phase-12 design so the audit gate holds again.
+const sttRequestWindow = new Map<string, { startedAt: number; count: number }>();
+const STT_MAX_REQUESTS_PER_MINUTE = Math.max(1, Number(process.env.STT_MAX_REQUESTS_PER_MINUTE || 12));
+const STT_MAX_AUDIO_BYTES = Math.max(256 * 1024, Number(process.env.STT_MAX_AUDIO_BYTES || 8 * 1024 * 1024));
+function consumeSttQuota(userId: string): boolean {
+  const now = Date.now();
+  const current = sttRequestWindow.get(userId);
+  if (!current || now - current.startedAt >= 60_000) {
+    sttRequestWindow.set(userId, { startedAt: now, count: 1 });
+    return true;
+  }
+  if (current.count >= STT_MAX_REQUESTS_PER_MINUTE) return false;
+  current.count += 1;
+  return true;
 }
 
 function otpHash(code:string){return crypto.createHash('sha256').update(code).digest('hex');}
@@ -3106,6 +3126,269 @@ app.post("/api/ai/reminders/:reminderId/ack", (req, res) => {
     res.json({ ok: true, acknowledged: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message || "تعذر تأكيد التذكير." });
+  }
+});
+
+// [FIX review-2026-11] Calendar events CRUD API — the exact endpoints
+// src/services/aiService.ts and CalendarView.tsx already call (GET/POST
+// /api/ai/events, PATCH/DELETE /api/ai/events/:id). Previously these hit the
+// 404 catch-all, so the calendar section could not list, add, edit or delete
+// any event. Backed by backend/ai/calendar/eventExecutor.ts (ai_events table).
+app.get("/api/ai/events", (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  try {
+    const from = typeof req.query.from === "string" ? req.query.from : undefined;
+    const to = typeof req.query.to === "string" ? req.query.to : undefined;
+    const events = listCalendarEvents(user.id, { from, to });
+    res.json({ events });
+  } catch (e: any) {
+    const bad = /must be|required|greater than/i.test(e.message || "");
+    res.status(bad ? 400 : 500).json({ error: e.message || "تعذر قراءة الأحداث." });
+  }
+});
+
+app.post("/api/ai/events", (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  try {
+    const payload = req.body && typeof req.body === "object" ? req.body : {};
+    res.status(201).json(createCalendarEvent(user.id, payload));
+  } catch (e: any) {
+    const bad = /must be|required/i.test(e.message || "");
+    res.status(bad ? 400 : 500).json({ error: e.message || "تعذر إنشاء الحدث." });
+  }
+});
+
+app.patch("/api/ai/events/:eventId", (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  try {
+    const payload = req.body && typeof req.body === "object" ? req.body : {};
+    res.json(updateCalendarEvent(user.id, String(req.params.eventId || ""), payload));
+  } catch (e: any) {
+    const msg = e.message || "";
+    const status = /not found/i.test(msg) ? 404 : /must be|required/i.test(msg) ? 400 : 500;
+    res.status(status).json({ error: msg || "تعذر تعديل الحدث." });
+  }
+});
+
+app.delete("/api/ai/events/:eventId", (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  try {
+    deleteCalendarEvent(user.id, String(req.params.eventId || ""));
+    res.json({ ok: true });
+  } catch (e: any) {
+    const msg = e.message || "";
+    const status = /not found/i.test(msg) ? 404 : 500;
+    res.status(status).json({ error: msg || "تعذر حذف الحدث." });
+  }
+});
+
+// [FIX review-2026-11] Canonical finance migration — the endpoint
+// src/services/financeService.ts reconcileCanonicalFinance() calls
+// (POST /api/finance/migrate). Idempotent import into the canonical finance
+// store; identical records are skipped, conflicting ids are reported.
+app.post("/api/finance/migrate", (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const items = Array.isArray((body as any).expenses) ? (body as any).expenses : [];
+    const results = importExpensesForUser(user.id, items);
+    const count = (status: string) => results.filter((r) => r.status === status).length;
+    res.json({
+      source: "canonical-finance-migrate",
+      total: results.length,
+      inserted: count("inserted"),
+      skipped: count("skipped"),
+      conflicts: count("conflict"),
+      results,
+    });
+  } catch (e: any) {
+    const msg = e.message || "";
+    res.status(/required|invalid|Too many/i.test(msg) ? 400 : 500).json({ error: msg || "تعذر تنفيذ الترحيل." });
+  }
+});
+
+// [FIX review-2026-11] Groq speech-to-text — restored to the full documented
+// phase-12 contract: quota protection (consumeSttQuota), payload size bound
+// (STT_MAX_AUDIO_BYTES), locale/mime validation, Arabic transliteration retry,
+// and the privacy non-persistence response (persisted: false). Used by
+// VoiceSearchModal and SmartAiVoiceConversationModal via groqSttService.ts.
+app.post("/api/ai/stt", async (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول لاستخدام تحويل الصوت." });
+  if (!isGroqConfigured()) {
+    return res.status(503).json({ error: "خدمة التعرف على الصوت غير مهيأة على الخادم بعد." });
+  }
+  if (!consumeSttQuota(String(user.id))) return res.status(429).json({ error: "حد تحويل الصوت مؤقتاً — جرب بعد دقيقة." });
+
+  try {
+    const rawAudio = String(req.body?.audioBase64 || "").trim();
+    const language = String(req.body?.language || "ar").trim().toLowerCase();
+    const locale = String(req.body?.locale || (language === "ar" ? "ar-EG" : "en-US")).trim();
+    const mimeType = String(req.body?.mimeType || "audio/webm").split(";")[0].trim().toLowerCase();
+    if (!rawAudio) return res.status(400).json({ error: "audioBase64 is required." });
+    if (!["ar", "en"].includes(language)) return res.status(400).json({ error: "language must be ar or en." });
+    if (!["ar-EG", "en-US"].includes(locale)) return res.status(400).json({ error: "Unsupported STT locale." });
+    const allowedMimeTypes = new Set(["audio/webm", "audio/mp4", "audio/wav", "audio/ogg", "audio/mpeg", "audio/flac"]);
+    if (!allowedMimeTypes.has(mimeType)) return res.status(415).json({ error: "Unsupported audio format." });
+
+    const normalizedBase64 = rawAudio.replace(/^data:[^,]*;base64,/i, "").replace(/\s+/g, "");
+    const maxBase64Chars = Math.ceil(STT_MAX_AUDIO_BYTES / 3) * 4 + 4;
+    if (normalizedBase64.length > maxBase64Chars) {
+      return res.status(413).json({ error: "Audio payload is too large." });
+    }
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(normalizedBase64) || normalizedBase64.length % 4 === 1) {
+      return res.status(400).json({ error: "Invalid base64 audio payload." });
+    }
+    const audio = Buffer.from(normalizedBase64, "base64");
+    if (!audio.length) return res.status(400).json({ error: "Audio payload is empty." });
+    if (audio.length > STT_MAX_AUDIO_BYTES) return res.status(413).json({ error: "Audio payload is too large." });
+
+    const prompt = language === "ar"
+      ? "الكلام باللهجة المصرية وبالعربي. اكتب النص المنطوق بالعربية فقط وبنفس الكلمات التي قالها المتحدث. حافظ على الكلمات المصرية والأسماء والأرقام والتواريخ. لا تترجم الكلام إلى الإنجليزية ولا تكتب العربية بحروف لاتينية. اكتب الكلمات الإنجليزية فقط إذا نطقها المتحدث فعلًا."
+      : "اكتب الكلام المنطوق فقط كما قيل، مع الحفاظ على الأرقام والتواريخ والأسماء والكلمات الإنجليزية التي نُطقت فعلًا.";
+
+    let transcription = await groqProvider.transcribeAudio({
+      audio,
+      mimeType,
+      language,
+      filename: mimeType === "audio/webm" ? "voice.webm" : "voice.audio",
+      prompt,
+    });
+
+    // Whisper occasionally emits Latin transliteration for short Arabic mobile
+    // utterances. If an Arabic request comes back mostly Latin, retry once with
+    // the full Whisper model and an explicit Arabic-script prompt.
+    if (language === "ar" && /[A-Za-z]/.test(transcription.text)) {
+      const letters = transcription.text.replace(/[^A-Za-z\u0600-\u06FF]/g, "").length;
+      const latin = transcription.text.replace(/[^A-Za-z]/g, "").length;
+      if (letters > 0 && latin / letters >= 0.35) {
+        transcription = await groqProvider.transcribeAudio({
+          audio,
+          mimeType,
+          language,
+          filename: mimeType === "audio/webm" ? "voice.webm" : "voice.audio",
+          model: "whisper-large-v3",
+          prompt: "الكلام باللهجة المصرية. أخرج النص العربي المنطوق فقط كما قيل. ممنوع الترجمة إلى الإنجليزية وممنوع كتابة العربية بحروف لاتينية. حافظ على الكلمات المصرية والأسماء والأرقام والتواريخ، واكتب الإنجليزية فقط إذا نُطقت فعلًا.",
+        });
+
+        const retryText = transcription.text.trim();
+        const retryArabic = retryText.replace(/[^\u0600-\u06FF]/g, "").length;
+        const retryLatin = retryText.replace(/[^A-Za-z]/g, "").length;
+        if (retryText && retryLatin > 0 && retryArabic === 0) {
+          return res.status(502).json({
+            error: "تعذر الحصول على تفريغ عربي موثوق من الصوت.",
+            code: "arabic-transcript-validation-failed",
+          });
+        }
+      }
+    }
+
+    return res.json({
+      provider: transcription.provider,
+      model: transcription.model,
+      transcript: transcription.text,
+      requestId: transcription.requestId,
+      locale,
+      persisted: false,
+    });
+  } catch (error) {
+    if (error instanceof Error && /authentication failed/i.test(error.message)) {
+      return res.status(502).json({ error: "Speech provider authentication failed." });
+    }
+    if (error instanceof Error && /rate limit/i.test(error.message)) {
+      return res.status(429).json({ error: "Speech provider rate limit reached." });
+    }
+    res.status(500).json({ error: error instanceof Error ? error.message : "Speech transcription failed." });
+  }
+});
+
+// [FIX review-2026-11] Egyptian TTS — restored from the documented phase-12
+// contract (SMART AI demo speaks replies in Egyptian Arabic via the local
+// Voice DNA engine). Public endpoint guarded by per-IP quota; speakers are
+// whitelisted; audio is streamed back without any persistence.
+app.post("/api/ai/egyptian-tts", async (req, res) => {
+  try {
+    if (!smartVoiceDnaProvider.isAvailable()) {
+      return res.status(503).json({ error: "محرك الصوت المصري غير موصل حاليًا." });
+    }
+
+    const ipKey = "public-tts:" + clientIp(req);
+    if (!consumeVoiceDnaQuota(ipKey)) {
+      return res.status(429).json({ error: "طلبات الصوت كثيرة حاليًا. حاول بعد قليل." });
+    }
+
+    const text = String(req.body?.text || "").trim();
+    const speaker = String(req.body?.speaker || "Mohamed").trim();
+    if (!text) return res.status(400).json({ error: "النص الصوتي مطلوب." });
+    if (text.length > 800) return res.status(413).json({ error: "النص الصوتي طويل جدًا." });
+
+    const allowedSpeakers = new Set([
+      "Abdelrahman", "Abdullah", "Kamal", "Hossam", "Mohamed",
+      "Omar", "Sayed", "Zaki", "Aly", "Essam", "Ahmed",
+      "Asmaa", "Esraa", "Hanan", "Sarah", "Yasmin", "Omnia",
+    ]);
+    if (!allowedSpeakers.has(speaker)) {
+      return res.status(400).json({ error: "الصوت المصري المطلوب غير متاح." });
+    }
+
+    const result = await smartVoiceDnaProvider.synthesize({
+      text,
+      language: "ar",
+      locale: "ar-EG",
+      profileId: "smart-ai-egyptian-default",
+      speaker,
+      speakingStyle: "natural",
+    });
+
+    res.setHeader("Content-Type", result.contentType || "audio/wav");
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-SMART-VOICE-PROVIDER", result.provider);
+    return res.send(Buffer.from(result.audio));
+  } catch (error: any) {
+    return res.status(502).json({ error: "تعذر توليد الصوت المصري حاليًا." });
+  }
+});
+
+// [FIX review-2026-11] LiveKit voice token — the endpoint src/services/livekitVoiceService.ts
+// calls (POST /api/voice/livekit-token) from SmartAiVoiceConversationModal.
+// بدون مفاتيح LIVEKIT_* يعود 503 'livekit-not-configured' والعميل يعالجه
+// بأمان بالفعل؛ ومع المفاتيح (LiveKit Cloud — الخطة المجانية) يولّد توكن
+// غرفة قصير العمر بتوقيع HS256 بدون أي مكتبة إضافية.
+app.post("/api/voice/livekit-token", rateLimitGuard("livekit", 30, 15, (req) => {
+  const user = authUser(req);
+  return [user ? user.id : clientIp(req)];
+}), (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  const serverUrl = String(process.env.LIVEKIT_URL || process.env.LIVEKIT_SERVER_URL || "").trim();
+  const apiKey = String(process.env.LIVEKIT_API_KEY || "").trim();
+  const apiSecret = String(process.env.LIVEKIT_API_SECRET || "").trim();
+  if (!serverUrl || !apiKey || !apiSecret) {
+    return res.status(503).json({ error: "خدمة الصوت الحية غير مهيأة على الخادم.", code: "livekit-not-configured" });
+  }
+  try {
+    const roomName = `voice-${String(user.id).replace(/[^a-zA-Z0-9]/g, "").slice(0, 24)}-${Date.now().toString(36)}`;
+    const identity = String(user.id).slice(0, 64);
+    const now = Math.floor(Date.now() / 1000);
+    const b64url = (value: string) => Buffer.from(value, "utf8").toString("base64url");
+    const header = b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+    const claims = b64url(JSON.stringify({
+      iss: apiKey,
+      sub: identity,
+      jti: identity,
+      nbf: now - 5,
+      exp: now + 600,
+      video: { roomJoin: true, room: roomName, canPublish: true, canSubscribe: true, canPublishData: true },
+    }));
+    const signature = crypto.createHmac("sha256", apiSecret).update(`${header}.${claims}`).digest("base64url");
+    res.json({ serverUrl, token: `${header}.${claims}.${signature}`, roomName });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || "تعذر إنشاء جلسة الصوت." });
   }
 });
 

@@ -86,6 +86,7 @@ export const TripsMap: React.FC<TripsMapProps> = ({
   const [routeInfo, setRouteInfo] = useState<{ distanceKm?: number; durationMins?: number } | null>(null);
   const isRtl = language === 'ar';
   const maptilerKey = import.meta.env.VITE_MAPTILER_API_KEY || '';
+  const [tilesProvider, setTilesProvider] = useState<'maptiler' | 'community'>(maptilerKey ? 'maptiler' : 'community');
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const userLocationMarkerRef = useRef<L.CircleMarker | null>(null);
   const floatPinRef = useRef<L.Marker | null>(null);
@@ -117,7 +118,7 @@ export const TripsMap: React.FC<TripsMapProps> = ({
       detectRetina: true,
       attribution: tileCfg.attribution,
     }).addTo(map);
-    attachTileErrorFallback(tileLayerRef.current, 'street', maptilerKey);
+    attachTileErrorFallback(tileLayerRef.current, 'street', maptilerKey, () => setTilesProvider('community'));
 
     markers.current = L.layerGroup().addTo(map);
     leafletMap.current = map;
@@ -415,7 +416,7 @@ export const TripsMap: React.FC<TripsMapProps> = ({
       detectRetina: true,
       attribution: tileCfg.attribution,
     }).addTo(map);
-    attachTileErrorFallback(tileLayerRef.current, mode, maptilerKey);
+    attachTileErrorFallback(tileLayerRef.current, mode, maptilerKey, () => setTilesProvider('community'));
     setMapMode(mode);
     setModeOpen(false);
   };
@@ -515,7 +516,7 @@ export const TripsMap: React.FC<TripsMapProps> = ({
 
         <div className="flex items-center gap-2">
           <span className="smart-map-live">
-            <span /> {maptilerKey ? 'MapTiler Live' : 'OpenStreetMap Live'}
+            <span /> {tilesProvider === 'maptiler' ? 'MapTiler Live' : 'OpenStreetMap Live'}
           </span>
         </div>
       </div>

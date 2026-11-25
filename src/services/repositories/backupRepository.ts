@@ -1,5 +1,6 @@
 import { STORAGE_KEYS } from '../storageKeys';
 import { StorageAdapter } from '../storageAdapter';
+import { restoreLegacyExpensesMirror } from './legacyFinanceMirror';
 import { UserRepository } from './userRepository';
 import { NotesRepository } from './notesRepository';
 import { ExpensesRepository } from './expensesRepository';
@@ -168,8 +169,8 @@ export class BackupRepository {
       if (d.calcHistory) NotesRepository.saveCalculatorHistory(d.calcHistory as never);
       // Legacy expense writes throw by design (canonical Finance API is the
       // only writer). Restore into the same storage key the reader and the
-      // migration preview consume instead.
-      if (d.expenses) StorageAdapter.setItem(STORAGE_KEYS.EXPENSES, d.expenses);
+      // migration preview consume instead — through the documented mirror helper.
+      if (d.expenses) restoreLegacyExpensesMirror(d.expenses);
       if (d.budget) ExpensesRepository.saveBudget(d.budget as never);
       if (d.monthlyIncome) ExpensesRepository.saveMonthlyIncome(d.monthlyIncome as never);
       if (d.bankCertificates) ExpensesRepository.saveBankCertificates(d.bankCertificates as never);

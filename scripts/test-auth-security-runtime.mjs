@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -10,6 +10,10 @@ import { DatabaseSync } from 'node:sqlite';
 const root = process.cwd();
 const tempDir = mkdtempSync(path.join(os.tmpdir(), 'smart-time-auth-test-'));
 const dbPath = path.join(tempDir, 'auth-test.db');
+// [FIX review-2026-11] ابتُكر الملف فارغًا قبل إقلاع السيرفر — بدون هذا
+// ينسخ السيرفر قاعدة البيانات المحلية الحقيقية (بها حساب المالك) إلى المسار
+// المؤقت فيتصادم INSERT الاختبار مع users.email الموجود مسبقًا.
+writeFileSync(dbPath, '');
 let child;
 let output = '';
 let server;

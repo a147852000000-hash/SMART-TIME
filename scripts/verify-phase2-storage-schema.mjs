@@ -16,10 +16,11 @@ const hidden = hiddenKeys.filter((key) =>
   source.includes(`[STORAGE_KEYS.${key}]: {`),
 ).length;
 
-// Phase 2 closed at 28 keys (Run #18), Phase 3 expanded to 33 keys (Run #7)
-// Allow both for backward compatibility after Phase 3.
-if (known !== 28 && known !== 33) {
-  throw new Error(`Phase 2/3 expected 28 or 33 known keys, found ${known}`);
+// Phase 2 closed at 28 keys (Run #18), Phase 3 expanded to 33 keys (Run #7),
+// then the secure-vault removal (ce61219) legitimately dropped one key → 32.
+// Allow all three historical counts for backward compatibility.
+if (known !== 28 && known !== 32 && known !== 33) {
+  throw new Error(`Phase 2/3 expected 28, 32 or 33 known keys, found ${known}`);
 }
 if (hidden !== 5) {
   throw new Error(`Phase 2 expected 5 hidden keys, found ${hidden}`);

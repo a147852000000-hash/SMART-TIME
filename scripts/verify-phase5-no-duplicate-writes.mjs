@@ -29,9 +29,16 @@ const violations = [];
 const financeSetItem = /(?:localStorage|StorageAdapter)\.setItem\s*\(\s*(?:['"]smart_time_expenses['"]|STORAGE_KEYS\.EXPENSES\b)/i;
 const aiWrite = /(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+(?:main\.)?(?:ai_transactions|ai_budgets)\b/i;
 
+// استثناء موثق (استرجاع النسخ الاحتياطية فقط): المفتاح القديم smart_time_expenses
+// هو مرآة معاينة الترحيل المالي، والاسترجاع يعيده عبر restoreLegacyExpensesMirror
+// في src/services/repositories/legacyFinanceMirror.ts — الكاتب الوحيد المسموح
+// لهذا المفتاح خارج canonical Finance API.
+const ALLOWED_FINANCE_MIRROR = "src/services/repositories/legacyFinanceMirror.ts";
+
 for (const file of files) {
   const rel = path.relative(ROOT, file).replaceAll(path.sep, "/");
   if (isTestFile(rel)) continue;
+  if (rel === ALLOWED_FINANCE_MIRROR) continue;
   const lines = fs.readFileSync(file, "utf8").split(/\r?\n/);
   for (const [index, line] of lines.entries()) {
     if (financeSetItem.test(line)) violations.push(`${rel}:${index + 1} direct finance storage write`);

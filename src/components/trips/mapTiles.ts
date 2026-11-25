@@ -16,6 +16,33 @@ export type TileMode = 'street' | 'satellite' | 'hybrid' | 'terrain' | 'dark';
 
 // علم على مستوى الجلسة — بعد أول فشل مع تأكيد نعتمد المصدر المجاني مباشرة
 let maptilerDisabled = false;
+let validationPromise: Promise<boolean> | null = null;
+
+/**
+ * MapTiler يرجع صورة الخطأ ("Invalid key") بحالة 403 **مع محتوى صورة PNG صالح**،
+ * ووسم <img> داخل Leaflet يعتبر أي محتوى قابل للفك تحميلًا ناجحًا —
+ * لذلك لا يُطلق tileerror أبدًا ولا يمكن الاعتماد عليه للكشف.
+ * الحل: تحقق استباقي واحد لكل جلسة عبر fetch (يرى حالة HTTP الحقيقية).
+ */
+export function ensureMapTilerValid(key: string): Promise<boolean> {
+  if (!key || maptilerDisabled) return Promise.resolve(false);
+  if (!validationPromise) {
+    validationPromise = fetch(
+      `https://api.maptiler.com/maps/streets-v2/0/0/0.png?key=${encodeURIComponent(key)}`,
+      { method: 'GET', cache: 'no-store' },
+    )
+      .then((response) => {
+        const ok = response.ok;
+        if (!ok) maptilerDisabled = true;
+        return ok;
+      })
+      .catch(() => {
+        maptilerDisabled = true;
+        return false;
+      });
+  }
+  return validationPromise;
+}
 
 const STYLE_MAP: Record<TileMode, string> = {
   street: 'streets-v2',
@@ -58,7 +85,12 @@ export function getTileConfig(mode: TileMode, key: string): TileConfig {
 }
 
 /** يراقب أخطاء البلاطات — بعد 3 أخطاء يتحول للمصدر المجاني تلقائياً */
-export function attachTileErrorFallback(layer: L.TileLayer, mode: TileMode, key: string): void {
+export function attachTileErrorFallback(
+  layer: L.TileLayer,
+  mode: TileMode,
+  key: string,
+  onFallback?: () => void,
+): void {
   if (!key) return;
   let errors = 0;
   layer.on('tileerror', () => {
@@ -67,6 +99,17 @@ export function attachTileErrorFallback(layer: L.TileLayer, mode: TileMode, key:
       maptilerDisabled = true;
       const fallback = getTileConfig(mode, key);
       layer.setUrl(fallback.url);
+      layer.options.attribution = fallback.attribution;
+    }
+  });
+  // الكشف الاستباقي — الحالة التي لا يُطلق فيها tileerror أبدًا:
+  // MapTiler يرد بصورة الخطأ نفسها كصورة PNG صالحة، فالـ <img> يعتبرها تحميلًا ناجحًا.
+  void ensureMapTilerValid(key).then((ok) => {
+    if (!ok) {
+      const fallback = getTileConfig(mode, '');
+      layer.setUrl(fallback.url);
+      layer.options.attribution = fallback.attribution;
+      onFallback?.();
     }
   });
 }
