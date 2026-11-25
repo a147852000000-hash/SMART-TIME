@@ -41,11 +41,14 @@ async function getWorker(): Promise<TesseractWorker> {
     workerPromise = (async () => {
       const { createWorker } = await import('tesseract.js');
       // OEM 1 = LSTM فقط — أخف وأدق مع نموذج tessdata_fast
+      // ملاحظة [v1.4]: gzip=false — أداة AAPT2 أثناء بناء الـ APK تفك ضغط
+      // ملفات ‎.gz داخل assets وتزيل الامتداد، لذا نشحن النموذج غير مضغوط
+      // (eng.traineddata) ليعمل نفس المسار على الويب وداخل التطبيق معاً.
       const worker = await createWorker('eng', 1, {
         workerPath: WORKER_PATH,
         corePath: CORE_PATH,
         langPath: LANG_PATH,
-        gzip: true,
+        gzip: false,
         // لا نسجل أي شيء في الكونسول — الأداء والخصوصية
         logger: () => undefined,
         errorHandler: () => undefined,
