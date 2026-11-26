@@ -67,6 +67,9 @@ function parseAction(message: string): SmartAiAction {
 
 export function classifyIntent(message: string): BrainIntent {
   const m = message.toLowerCase();
+  // How-it-works / explanation questions always belong to the talking brain
+  // (persona + app knowledge) — never to the data-computation rules.
+  if (/ازاي|إزاي|بيعمل ايه|بتعمل ايه|بتشتغل|شغالة|إيه هو|ايه هو|طريقة|فيه ايه|فيه إيه/.test(m)) return "conversation";
   if (/صرفت|دفعت|مصروف|expense|spent|paid/.test(m) && extractAmount(message) !== null) return "app_action";
   if (/مهمة|task|ذكرني|remind|سجل|أضف|عدّل|(?<!أ)حدث|حدّث|غير|نفذ|امسح|احذف|execute|add|delete|update|edit/.test(m)) return "app_action";
   if (/بحث|ابحث|مصادر|آخر|latest|search|research/.test(m)) return "web_research";
