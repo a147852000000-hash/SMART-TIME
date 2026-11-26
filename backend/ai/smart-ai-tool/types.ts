@@ -8,6 +8,7 @@ export type V3ToolName =
   | "generate_pdf_report"
   | "generate_chart"
   | "draw_plan"
+  | "generate_dxf"
   | "request_permissions";
 
 export interface V3ToolContext {

@@ -52,11 +52,58 @@ function isHelpQuestion(q: string): boolean {
   return /(اشرح|شرح|ازاي|كيف|ماذا تستطيع|تقدر تعمل ايه|what can you do|help)/i.test(q);
 }
 
+function isSecretRequest(q: string): boolean {
+  return /(api[ _-]?key|توكن|token|كلمة المرور|كلمه المرور|باسورد|password|secret|المفتاح السري)/i.test(q);
+}
+
+function isDestructiveRequest(q: string): boolean {
+  return /(امسح|احذف|أمسح|أحذف|لغى|إلغاء|الغاء|مسح كل|حذف كل|امسحوا|delete all|remove all|clear all|wipe)/i.test(q);
+}
+
+function isRatioQuestion(q: string): boolean {
+  return /(نسبة|نسبه|ratio|percent|في المية|بالمية)/i.test(q);
+}
+
+function isAverageQuestion(q: string): boolean {
+  return /(متوسط|average|متوسط يومي|per day|يوميًا|يوميا)/i.test(q);
+}
+
+function isIncomeQuestion(q: string): boolean {
+  return /(دخلي|الدخل|مرتب|راتب|income|salary)/i.test(q);
+}
+
 export function answerWithRules(message: string, language: "ar" | "en", data: SmartTimeData): SmartAiResponse {
   const q = message.toLowerCase();
   const typedData = data as any;
   const currency = String(typedData.profile.currency || "EGP");
   const action = actionFromMessage(message);
+
+  // Guard 1: no data available for the requested period — say it, never fake 0s.
+  if (typedData.dataAvailable === false) {
+    return {
+      reply: language === "ar"
+        ? "مفيش بيانات مسجلة متاحة للفترة المطلوبة في سجلاتك — أقدر أجيبلك من الفترات المسجلة زي الشهر ده أو الشهر اللي فات."
+        : "No recorded data is available for that period — I can report the recorded periods such as this month or last month.",
+      action,
+      needsClarification: true,
+      provider: "smart-ai",
+      model: "smart-time-core",
+      engine: "rules"
+    };
+  }
+
+  // Guard 2: never expose secrets, tokens, or keys.
+  if (isSecretRequest(q)) {
+    return {
+      reply: language === "ar"
+        ? "مش أقدر أعرض أو أشارك مفاتيح API أو توكنات أو كلمات مرور — حماية الأسرار جزء ثابت من قواعدي حتى مع صاحب الحساب."
+        : "I cannot display or share API keys, tokens, or passwords — secret protection is a fixed rule even for the account owner.",
+      action,
+      provider: "smart-ai",
+      model: "smart-time-core",
+      engine: "rules"
+    };
+  }
 
   if (isComparisonQuestion(q)) {
     const current = typedData.comparisons?.thisMonth;
@@ -88,6 +135,73 @@ export function answerWithRules(message: string, language: "ar" | "en", data: Sm
       reply: language === "ar"
         ? "الدخل المسجل في الشهر ده " + money(income, currency) + "، والمصاريف " + money(expenses, currency) + "، وصافي الدخل المحسوب هو " + money(net, currency) + "."
         : "Recorded income this month is " + money(income, currency) + ", expenses are " + money(expenses, currency) + ", and calculated net income is " + money(net, currency) + ".",
+      action,
+      provider: "smart-ai",
+      model: "smart-time-core",
+      engine: "rules"
+    };
+  }
+
+  if (isRatioQuestion(q)) {
+    const income = Number(typedData.comparisons?.thisMonthIncome || 0);
+    const expenses = Number(typedData.expenses?.total ?? typedData.comparisons?.thisMonth?.total ?? 0);
+    if (income <= 0) {
+      return {
+        reply: language === "ar"
+          ? "مش قادر أحسب النسبة لأن الدخل المسجل صفر — سجل دخلك الشهري الأول من قسم المصروفات والميزانية."
+          : "I cannot compute the ratio because the recorded income is zero — record your monthly income first.",
+        action,
+        needsClarification: true,
+        provider: "smart-ai",
+        model: "smart-time-core",
+        engine: "rules"
+      };
+    }
+    const percent = Math.round((expenses / income) * 1000) / 10;
+    return {
+      reply: language === "ar"
+        ? "مصاريفك " + money(expenses, currency) + " من دخل مسجل " + money(income, currency) + " — يعني النسبة " + percent + "% من دخلك."
+        : "Your expenses are " + money(expenses, currency) + " against recorded income of " + money(income, currency) + " — that is " + percent + "% of your income.",
+      action,
+      provider: "smart-ai",
+      model: "smart-time-core",
+      engine: "rules"
+    };
+  }
+
+  if (isAverageQuestion(q) && typedData.period?.days) {
+    const total = Number(typedData.expenses?.total ?? typedData.comparisons?.thisMonth?.total ?? 0);
+    const days = Number(typedData.period.days);
+    if (days <= 0) {
+      return {
+        reply: language === "ar"
+          ? "مش قادر أحسب المتوسط لأن عدد الأيام غير صالح."
+          : "I cannot compute the average because the day count is invalid.",
+        action,
+        needsClarification: true,
+        provider: "smart-ai",
+        model: "smart-time-core",
+        engine: "rules"
+      };
+    }
+    const average = Math.round((total / days) * 100) / 100;
+    return {
+      reply: language === "ar"
+        ? "إجمالي المصاريف " + money(total, currency) + " على " + days + " أيام — المتوسط " + money(average, currency) + " في اليوم."
+        : "Total expenses of " + money(total, currency) + " over " + days + " days — an average of " + money(average, currency) + " per day.",
+      action,
+      provider: "smart-ai",
+      model: "smart-time-core",
+      engine: "rules"
+    };
+  }
+
+  if (isIncomeQuestion(q)) {
+    const income = Number(typedData.comparisons?.thisMonthIncome || 0);
+    return {
+      reply: language === "ar"
+        ? "الدخل المسجل في " + periodLabel(typedData.period?.key, "ar") + " هو " + money(income, currency) + "."
+        : "Recorded income for " + periodLabel(typedData.period?.key, "en") + " is " + money(income, currency) + ".",
       action,
       provider: "smart-ai",
       model: "smart-time-core",
@@ -134,6 +248,21 @@ export function answerWithRules(message: string, language: "ar" | "en", data: Sm
         ? "في " + p + " عندك " + count + " مصروف تعليمي بإجمالي " + money(total, currency) + "."
         : "For " + p + ", there were " + count + " education expenses totaling " + money(total, currency) + ".",
       action,
+      provider: "smart-ai",
+      model: "smart-time-core",
+      engine: "rules"
+    };
+  }
+
+  if (isDestructiveRequest(q)) {
+    const accountsCount = Number(typedData.accounts?.count || 0);
+    return {
+      reply: language === "ar"
+        ? "الطلب ده عملية تدميرية على بياناتك" + (accountsCount > 0 ? " (عندك " + accountsCount + " حساب مسجل)" : "") + " — مش بتنفذ من مسار الشات أبدًا. العمليات التدميرية بتتم من الواجهة فقط بعد تأكيد صريح، وأنا بس أوضحلك النطاق المطلوب قبلها."
+        : "That is a destructive operation on your data" + (accountsCount > 0 ? " (you have " + accountsCount + " recorded account(s))" : "") + " — it never executes from the chat path. Destructive operations happen only from the UI after explicit confirmation.",
+      action,
+      needsClarification: true,
+      requiresConfirmation: true,
       provider: "smart-ai",
       model: "smart-time-core",
       engine: "rules"

@@ -7,7 +7,14 @@ import {
   generate_chart,
   draw_plan,
 } from "./reportGenerator.js";
+import { buildDxf, dxfFromNaturalLanguage, type DxfDrawingDescription } from "./dxfGenerator.js";
 import type { V3ToolContext, V3ToolName } from "./types.js";
+
+// Per-operation confirmation policy: every tool that CREATES a file or
+// artifact on the user's behalf requires explicit confirmation before it
+// executes. Read-only tools (search, advisory solvers) do not.
+const isDxfDescription = (value: unknown): value is DxfDrawingDescription =>
+  !!value && typeof value === "object" && Array.isArray((value as DxfDrawingDescription).entities);
 
 export type V3ArgumentSchema = Record<string, {
   type: "string" | "number" | "boolean" | "object" | "array";
@@ -91,7 +98,7 @@ export const v3ToolRegistry: Record<V3ToolName, V3ToolDefinition> = {
   generate_excel_report: {
     name: "generate_excel_report",
     description: "تقرير Excel",
-    requiresConfirmation: false,
+    requiresConfirmation: true,
     permission: "reports",
     argumentSchema: { data: { type: "object", required: true } },
     validate: requireObject("data"),
@@ -102,7 +109,7 @@ export const v3ToolRegistry: Record<V3ToolName, V3ToolDefinition> = {
   generate_word_report: {
     name: "generate_word_report",
     description: "تقرير Word",
-    requiresConfirmation: false,
+    requiresConfirmation: true,
     permission: "reports",
     argumentSchema: { data: { type: "object", required: true } },
     validate: requireObject("data"),
@@ -113,7 +120,7 @@ export const v3ToolRegistry: Record<V3ToolName, V3ToolDefinition> = {
   generate_pdf_report: {
     name: "generate_pdf_report",
     description: "تقرير PDF",
-    requiresConfirmation: false,
+    requiresConfirmation: true,
     permission: "reports",
     argumentSchema: { data: { type: "object", required: true } },
     validate: requireObject("data"),
@@ -124,7 +131,7 @@ export const v3ToolRegistry: Record<V3ToolName, V3ToolDefinition> = {
   generate_chart: {
     name: "generate_chart",
     description: "رسم بياني",
-    requiresConfirmation: false,
+    requiresConfirmation: true,
     permission: "reports",
     argumentSchema: { expenses: { type: "array", required: true } },
     validate: (args) => Array.isArray(args.expenses) ? null : "Missing or invalid array argument: expenses",
@@ -135,12 +142,32 @@ export const v3ToolRegistry: Record<V3ToolName, V3ToolDefinition> = {
   draw_plan: {
     name: "draw_plan",
     description: "رسم مخطط SVG",
-    requiresConfirmation: false,
+    requiresConfirmation: true,
     permission: "reports",
     argumentSchema: { message: { type: "string", required: true } },
     validate: requireString("message"),
     execute: async (_context, args) => draw_plan(String(args.message)),
     verify: resultExists,
+  },
+
+  generate_dxf: {
+    name: "generate_dxf",
+    description: "توليد رسم CAD بصيغة DXF يفتح في AutoCAD — من وصف هندسي مهيكل أو وصف نصي",
+    requiresConfirmation: true,
+    permission: "cad",
+    argumentSchema: {
+      description: { type: "object", required: false },
+      message: { type: "string", required: false },
+    },
+    validate: (args) =>
+      isDxfDescription(args.description) || (typeof args.message === "string" && args.message.trim())
+        ? null
+        : "Missing argument: provide a structured description object or a message",
+    execute: async (_context, args) =>
+      isDxfDescription(args.description)
+        ? buildDxf(args.description as DxfDrawingDescription)
+        : dxfFromNaturalLanguage(String(args.message), _context.language),
+    verify: (result) => !!result && (result as { ok?: boolean }).ok === true && !!(result as { data?: string }).data,
   },
 
   request_permissions: {

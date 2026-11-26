@@ -137,5 +137,102 @@
       "final_train_loss": 0.2327,
       "generation_gate": "0/120 (0.0%)"
     }
+  },
+  "custom_model_training": {
+    "model_tag": "smart-ai-custom-v1",
+    "engine_chain": "groq -> local (optional) -> rules",
+    "rounds": [
+      {
+        "round": 1,
+        "finished_at": "2026-11-26T18:29:34.007Z",
+        "eval_count": 22,
+        "factual_grounding": 0.818,
+        "no_fabrication": 0.5,
+        "confirmation_boundary": 0.667,
+        "tool_selection_validity": 0.875,
+        "corpus_rows": 38,
+        "corpus_path": "/home/z/my-project/SMART-TIME/data/ai-training/custom-corpus-r1.jsonl",
+        "knowledge_version": "v1.0",
+        "passed": false
+      },
+      {
+        "round": 2,
+        "finished_at": "2026-11-26T18:29:36.647Z",
+        "eval_count": 22,
+        "factual_grounding": 0.818,
+        "no_fabrication": 0.5,
+        "confirmation_boundary": 0.667,
+        "tool_selection_validity": 0.875,
+        "corpus_rows": 38,
+        "corpus_path": "/home/z/my-project/SMART-TIME/data/ai-training/custom-corpus-r2.jsonl",
+        "knowledge_version": "v1.0",
+        "passed": false
+      },
+      {
+        "round": 3,
+        "finished_at": "2026-11-26T18:29:57.601Z",
+        "eval_count": 22,
+        "factual_grounding": 0.818,
+        "no_fabrication": 0.5,
+        "confirmation_boundary": 0.667,
+        "tool_selection_validity": 0.875,
+        "corpus_rows": 38,
+        "corpus_path": "/home/z/my-project/SMART-TIME/data/ai-training/custom-corpus-r3.jsonl",
+        "knowledge_version": "v1.0",
+        "passed": false
+      },
+      {
+        "round": 4,
+        "finished_at": "2026-11-26T18:32:30.556Z",
+        "eval_count": 22,
+        "factual_grounding": 0.818,
+        "no_fabrication": 1,
+        "confirmation_boundary": 1,
+        "tool_selection_validity": 1,
+        "corpus_rows": 38,
+        "corpus_path": "/home/z/my-project/SMART-TIME/data/ai-training/custom-corpus-r4.jsonl",
+        "knowledge_version": "v1.0",
+        "passed": true
+      },
+      {
+        "round": 5,
+        "finished_at": "2026-11-26T18:33:54.245Z",
+        "eval_count": 22,
+        "factual_grounding": 1,
+        "no_fabrication": 1,
+        "confirmation_boundary": 1,
+        "tool_selection_validity": 1,
+        "corpus_rows": 38,
+        "corpus_path": "/home/z/my-project/SMART-TIME/data/ai-training/custom-corpus-r5.jsonl",
+        "knowledge_version": "v1.0",
+        "passed": true
+      },
+      {
+        "round": 6,
+        "finished_at": "2026-11-26T18:34:01.138Z",
+        "eval_count": 22,
+        "factual_grounding": 1,
+        "no_fabrication": 1,
+        "confirmation_boundary": 1,
+        "tool_selection_validity": 1,
+        "corpus_rows": 38,
+        "corpus_path": "/home/z/my-project/SMART-TIME/data/ai-training/custom-corpus-r6.jsonl",
+        "knowledge_version": "v1.0",
+        "passed": true
+      },
+      {
+        "round": 7,
+        "finished_at": "2026-11-26T18:34:01.143Z",
+        "eval_count": 22,
+        "factual_grounding": 1,
+        "no_fabrication": 1,
+        "confirmation_boundary": 1,
+        "tool_selection_validity": 1,
+        "corpus_rows": 38,
+        "corpus_path": "/home/z/my-project/SMART-TIME/data/ai-training/custom-corpus-r7.jsonl",
+        "knowledge_version": "v1.0",
+        "passed": true
+      }
+    ]
   }
 }

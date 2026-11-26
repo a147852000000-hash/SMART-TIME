@@ -19,6 +19,8 @@ import { groqProvider, isGroqConfigured } from "./backend/ai/providers/groqProvi
 import { estimateProviderPrice, type RideProvider, type RideCategory } from "./src/services/ridePriceEstimator.js";
 import { askSmartAiCore } from "./backend/ai/smartAiCore.js";
 import { isLocalSmartAiConfigured } from "./backend/ai/localInference.js";
+import { runAutonomousAgent } from "./backend/ai/smart-ai-tool/autonomousAgent.js";
+import { runTrainingRound, getTrainingHistory, DEDICATED_MODEL_TAG } from "./backend/ai/training/trainingPipeline.js";
 import { createHttpVoiceDnaProvider, DisabledVoiceDnaProvider } from "./backend/voice/voiceDnaProvider.js";
 import { sendPasswordResetEmail as sendPasswordResetEmailWithProvider } from "./backend/auth/passwordResetEmail.js";
 import { isTurnstileEnforced, verifyTurnstileToken } from "./backend/auth/turnstile.js";
@@ -943,8 +945,104 @@ app.get("/api/ai/status", (req, res) => {
     rulesFallback: true,
     knowledgeVersion: "v1.0",
     apiKeyRequired: false,
+    // Dedicated model + agent + training (SMART AI phase).
+    dedicatedModel: DEDICATED_MODEL_TAG,
+    agent: "smart-agent-v1",
+    agentTools: ["generate_dxf", "generate_excel_report", "generate_word_report", "generate_pdf_report", "generate_chart", "draw_plan", "web_search", "solve_emotional_problem", "solve_social_problem", "solve_economic_problem"],
+    trainingEndpoint: "/api/ai/training (owner only)",
     timestamp: new Date().toISOString(),
   });
+});
+
+// ----------------------------------------------------
+// SMART AI AGENT — the agent attached to the dedicated model.
+// Plans tool calls (Groq structured output when configured,
+// deterministic planner otherwise), enforces the per-operation
+// confirmation gate, executes and verifies real artifacts
+// (DXF CAD files, Excel/Word/PDF reports, charts, web search).
+// ----------------------------------------------------
+const redactForAgent = (value: unknown, depth = 0): Record<string, unknown> => {
+  if (depth > 3 || !value || typeof value !== "object") return {};
+  const out: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    if (/password|token|api[_-]?key|secret|pin|credential/i.test(key)) continue;
+    if (Array.isArray(item)) { out[key] = item.slice(0, 50); continue; }
+    if (item && typeof item === "object") { out[key] = redactForAgent(item, depth + 1); continue; }
+    out[key] = item;
+  }
+  return out;
+};
+
+app.post("/api/ai/agent", async (req, res) => {
+  const language = String(req.body?.language || "ar") === "en" ? "en" : "ar";
+  try {
+    const user = authUser(req);
+    if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول لاستخدام إيجنت SMART AI." });
+
+    const goal = String(req.body?.goal || req.body?.message || "").trim();
+    if (!goal) return res.status(400).json({ error: "الهدف (goal) مطلوب لتشغيل الإيجنت." });
+
+    const timezone = typeof req.body?.timezone === "string" && req.body.timezone.trim()
+      ? req.body.timezone.trim().slice(0, 60) : "Africa/Cairo";
+    const conversationId = typeof req.body?.conversationId === "string" ? req.body.conversationId.slice(0, 120) : undefined;
+
+    const result = await runAutonomousAgent({
+      goal,
+      confirmed: req.body?.confirmed === true,
+      approvedToolCalls: Array.isArray(req.body?.approvedToolCalls) ? req.body.approvedToolCalls : undefined,
+      allowModelPlanning: req.body?.allowModelPlanning !== false,
+      context: {
+        userId: user.id,
+        language,
+        currentDate: new Date().toLocaleDateString("en-CA", { timeZone: timezone }),
+        timezone,
+        conversationId,
+        canonicalData: redactForAgent(req.body?.appContext),
+      },
+    });
+
+    // NOTE: agent conversation-memory persistence is intentionally not
+    // wired yet — contextMemory has no conversation-message append API.
+    // The full result is returned to the client and the steps/artifacts
+    // are self-describing. Wiring agent memory comes with the UI round.
+
+    return res.json(result);
+  } catch (error: any) {
+    console.error("SMART AI Agent error:", error?.message || error);
+    return res.status(500).json({
+      error: language === "en" ? "The SMART AI agent could not process this goal." : "تعذر تشغيل إيجنت SMART AI لهذا الهدف.",
+    });
+  }
+});
+
+// ----------------------------------------------------
+// DEDICATED MODEL TRAINING — owner-only training rounds.
+// GET  /api/ai/training      -> round history (recorded in SQLite).
+// POST /api/ai/training/run  -> execute one training round now
+//                               (corpus build + eval gates + ledger).
+// ----------------------------------------------------
+app.get("/api/ai/training", (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  if (resolvedAccountRole(user) !== "owner") return res.status(403).json({ error: "صفحة التدريب للمالك فقط." });
+  res.json({
+    modelTag: DEDICATED_MODEL_TAG,
+    rounds: getTrainingHistory(20),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.post("/api/ai/training/run", (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  if (resolvedAccountRole(user) !== "owner") return res.status(403).json({ error: "تشغيل التدريب للمالك فقط." });
+  try {
+    const summary = runTrainingRound({ notes: typeof req.body?.notes === "string" ? req.body.notes : undefined });
+    return res.json({ ok: true, round: summary });
+  } catch (error: any) {
+    console.error("Training round error:", error?.message || error);
+    return res.status(500).json({ ok: false, error: "تعذر تنفيذ جولة التدريب." });
+  }
 });
 
 // ----------------------------------------------------
