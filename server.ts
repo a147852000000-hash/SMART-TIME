@@ -21,6 +21,7 @@ import { askSmartAiCore } from "./backend/ai/smartAiCore.js";
 import { isLocalSmartAiConfigured } from "./backend/ai/localInference.js";
 import { runAutonomousAgent } from "./backend/ai/smart-ai-tool/autonomousAgent.js";
 import { runTrainingRound, getTrainingHistory, DEDICATED_MODEL_TAG } from "./backend/ai/training/trainingPipeline.js";
+import { listPermissions, setPermission, type Permission } from "./backend/ai/smart-ai-tool/permissions.js";
 import { createHttpVoiceDnaProvider, DisabledVoiceDnaProvider } from "./backend/voice/voiceDnaProvider.js";
 import { sendPasswordResetEmail as sendPasswordResetEmailWithProvider } from "./backend/auth/passwordResetEmail.js";
 import { isTurnstileEnforced, verifyTurnstileToken } from "./backend/auth/turnstile.js";
@@ -986,6 +987,19 @@ app.post("/api/ai/agent", async (req, res) => {
       ? req.body.timezone.trim().slice(0, 60) : "Africa/Cairo";
     const conversationId = typeof req.body?.conversationId === "string" ? req.body.conversationId.slice(0, 120) : undefined;
 
+    // First-time users get sensible agent capabilities seeded (reports,
+    // CAD, expenses). Every actual tool execution still goes through the
+    // per-operation confirmation gate, and permissions stay revocable via
+    // POST /api/ai/permissions.
+    let permissionsSeeded = false;
+    try {
+      const existing = db.prepare("SELECT COUNT(*) AS c FROM ai_permissions WHERE user_id=?").get(user.id) as { c?: number };
+      if (!existing?.c) {
+        for (const p of ["reports", "cad", "expenses"] as Permission[]) await setPermission(user.id, p, true);
+        permissionsSeeded = true;
+      }
+    } catch { /* seeding is best-effort; toolRuntime still enforces grants */ }
+
     const result = await runAutonomousAgent({
       goal,
       confirmed: req.body?.confirmed === true,
@@ -1006,13 +1020,36 @@ app.post("/api/ai/agent", async (req, res) => {
     // The full result is returned to the client and the steps/artifacts
     // are self-describing. Wiring agent memory comes with the UI round.
 
-    return res.json(result);
+    return res.json({ ...result, permissionsSeeded });
   } catch (error: any) {
     console.error("SMART AI Agent error:", error?.message || error);
     return res.status(500).json({
       error: language === "en" ? "The SMART AI agent could not process this goal." : "تعذر تشغيل إيجنت SMART AI لهذا الهدف.",
     });
   }
+});
+
+// ----------------------------------------------------
+// AGENT PERMISSIONS — user capability control for agent tools.
+// GET  -> current grants. POST {permission, granted} -> grant/revoke.
+// Per-operation confirmation is enforced independently on top.
+// ----------------------------------------------------
+const AGENT_PERMISSION_IDS: Permission[] = ["expenses", "trips", "fuel", "reports", "cad", "voice", "microphone", "all"];
+
+app.get("/api/ai/permissions", (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  res.json({ permissions: listPermissions(user.id), note: "كل عملية توليد ملف تبقى محتاجة تأكيدك لكل عملية حتى مع منح الصلاحية." });
+});
+
+app.post("/api/ai/permissions", async (req, res) => {
+  const user = authUser(req);
+  if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول." });
+  const permission = String(req.body?.permission || "").trim() as Permission;
+  if (!AGENT_PERMISSION_IDS.includes(permission)) return res.status(400).json({ error: "صلاحية غير معروفة." });
+  const granted = req.body?.granted === true;
+  const result = await setPermission(user.id, permission, granted);
+  res.json({ ok: true, permission, granted: result, permissions: listPermissions(user.id) });
 });
 
 // ----------------------------------------------------
