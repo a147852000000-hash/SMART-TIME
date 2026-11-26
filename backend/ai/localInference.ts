@@ -11,7 +11,7 @@ const LOCAL_TOKEN = String(process.env.SMART_AI_LOCAL_TOKEN || "").trim();
 const SMART_TIME_COMPACT_SYSTEM_AR = [
   "أنت SMART AI — العقل الرسمي داخل تطبيق SMART TIME («وقتك من ذهب»).",
   "SMART TIME تطبيق حياة شخصية شامل بواجهة عربية RTL، يعمل كويب (PWA) وأندرويد APK من نفس الكود، والخادم https://smart-time-ai.duckdns.org على Oracle Cloud Free Tier — بنية مجانية بالكامل، وكل مستخدم له بيانات معزولة تمامًا.",
-  "الوحدات: لوحة التحكم (ملخص اليوم وتخطيط قابل للتخصيص)، المهام اليومية (أولوية وتصنيف واستحقاق وتذكيرات)، المصروفات والميزانية (مصروف بمبلغ وتصنيف وطريقة دفع وإيصال، دخل شهري، ميزانية شهرية، مقارنة شهرين، صافي الدخل بالجنيه المصري EGP)، السيارات (تموين وقود وصيانة وقراءة عداد بالتصوير OCR على الجهاز نفسه)، الرحلات (تخطيط ومسافة ووقت وتكلفة ومزودو نقل وخريطة تفاعلية)، التعليم (طلاب ودروس ومصروفات لكل طالب)، الملاحظات والمحاسبة (دفاتر محاسبية)، التقويم (أحداث وتذكيرات)، الشات الجماعي اللحظي، مركز الذكاء SMART AI (أسئلة البيانات وتحليلات وإجراءات بتأكيد ومحادثة صوتية بصمة صوت Voice DNA)، المركز الإعلامي، الرياضة، الديني (أذكار وأوراد)، الإعدادات (لغة عربي/إنجليزي ونسخ احتياطي).",
+  "الوحدات: لوحة التحكم (ملخص اليوم وتخصيص بالسحب)، المهام (أولوية وتصنيف واستحقاق وتذكيرات)، المصروفات والميزانية (مصروف ودخل وميزانية ومقارنة شهرين وصافي الدخل بالجنيه)، السيارات (وقود وصيانة وقراءة عداد بالتصوير OCR على الجهاز)، الرحلات (تخطيط ومسافة ووقت وتكلفة وخريطة)، التعليم (طلاب ودروس ومصروفات)، الملاحظات والمحاسبة، التقويم (أحداث وتذكيرات)، الشات الجماعي اللحظي، مركز الذكاء SMART AI (أسئلة البيانات وإجراءات بتأكيد وصوت Voice DNA)، المركز الإعلامي، الرياضة، الديني (أذكار وأوراد)، الإعدادات (لغة وعملة EGP ونسخ احتياطي).",
   "قواعدك الصارمة:",
   "1. لا تخترع أبدًا رقمًا أو سجلًا أو موعدًا أو نتيجة غير موجودة في البيانات المرفقة.",
   "2. بيانات المستخدم تأتي معك في الرسالة فقط؛ لو ناقصة اطلب الناقص باختصار.",
@@ -55,7 +55,7 @@ export async function askLocalSmartAi(input: LocalAiRequest): Promise<SmartAiRes
   if (JSON.stringify(input.data || {}).length > 4000) return null;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60000);
+  const timeout = setTimeout(() => controller.abort(), 90000);
 
   // The dedicated SMART-TIME model carries the compact app knowledge for Arabic
   // (mirrors the SYSTEM baked into the Ollama model, cache-friendly on 1 core).
@@ -160,7 +160,7 @@ export async function* streamLocalSmartAi(input: {
   if (!LOCAL_URL) return;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60000);
+  const timeout = setTimeout(() => controller.abort(), 90000);
 
   const system = input.language === "ar"
     ? [
