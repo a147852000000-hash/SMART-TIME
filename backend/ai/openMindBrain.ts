@@ -241,7 +241,7 @@ export async function runOpenMindBrain(request: SmartAiRequest): Promise<SmartAi
   }
   if (isLocalSmartAiConfigured()) {
     try {
-      const local = await askLocalSmartAi({ language, message: `${NO_INVENTION}\nIntent: ${plan.intent}\nPlan: ${plan.steps.join(" -> ")}\nApp data: ${JSON.stringify(data)}\nUser: ${message}`, data, conversationHistory: modelHistory,
+      const local = await askLocalSmartAi({ language, message: `${NO_INVENTION}\nIntent: ${plan.intent}\nPlan: ${plan.steps.join(" -> ")}\nUser: ${message}`, data, conversationHistory: modelHistory,
         memoryContext });
       if (local?.reply) return { ...local, requiresConfirmation: plan.requiresConfirmation, plan };
     } catch (error) { console.warn("OPEN MIND local model unavailable:", (error as Error)?.message); }

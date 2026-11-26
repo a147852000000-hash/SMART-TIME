@@ -1,4 +1,5 @@
 import type { SmartAiResponse } from "./types.js";
+import { buildAppKnowledge } from "./appKnowledge.js";
 
 const LOCAL_URL = String(process.env.SMART_AI_LOCAL_URL || "").trim().replace(/\/$/, "");
 const LOCAL_MODEL = String(process.env.SMART_AI_LOCAL_MODEL || "smart-time-local").trim();
@@ -31,19 +32,16 @@ type LocalAiRequest = {
 export async function askLocalSmartAi(input: LocalAiRequest): Promise<SmartAiResponse | null> {
   if (!LOCAL_URL) return null;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20000);
+  // Single-core free CPU: skip the local model for very large data payloads —
+  // those deterministic answers are handled better by the rules engine anyway.
+  if (JSON.stringify(input.data || {}).length > 4000) return null;
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60000);
+
+  // The dedicated SMART-TIME model carries the full app knowledge for Arabic.
   const system = input.language === "ar"
-    ? [
-        "أنت SMART AI داخل تطبيق SMART TIME.",
-        "استخدم بيانات SMART TIME المرفقة فقط عند الحديث عن أرقام أو سجلات أو تواريخ.",
-        "لا تخترع أي رقم أو سجل أو حقيقة غير موجودة في البيانات.",
-        "لا تكشف أسرارًا أو مفاتيح API أو كلمات مرور أو PIN.",
-        "لا تنفذ أي تعديل على البيانات من نفسك؛ أي تعديل يحتاج تأكيد المستخدم.",
-        "تحدث بعربية مصرية طبيعية ومختصرة.",
-        "إذا وُجد سياق ذاكرة، استخدمه كمرجع تفضيلي فقط ولا تحوله إلى حقيقة جديدة دون دليل."
-      ].join("\n")
+    ? buildAppKnowledge({ ownerView: false, language: "ar" })
     : [
         "You are SMART AI inside SMART TIME.",
         "Use only the supplied SMART TIME data for numbers, records, and dates.",
@@ -61,7 +59,7 @@ export async function askLocalSmartAi(input: LocalAiRequest): Promise<SmartAiRes
     model: LOCAL_MODEL,
     stream: false,
     temperature: 0.2,
-    max_tokens: 700,
+    max_tokens: 400,
     // Qwen3-compatible OpenAI servers can use this to keep runtime replies
     // concise and avoid emitting hidden reasoning blocks into the UI.
     chat_template_kwargs: { enable_thinking: false },
@@ -77,7 +75,7 @@ export async function askLocalSmartAi(input: LocalAiRequest): Promise<SmartAiRes
         content: JSON.stringify({
           request: input.message,
           smartTimeData: input.data
-        })
+        }).slice(0, 4000)
       }
     ]
   };
