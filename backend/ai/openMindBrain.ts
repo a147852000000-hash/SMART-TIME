@@ -20,6 +20,9 @@ export interface BrainPlan {
 }
 
 const NO_INVENTION = "Never invent facts, numbers, tool results, locations, files, execution status, or measurements. If required evidence is missing, say so and ask for it.";
+// Dedicated local model handles persona + app knowledge + how-it-works talk.
+// Number/data intents go straight to the deterministic rules engine (grounded).
+const LOCAL_MODEL_INTENTS = new Set<BrainIntent>(["conversation", "social_emotional", "unknown"]);
 const ARABIC_DIGITS = "٠١٢٣٤٥٦٧٨٩";
 
 function normalizeNumberText(value: string) {
@@ -71,7 +74,7 @@ export function classifyIntent(message: string): BrainIntent {
   if (/dwg|dxf|cad|كاد|لوحة هندسية/.test(m)) return "cad_analysis";
   if (/فيديو|سرعة|speed|opencv|yolo|رياح|دخان/.test(m)) return "speed_estimation";
   if (/خريطة|خرائط|maps|مسافة|طريق|route|coordinates|إحداثيات/.test(m)) return "maps";
-  if (/مصروف|ميزانية|دخل|جدوى|اقتصاد|budget|expense|finance/.test(m)) return "economic_analysis";
+  if (/مصروف|صرف|ميزانية|دخل|جدوى|اقتصاد|budget|expense|finance/.test(m)) return "economic_analysis";
   if (/علاقة|توتر|قلق|مشكلة|مشاعر|زعلان|خلاف|relationship|stress/.test(m)) return "social_emotional";
   return "conversation";
 }
@@ -239,7 +242,7 @@ export async function runOpenMindBrain(request: SmartAiRequest): Promise<SmartAi
       console.warn("OPEN MIND Groq unavailable, falling back:", (error as Error)?.message);
     }
   }
-  if (isLocalSmartAiConfigured()) {
+  if (isLocalSmartAiConfigured() && LOCAL_MODEL_INTENTS.has(plan.intent)) {
     try {
       const local = await askLocalSmartAi({ language, message: `${NO_INVENTION}\nIntent: ${plan.intent}\nPlan: ${plan.steps.join(" -> ")}\nUser: ${message}`, data, conversationHistory: modelHistory,
         memoryContext });
