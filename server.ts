@@ -898,11 +898,20 @@ const handleAiChat = async (req: express.Request, res: express.Response) => {
       return res.status(400).json({ error: "بيانات سياق SMART TIME مطلوبة." });
     }
 
+    // [FIX ai-phase] forward the full auth/request context to the brain:
+    // confirmed was previously dropped, so the UI "تنفيذ" button could never
+    // pass the confirmation gate in production; userId activates persistent
+    // memory context; ownerView unlocks the technical knowledge layer.
     const response = await askSmartAiCore({
       message,
       language,
       conversationHistory,
       appContext: appContext as Record<string, unknown>,
+      userId: user.id,
+      conversationId: typeof req.body?.conversationId === "string" ? req.body.conversationId.slice(0, 120) : undefined,
+      timezone: typeof req.body?.timezone === "string" && req.body.timezone.trim() ? req.body.timezone.trim().slice(0, 60) : "Africa/Cairo",
+      confirmed: req.body?.confirmed === true,
+      ownerView: resolvedAccountRole(user) === "owner",
     });
 
     return res.json(response);
@@ -925,9 +934,14 @@ app.get("/api/ai/status", (req, res) => {
   res.json({
     provider: "smart-ai",
     core: "smart-time-core",
-    deterministic: true,
+    deterministic: false,
+    // Engine chain: Groq (production brain) -> optional local model -> rules.
+    groqConfigured: isGroqConfigured(),
+    groqModel: isGroqConfigured() ? String(process.env.GROQ_MODEL || "openai/gpt-oss-120b").trim() : null,
     localInferenceConfigured: isLocalSmartAiConfigured(),
     localModel: isLocalSmartAiConfigured() ? String(process.env.SMART_AI_LOCAL_MODEL || "smart-time-local").trim() : null,
+    rulesFallback: true,
+    knowledgeVersion: "v1.0",
     apiKeyRequired: false,
     timestamp: new Date().toISOString(),
   });

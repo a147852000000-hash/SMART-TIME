@@ -2,6 +2,9 @@ import { buildSmartTimeData } from "./appContext.js";
 import { buildSmartContext, calendarContextForModel, conversationMessagesForModel, memoryContextForModel } from "./smart-ai-tool/contextMemory.js";
 import { askLocalSmartAi, isLocalSmartAiConfigured } from "./localInference.js";
 import { executeToolAction, type VerifiedToolResult } from "./toolExecutor.js";
+import { groqProvider, isGroqConfigured } from "./providers/groqProvider.js";
+import { answerWithRules } from "./rulesEngine.js";
+import { buildAppKnowledge } from "./appKnowledge.js";
 import type { SmartAiAction, SmartAiRequest, SmartAiResponse } from "./types.js";
 
 export type BrainIntent =
@@ -118,6 +121,61 @@ function readCurrency(result: VerifiedToolResult) {
   return String((result.record as any).currency || "EGP");
 }
 
+// ------------------------------------------------------------
+// Groq production brain — the primary conversational engine.
+// System prompt = full app knowledge (user layer, + technical layer
+// for the owner) + strict no-invention rules. User message carries
+// the sanitized SMART TIME data JSON so answers stay grounded.
+// ------------------------------------------------------------
+async function askGroqOpenMind(input: {
+  request: SmartAiRequest;
+  language: "ar" | "en";
+  plan: BrainPlan;
+  data: Record<string, unknown>;
+  history: Array<{ sender: "user" | "model"; text: string }>;
+  memoryContext: string;
+}): Promise<SmartAiResponse> {
+  const { request, language, plan, data, history, memoryContext } = input;
+  const knowledge = buildAppKnowledge({ ownerView: request.ownerView === true, language });
+  const system = [
+    knowledge,
+    `المسار الحالي: نية الطلب "${plan.intent}" والخطوات: ${plan.steps.join(" -> ")}.`,
+    "استخدم هذه البيانات المحسوبة من التطبيق عند أي حديث عن أرقام أو سجلات المستخدم:",
+    JSON.stringify(data).slice(0, 12000),
+  ].join("\n");
+
+  const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+    { role: "system", content: system },
+  ];
+  if (memoryContext) {
+    messages.push({ role: "system", content: `ذاكرة SMART AI وأحداث قادمة:\n${memoryContext.slice(0, 5000)}` });
+  }
+  for (const item of history.slice(-8)) {
+    messages.push({
+      role: item.sender === "user" ? "user" : "assistant",
+      content: String(item.text || "").slice(0, 2000),
+    });
+  }
+  messages.push({ role: "user", content: String(request.message || "").slice(0, 4000) });
+
+  const result = await groqProvider.chat({
+    messages,
+    temperature: 0.3,
+    maxCompletionTokens: 900,
+  });
+  const reply = String(result.content || "").trim();
+  if (!reply) throw new Error("Groq returned an empty reply.");
+  return {
+    reply,
+    action: null,
+    requiresConfirmation: plan.requiresConfirmation,
+    needsClarification: false,
+    provider: "smart-ai",
+    model: result.model,
+    engine: "groq",
+  };
+}
+
 export async function runOpenMindBrain(request: SmartAiRequest): Promise<SmartAiResponse & { plan: BrainPlan; execution?: VerifiedToolResult }> {
   const message = String(request.message || "").trim();
   if (!message) throw new Error("Message is required");
@@ -145,8 +203,12 @@ export async function runOpenMindBrain(request: SmartAiRequest): Promise<SmartAi
     ? (request.appContext.profile as Record<string, unknown>).timezone || "Africa/Cairo"
     : "Africa/Cairo");
   const runtimeNow = new Date();
-  const smartContext = request.userId
-    ? buildSmartContext({
+  // buildSmartContext touches ai_memories/ai_events/messages tables — it must
+  // never break a chat, so any failure degrades to a context-less reply.
+  let smartContext: ReturnType<typeof buildSmartContext> | null = null;
+  if (request.userId) {
+    try {
+      smartContext = buildSmartContext({
         userId: request.userId,
         conversationId: request.conversationId,
         currentDate: runtimeNow.toLocaleDateString("en-CA", { timeZone: timezone }),
@@ -155,14 +217,28 @@ export async function runOpenMindBrain(request: SmartAiRequest): Promise<SmartAi
         activeFileIds: request.activeFileIds,
         maxMessages: 20,
         maxMemories: 12,
-      })
-    : null;
+      });
+    } catch (error) {
+      console.warn("OPEN MIND context build unavailable:", (error as Error)?.message);
+      smartContext = null;
+    }
+  }
   const modelHistory = smartContext
     ? conversationMessagesForModel(smartContext, 8)
     : (Array.isArray(request.conversationHistory) ? request.conversationHistory.slice(-8) : []);
   const memoryContext = smartContext
     ? [memoryContextForModel(smartContext.memories, 12), calendarContextForModel(smartContext.upcomingEvents, 12)].filter(Boolean).join("\n")
     : "";
+
+  // Engine chain (production): Groq -> optional local model -> deterministic rules.
+  if (isGroqConfigured()) {
+    try {
+      const groqReply = await askGroqOpenMind({ request, language, plan, data, history: modelHistory, memoryContext });
+      return { ...groqReply, plan };
+    } catch (error) {
+      console.warn("OPEN MIND Groq unavailable, falling back:", (error as Error)?.message);
+    }
+  }
   if (isLocalSmartAiConfigured()) {
     try {
       const local = await askLocalSmartAi({ language, message: `${NO_INVENTION}\nIntent: ${plan.intent}\nPlan: ${plan.steps.join(" -> ")}\nApp data: ${JSON.stringify(data)}\nUser: ${message}`, data, conversationHistory: modelHistory,
@@ -170,5 +246,7 @@ export async function runOpenMindBrain(request: SmartAiRequest): Promise<SmartAi
       if (local?.reply) return { ...local, requiresConfirmation: plan.requiresConfirmation, plan };
     } catch (error) { console.warn("OPEN MIND local model unavailable:", (error as Error)?.message); }
   }
-  return { reply: language === "ar" ? `فهمت الطلب كـ${plan.intent}. لا توجد نتيجة أداة موثقة لهذا الطلب داخل المسار الحالي، لذلك لن أخترع نتيجة.` : `I classified this as ${plan.intent}. No verified tool result is available, so I will not invent one.`, action: null, requiresConfirmation: false, needsClarification: true, provider: "smart-ai", model: "open-mind-brain", engine: "rules", plan };
+  // Deterministic rules engine — grounded answers for data questions with zero keys.
+  const rulesReply = answerWithRules(message, language, data);
+  return { ...rulesReply, requiresConfirmation: plan.requiresConfirmation, plan };
 }

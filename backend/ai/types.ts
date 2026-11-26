@@ -18,6 +18,8 @@ export interface SmartAiRequest {
   activeTaskId?: string;
   activeFileIds?: string[];
   confirmed?: boolean;
+  /** true only for the program owner — unlocks the technical knowledge layer. */
+  ownerView?: boolean;
 }
 
 export interface SmartAiResponse {
@@ -28,7 +30,7 @@ export interface SmartAiResponse {
   needsClarification?: boolean;
   provider: "smart-ai";
   model: string;
-  engine: "rules" | "gemini" | "local";
+  engine: "rules" | "gemini" | "local" | "groq";
 }
 
 export interface SmartAiProviderRequest {
