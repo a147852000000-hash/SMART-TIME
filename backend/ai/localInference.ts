@@ -29,14 +29,13 @@ export function isLocalSmartAiConfigured(): boolean {
 
 function extractText(data: any): string {
   const content = data?.choices?.[0]?.message?.content;
-  if (typeof content === "string") return content.trim();
-  if (Array.isArray(content)) {
-    return content
-      .map((part: any) => typeof part?.text === "string" ? part.text : "")
-      .join("")
-      .trim();
-  }
-  return "";
+  const raw = typeof content === "string"
+    ? content
+    : Array.isArray(content)
+      ? content.map((part: any) => typeof part?.text === "string" ? part.text : "").join("")
+      : "";
+  // Small local models tend to wrap replies in literal quotes — unwrap them.
+  return raw.trim().replace(/^["“”«»']+/, "").replace(/["“”«»']+$/, "").trim();
 }
 
 type LocalAiRequest = {
@@ -91,10 +90,12 @@ export async function askLocalSmartAi(input: LocalAiRequest): Promise<SmartAiRes
       })),
       {
         role: "user",
-        content: JSON.stringify({
-          request: input.message,
-          smartTimeData: input.data
-        }).slice(0, 2500)
+        // Plain-language request for the small local model (JSON envelopes
+        // make 0.5B models echo the question); data appended as reference.
+        content: input.message +
+          (input.data && Object.keys(input.data).length
+            ? `\nبيانات المستخدم الحالية (اعتمد عليها فقط، لا تخترع): ${JSON.stringify(input.data).slice(0, 2200)}`
+            : "")
       }
     ]
   };
