@@ -4,6 +4,7 @@ import { askLocalSmartAi, isLocalSmartAiConfigured } from "./localInference.js";
 import { executeToolAction, type VerifiedToolResult } from "./toolExecutor.js";
 import { groqProvider, isGroqConfigured } from "./providers/groqProvider.js";
 import { answerWithRules } from "./rulesEngine.js";
+import { answerShubraKnowledge } from "./shubraKnowledge.js";
 import { buildAppKnowledge } from "./appKnowledge.js";
 import type { SmartAiAction, SmartAiRequest, SmartAiResponse } from "./types.js";
 
@@ -202,6 +203,14 @@ export async function runOpenMindBrain(request: SmartAiRequest): Promise<SmartAi
       const execution: VerifiedToolResult = { ok: false, operation: plan.action.type, record: {}, verification: {}, error: (error as Error).message };
       return { reply: verifiedReply(language, execution), action: plan.action, actionSummary: "execution_failed", requiresConfirmation: false, needsClarification: true, provider: "smart-ai", model: "open-mind-brain", engine: "rules", plan, execution };
     }
+  }
+
+  // Deterministic Shubra knowledge base — identity/free/security/greeting and
+  // every section's "what it does + how it works" answered instantly in
+  // consistent dialect (the local model keeps the open conversation).
+  const shubra = answerShubraKnowledge(message, language);
+  if (shubra) {
+    return { ...shubra, requiresConfirmation: false, needsClarification: false, plan } as SmartAiResponse & { plan: BrainPlan };
   }
 
   const data = buildSmartTimeData(request.appContext || {}, message);
