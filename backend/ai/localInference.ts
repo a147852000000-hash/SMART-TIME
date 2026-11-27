@@ -48,6 +48,22 @@ type LocalAiRequest = {
   memoryContext?: string;
 };
 
+// Drop empty collections/scalars so "expenses: []"-style payloads never reach
+// the small model — empty JSON envelopes made it answer "the data is empty"
+// even when the user asked an app-knowledge question.
+function compactDataJson(data: Record<string, unknown> | undefined): string {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(data || {})) {
+    const isEmpty = Array.isArray(v)
+      ? v.length === 0
+      : v && typeof v === "object"
+        ? Object.keys(v as object).length === 0
+        : v === null || v === undefined || v === "";
+    if (!isEmpty) out[k] = v;
+  }
+  return Object.keys(out).length ? JSON.stringify(out) : "";
+}
+
 export async function askLocalSmartAi(input: LocalAiRequest): Promise<SmartAiResponse | null> {
   if (!LOCAL_URL) return null;
 
@@ -93,12 +109,12 @@ export async function askLocalSmartAi(input: LocalAiRequest): Promise<SmartAiRes
       })),
       {
         role: "user",
-        // Plain-language request for the small local model (JSON envelopes
-        // make 0.5B models echo the question); data appended as reference.
+        // Plain question only; non-empty user data appended as reference.
         content: input.message +
-          (input.data && Object.keys(input.data).length
-            ? `\nبيانات المستخدم الحالية (اعتمد عليها فقط، لا تخترع): ${JSON.stringify(input.data).slice(0, 2200)}`
-            : "")
+          ((() => {
+            const dj = compactDataJson(input.data);
+            return dj ? `\nبيانات المستخدم الحالية (اعتمد عليها فقط، لا تخترع): ${dj.slice(0, 2200)}` : "";
+          })())
       }
     ]
   };
