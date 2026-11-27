@@ -108,19 +108,19 @@ export function planRequest(request: SmartAiRequest): BrainPlan {
 }
 
 function verifiedReply(language: "ar" | "en", result: VerifiedToolResult): string {
-  if (!result.ok) return language === "ar" ? `فشل التنفيذ فعليًا: ${result.error || "خطأ غير معروف"}` : `Execution failed: ${result.error || "unknown error"}`;
+  if (!result.ok) return language === "ar" ? `فشل التنفيذ يا معلم: ${result.error || "خطأ غير معروف"} — وأنا مش بهمّم نتايج، نجرب تاني؟` : `Execution failed: ${result.error || "unknown error"}`;
   if (result.operation === "addTransaction") {
     const r = result.record as any;
     const remaining = (result.verification as any).monthlyRemaining;
     const balance = remaining === null || remaining === undefined ? "غير محدد لأن ميزانية الشهر غير مسجلة" : `${remaining} ${readCurrency(result)}`;
     return language === "ar"
-      ? `تم تسجيل ${r.amount} جنيه ${r.title}، وتم التحقق من وجود العملية في قاعدة البيانات. الرصيد المتبقي من الميزانية: ${balance}.`
+      ? `خلصنا يا معلم! سجلت ${r.amount} جنيه ${r.title} ورجعت اتأكدت منها في قاعدة بياناتك بنفسي. المتبقي من ميزانية الشهر: ${balance}.`
       : `Recorded ${r.amount} EGP for ${r.title}; the database read-back verified the transaction. Remaining budget: ${balance}.`;
   }
-  if (result.operation === "updateBudget") return language === "ar" ? `تم تحديث الميزانية إلى ${Number((result.record as any).monthlyLimit)} ${(result.record as any).currency} وتم التحقق منها من قاعدة البيانات.` : `Budget updated to ${Number((result.record as any).monthlyLimit)} ${(result.record as any).currency} and verified from the database.`;
-  if (result.operation === "addTask") return language === "ar" ? `تمت إضافة المهمة «${(result.record as any).title}» والتحقق من حفظها.` : `Task "${(result.record as any).title}" was added and verified.`;
-  if (result.operation === "updateTask") return language === "ar" ? `تم تحديث المهمة «${(result.record as any).title}» والتحقق من النتيجة.` : `Task "${(result.record as any).title}" was updated and verified.`;
-  return language === "ar" ? "تم التنفيذ والتحقق من النتيجة." : "Executed and verified.";
+  if (result.operation === "updateBudget") return language === "ar" ? `خلصنا يا قمر! الميزانية بقت ${Number((result.record as any).monthlyLimit)} ${(result.record as any).currency} ورجعت اتأكدت منها في قاعدة البيانات.` : `Budget updated to ${Number((result.record as any).monthlyLimit)} ${(result.record as any).currency} and verified from the database.`;
+  if (result.operation === "addTask") return language === "ar" ? `خلصنا يا معلم! المهمة «${(result.record as any).title}» اتسجلت واتتحققت في قاعدة البيانات.` : `Task "${(result.record as any).title}" was added and verified.`;
+  if (result.operation === "updateTask") return language === "ar" ? `اتظبطت يا معلم! المهمة «${(result.record as any).title}» اتحدثت واتتحققت.` : `Task "${(result.record as any).title}" was updated and verified.`;
+  return language === "ar" ? "خلصنا يا معلم والنتيجة اتتحققت بنفسي — لو في أي حاجة غلط هقولك على طول." : "Executed and verified.";
 }
 
 function readCurrency(result: VerifiedToolResult) {
@@ -190,10 +190,10 @@ export async function runOpenMindBrain(request: SmartAiRequest): Promise<SmartAi
 
   if (plan.action) {
     if (!request.userId) {
-      return { reply: language === "ar" ? "أحتاج هوية المستخدم لتنفيذ العملية على قاعدة البيانات الحقيقية." : "A user identity is required before I can mutate the real database.", action: plan.action, actionSummary: "user_id_required", requiresConfirmation: true, needsClarification: true, provider: "smart-ai", model: "open-mind-brain", engine: "rules", plan };
+      return { reply: language === "ar" ? "محتاج أعرف مين انت الأول يا معلم عشان أفتح قاعدة بياناتك — من غير هوية مش هسجل حاجة." : "A user identity is required before I can mutate the real database.", action: plan.action, actionSummary: "user_id_required", requiresConfirmation: true, needsClarification: true, provider: "smart-ai", model: "open-mind-brain", engine: "rules", plan };
     }
     if (!request.confirmed) {
-      return { reply: language === "ar" ? "فهمت العملية وجهزتها. أحتاج تأكيدك قبل الكتابة في قاعدة البيانات." : "I understood and prepared the operation. I need your confirmation before writing to the database.", action: plan.action, actionSummary: "confirmation_required", requiresConfirmation: true, needsClarification: false, provider: "smart-ai", model: "open-mind-brain", engine: "rules", plan };
+      return { reply: language === "ar" ? "فهمت العملية وجهزتها يا معلم — بس استنى شوية، محتاج تأكيدك قبل ما أكتب في قاعدة بياناتك، فلوسك مش لعبة. دوّس تأكيد وأنا أتحقق وأرجعلك." : "I understood and prepared the operation. I need your confirmation before writing to the database.", action: plan.action, actionSummary: "confirmation_required", requiresConfirmation: true, needsClarification: false, provider: "smart-ai", model: "open-mind-brain", engine: "rules", plan };
     }
     try {
       const execution = executeToolAction(request.userId, plan.action);
