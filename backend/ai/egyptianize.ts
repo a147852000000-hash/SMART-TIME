@@ -95,6 +95,29 @@ export function msaMarkerCount(text: string): number {
   return count;
 }
 
+// Final safety net BEFORE any Arabic reply leaves the server. A genuine
+// Shubra reply almost always carries at least one conversational anchor;
+// replies without any anchor (or with Latin drift / mangled repetitions)
+// are treated as broken Arabic and rejected by the caller.
+const EGYPT_ANCHORS =
+  /(هههه|يا معلم|يا عم |يا عم$|يا قمر|يا غالي|خلاص|تقدر|بقدر|هتلاقي|هتقدر|هتعمل|هيقولك|هقولك|دلوقتي|دلوقت|دلوقتى|عايز|عايزة|عاوز|عشان|علشان|لو سمحت|مفيش|فيه مشكلة|مش |أقدر|اقدر|إزاي|ازاي|ازاى|إزيك|ازيك|بص |ماشي|تمام|كويس|أيوة|ايوة|ايوَة|ايوه|كمان|برضه|برضو|إيه|ايه|فين|إمتى|امتى|ليه|منين|ههه)/;
+
+export function looksBrokenArabic(text: string): boolean {
+  const t = String(text || "").trim();
+  if (!t) return true;
+  const lettersAll = t.match(/[A-Za-z\u0600-\u06FF]/g) || [];
+  const latin = lettersAll.length
+    ? (t.match(/[A-Za-z]/g) || []).length / lettersAll.length
+    : 0;
+  if (latin > 0.55) return true;
+  if (t.length < 14) return false; // short playful replies are fine
+  if (!EGYPT_ANCHORS.test(t)) return true;
+  // mangled token soup: letter streaks (شششش) — laughter (هههه) is normal
+  // for the persona and must NOT count as broken.
+  if (/([^ه\s])\1{3,}/.test(t)) return true;
+  return false;
+}
+
 export function egyptianizeText(text: string): string {
   let out = String(text || "");
   for (const [re, to] of SWAPS) out = out.replace(re, to);

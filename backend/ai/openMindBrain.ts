@@ -6,7 +6,7 @@ import { groqProvider, isGroqConfigured } from "./providers/groqProvider.js";
 import { answerWithRules } from "./rulesEngine.js";
 import { answerShubraKnowledge } from "./shubraKnowledge.js";
 import { buildAppKnowledge } from "./appKnowledge.js";
-import { egyptianizeText, msaMarkerCount, SHUBRA_FEWSHOT, SHUBRA_BANNED, dialectFixMessages } from "./egyptianize.js";
+import { egyptianizeText, msaMarkerCount, looksBrokenArabic, SHUBRA_FEWSHOT, SHUBRA_BANNED, dialectFixMessages } from "./egyptianize.js";
 import type { SmartAiAction, SmartAiRequest, SmartAiResponse } from "./types.js";
 
 export type BrainIntent =
@@ -175,37 +175,65 @@ async function askGroqOpenMind(input: {
     knowledge,
     `المسار الحالي: نية الطلب "${plan.intent}" والخطوات: ${plan.steps.join(" -> ")}.`,
     "استخدم هذه البيانات المحسوبة من التطبيق عند أي حديث عن أرقام أو سجلات المستخدم:",
-    JSON.stringify(data).slice(0, 12000),
+    // Groq free tier = 8000 tokens/min. Data JSON at 12k chars alone ate
+    // ~3k tokens and pushed every request over the limit (429) — the exact
+    // root cause of broken-Arabic fallbacks. Keep the whole request well
+    // under the ceiling: 3000 chars of data ≈ ~800 tokens.
+    JSON.stringify(data).slice(0, 3000),
   ].join("\n");
 
   const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
     { role: "system", content: system },
   ];
   if (memoryContext) {
-    messages.push({ role: "system", content: `ذاكرة SMART AI وأحداث قادمة:\n${memoryContext.slice(0, 5000)}` });
+    messages.push({ role: "system", content: `ذاكرة SMART AI وأحداث قادمة:\n${memoryContext.slice(0, 1800)}` });
   }
-  for (const item of history.slice(-8)) {
+  for (const item of history.slice(-6)) {
     messages.push({
       role: item.sender === "user" ? "user" : "assistant",
-      content: String(item.text || "").slice(0, 2000),
+      content: String(item.text || "").slice(0, 700),
     });
   }
-  messages.push({ role: "user", content: String(request.message || "").slice(0, 4000) });
+  messages.push({ role: "user", content: String(request.message || "").slice(0, 2000) });
+
+  // Free-tier TPM: a 429 body carries "try again in Nms" — waiting exactly
+  // that long costs nothing and saves the request from the broken-Arabic
+  // fallback chain. One retry, capped at ~3.5s.
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const rateLimitDelay = (e: unknown): number => {
+    const msg = String((e as Error)?.message || "");
+    const m = msg.match(/try again in ([\d.]+)m?s/i);
+    const ms = m ? Math.ceil(parseFloat(m[1]) * (/s$/i.test(m[1]) || /\d+\s?s/i.test(m[1]) ? 1000 : 1)) : 0;
+    if (ms > 0) return Math.min(ms + 400, 3500);
+    return /rate limit/i.test(msg) ? 1200 : 0;
+  };
 
   let result: { content?: string; model?: string } = { content: "" };
   try {
-    result = await groqProvider.chat({
-      messages,
-      temperature: 0.3,
-      maxCompletionTokens: 900,
-    });
+    try {
+      result = await groqProvider.chat({
+        messages,
+        temperature: 0.3,
+        maxCompletionTokens: 480,
+      });
+    } catch (e) {
+      const wait = rateLimitDelay(e);
+      if (wait > 0 && /rate limit/i.test(String((e as Error)?.message || ""))) {
+        await sleep(wait);
+        result = await groqProvider.chat({
+          messages,
+          temperature: 0.3,
+          maxCompletionTokens: 480,
+        });
+      } else throw e;
+    }
     // Empty reply happens occasionally (content filter / glitch) — one cheap
-    // retry beats dropping into the 45-90s local-model fallback.
+    // retry beats dropping into the fallback chain.
     if (!String(result.content || "").trim()) {
       result = await groqProvider.chat({
         messages,
         temperature: 0.5,
-        maxCompletionTokens: 700,
+        maxCompletionTokens: 480,
       });
     }
   } catch (error) {
@@ -219,7 +247,7 @@ async function askGroqOpenMind(input: {
     try {
       messages.push({ role: "assistant", content: reply.slice(0, 500) });
       messages.push({ role: "user", content: "ردّي على نفس رسالة المستخدم تاني، بس المرة دي بالعامية المصرية الشبرا خالص، من غير أي كلمة إنجليزي ولا حرف لاتيني زيادة." });
-      const retry = await groqProvider.chat({ messages, temperature: 0.3, maxCompletionTokens: 900 });
+      const retry = await groqProvider.chat({ messages, temperature: 0.3, maxCompletionTokens: 480 });
       const retryReply = String(retry.content || "").trim();
       if (retryReply && latinRatio(retryReply) <= LATIN_DRIFT_LIMIT) reply = retryReply;
     } catch { /* keep first reply */ }
@@ -232,7 +260,7 @@ async function askGroqOpenMind(input: {
       const fixed = await groqProvider.chat({
         messages: dialectFixMessages(reply),
         temperature: 0.2,
-        maxCompletionTokens: 700,
+        maxCompletionTokens: 480,
       });
       const fixedReply = String(fixed.content || "").trim();
       if (fixedReply && latinRatio(fixedReply) <= LATIN_DRIFT_LIMIT
@@ -242,6 +270,13 @@ async function askGroqOpenMind(input: {
     } catch { /* keep original reply */ }
   }
   if (language === "ar") reply = egyptianizeText(reply);
+  // Final broken-Arabic net: a coherent Shubra reply always carries a
+  // conversational anchor — anything else falls through to the deterministic
+  // engines instead of reaching the user (this is the video complaint fix).
+  if (language === "ar" && looksBrokenArabic(reply)) {
+    console.warn("OPEN MIND Groq reply rejected by broken-Arabic net.");
+    throw new Error("Groq reply failed the dialect quality gate.");
+  }
   return {
     reply,
     action: null,
@@ -315,7 +350,10 @@ export async function runOpenMindBrain(request: SmartAiRequest): Promise<SmartAi
     ? [memoryContextForModel(smartContext.memories, 12), calendarContextForModel(smartContext.upcomingEvents, 12)].filter(Boolean).join("\n")
     : "";
 
-  // Engine chain (production): Groq -> optional local model -> deterministic rules.
+  // Engine chain (production): Groq -> deterministic rules (Arabic).
+  // The 1.5B local model produced مكسر Arabic (the #1 user complaint, see the
+  // Nov-27 video) — it is NO LONGER part of the Arabic chain. It stays for
+  // English conversation only, where its output is coherent.
   if (isGroqConfigured()) {
     try {
       const groqReply = await askGroqOpenMind({ request, language, plan, data, history: modelHistory, memoryContext });
@@ -324,24 +362,12 @@ export async function runOpenMindBrain(request: SmartAiRequest): Promise<SmartAi
       console.warn("OPEN MIND Groq unavailable, falling back:", (error as Error)?.message);
     }
   }
-  if (isLocalSmartAiConfigured() && LOCAL_MODEL_INTENTS.has(plan.intent)) {
+  if (language === "en" && isLocalSmartAiConfigured() && LOCAL_MODEL_INTENTS.has(plan.intent)) {
     try {
-      // Plain message only: the persona SYSTEM already carries the dialect +
-      // no-invention rules. Envelopes/JSON around the question made the 1.5B
-      // model echo the envelope or drift to MSA/English.
       const local = await askLocalSmartAi({ language, message, data, conversationHistory: modelHistory,
         memoryContext });
       if (local?.reply) {
-        // Quality gate: the small model is the #1 source of broken Arabic
-        // (عربي مكسر). English drift or heavy MSA → discard and let the
-        // deterministic dialect rules engine answer instead.
-        const badDialect = language === "ar" && msaMarkerCount(local.reply) >= 3;
-        if ((isArabicMessage(message) && latinRatio(local.reply) > LATIN_DRIFT_LIMIT) || badDialect) {
-          console.warn(`OPEN MIND local model reply discarded (latin=${latinRatio(local.reply).toFixed(2)}, msa=${msaMarkerCount(local.reply)}).`);
-        } else {
-          const localReply = language === "ar" ? egyptianizeText(local.reply) : local.reply;
-          return { ...local, reply: localReply, requiresConfirmation: plan.requiresConfirmation, plan };
-        }
+        return { ...local, requiresConfirmation: plan.requiresConfirmation, plan };
       }
     } catch (error) { console.warn("OPEN MIND local model unavailable:", (error as Error)?.message); }
   }
