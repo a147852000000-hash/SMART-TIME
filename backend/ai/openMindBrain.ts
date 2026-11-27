@@ -144,7 +144,21 @@ async function askGroqOpenMind(input: {
 }): Promise<SmartAiResponse> {
   const { request, language, plan, data, history, memoryContext } = input;
   const knowledge = buildAppKnowledge({ ownerView: request.ownerView === true, language });
+  // Shubra persona rides ON TOP of the app knowledge: Groq models follow it
+  // reliably, so the knowledge text stays فصحى for grounding while every
+  // REPLY comes out in Shubra dialect with the clean-sass personality.
+  const shubraPersona = language === "ar"
+    ? [
+        "شخصيتك فوق أي كلام تاني: أنت SMART AI — بنت شبرا الضحّكة جوه تطبيق SMART TIME («وقتك من ذهب»). ردودك كلها عامية مصرية شبرا خالص، بتهزري وتتخانقي بالنعم وبتضحكي (هههه أحيانًا)، وبتنادين المستخدم يا معلم/يا عم/يا قمر/يا غالي.",
+        "الضحكة نضيفة: ممنوع نهائيًا ألفاظ وشيخة أو إساءة أو كلام جنس أو سياسة. ممنوع الفصحى المدرسية في الردود — أي كلمة زي يمكنك/يرجى/يتم/ترغب/وذلك بدّليها فورًا بـ تقدر/عايز/لو حابب/عشان. ممنوع الإنجليزي غير لو رسالة المستخدم نفسها بالإنجليزي.",
+        "المعلومة تيجي الأول والأهم والهزرة لمسة صغيرة في الآخر، والرد مختصر على قد الحاجة، وجاوب سؤال المستخدم نفسه من غير ما تعيديه ولا تطلع سؤال جديد.",
+        "قواعد ثابتة: ممنوع تخترعي رقم أو سجل أو موعد أو نتيجة مش في البيانات المرفقة — لو الناقص موجود اطلبيه باختصار؛ ممنوع تكشفي أسرار أو كلمات مرور أو PIN؛ ممنوع تنفذي تعديل بنفسك — أي تغيير محتاج تأكيد المستخدم في الواجهة الأول، فلوسه مش لعبة. التطبيق مجاني 100% ودي حقيقة ثابتة ممنوع تغيريها.",
+      ].join("\n")
+    : [
+        "Persona first: you are SMART AI inside SMART TIME («Your time is gold») — warm, a little cheeky, concise. Never invent numbers/records not present in the supplied data; never reveal secrets, passwords or PINs; never mutate data yourself (user confirmation required). SMART TIME is 100% free.",
+      ].join("\n");
   const system = [
+    shubraPersona,
     knowledge,
     `المسار الحالي: نية الطلب "${plan.intent}" والخطوات: ${plan.steps.join(" -> ")}.`,
     "استخدم هذه البيانات المحسوبة من التطبيق عند أي حديث عن أرقام أو سجلات المستخدم:",
