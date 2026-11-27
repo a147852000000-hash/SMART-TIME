@@ -66,6 +66,30 @@ const WHO_MADE = canned(
   "عاملني فريق سمارت تايم يا معلم، وبنت شبرا ضحّكة زوقه فيني هههه — شغالين على Oracle المجاني وكل حاجة في التطبيق ببلاش بالكامل، وأنا هنا عشان أظبطلك وقتك «وقتك من ذهب» زي ما بيقال."
 );
 
+// v3.2 small-talk extras: keep the persona alive WITHOUT burning Groq TPM —
+// these get answered instantly from the deterministic bank.
+const JOKES = [
+  "حاجة تضحكك يا معلم؟ اتفضل هههه — واحد سأل صاحبه: «بتشرب قهوة في ليلة العمر فين؟» قال: «في مقهى العمر — واللي ميعده جاي بعد المصاريف اللي انت سجلتهم هههه». بلاش الكومدي وحط مصروفك في التطبيق أحسن.",
+  "خد دي يا معلم هههه — واحد دخل صيدلية قال: «حاجه تنسي اللي فات»، قال الصيدلي: «حبيبي آخر كلام انت قلته اتنين ونيف شاى مع كرواسون، بـ٤٥ جنيه» — سجلهم في المصاريف وريحني هههه.",
+  "قولك دي وهنا خلاص هههه — مرات واحد بتقوله: «عيني في عينك»، قالها: «مين اللي زعقلك في التطبيق؟ سمارت تايم بنته قاعدة تعمل حسابك مش قاعدة تبص في حتة تانية هههه».",
+];
+function jokeForNow(): string {
+  const slot = Math.floor(Date.now() / 3600000) % JOKES.length;
+  return JOKES[slot];
+}
+
+const SOCIAL_LOVE = canned(
+  "هههه سؤال ده يا معلم — أنا بنت موبايلات وقواعد بيانات، قلبي محجوز لمصاريفك ومهامك وتقويمك بالكامل هههه. بس اللي حواليك في الشات أهلك وأصحابك دول اللي تستاهل وقتك، وأنا بس بنظمهولك «وقتك من ذهب»."
+);
+
+const SOCIAL_TASTE = canned(
+  "أنا بتحب شاي معتّق بنعناع وده مش سر يا معلم هههه — بس المهم أنا بتحب أكتر حاجة لما تخلص مهمة قبل ميعادها وتسجل مصروف يوم ما بيحصل. جرب وأنت شوف: دوس مهمة واحدة النهاردة وأنا هفكرك قبلها."
+);
+
+const POLITICS = canned(
+  "أنا ممنوع أتكلم في السياسة يا معلم، ده أكبر مصدر خناقة في العيلة والشات هههه — وأنا جيت هنا عشان أخلص مهامك وأحسب مصاريفك، مش عشان أفتح ملفات. جرّب تسألني عن أي قسم في التطبيق وأنا معاك فوراً."
+);
+
 const MODULES_LIST = canned(
   "سمارت تايم فيه أقسام يا معلم: لوحة التحكم، المهام، المصروفات والميزانية، السيارات، الرحلات، التعليم، الملاحظات والمحاسبة، التقويم، الشات الجماعي، مركز الذكاء — أنا — والمركز الإعلامي والرياضة والقسم الديني والإعدادات. قولي عايز تبص على انهي قسم وأنا أشرحهالك بالبلدي هههه."
 );
@@ -132,6 +156,33 @@ const SECTIONS: Array<{ keys: RegExp; reply: string }> = [
 // how/what phrasings that make a section mention an actual question about it
 const HOW = /بتشتغل|شغالة|شغال|بتعمل|بيعمل|اعمل ايه|أعمل ايه|ازاي|إزاي|ازي|فيه ايه|فيه إيه|ميزة|تقدر|يعني ايه|ايه هو|إيه هو|اضف|أضف|سجل|استخدم/;
 
+// Deterministic pocket calculator — math must NEVER be left to a model
+// (hallucinated numbers are worse than broken Arabic). Instant, exact.
+const AR_DIGITS = "٠١٢٣٤٥٦٧٨٩";
+function tryArithmetic(m: string): string | null {
+  const t = m.replace(/[٠-٩]/g, (d) => String(AR_DIGITS.indexOf(d)));
+  const ops: Array<[RegExp, (a: number, b: number) => number, string]> = [
+    [/(\d+(?:\.\d+)?)\s*(?:في|فى|×|x|\*)\s*(\d+(?:\.\d+)?)/i, (a, b) => a * b, "×"],
+    [/(\d+(?:\.\d+)?)\s*(?:زائد|\+)\s*(\d+(?:\.\d+)?)/, (a, b) => a + b, "+"],
+    [/(\d+(?:\.\d+)?)\s*ناقص\s*(\d+(?:\.\d+)?)/, (a, b) => a - b, "−"],
+    [/(\d+(?:\.\d+)?)\s*(?:÷|\/|تقسم على)\s*(\d+(?:\.\d+)?)/, (a, b) => (b === 0 ? NaN : a / b), "÷"],
+  ];
+  for (const [re, fn, sym] of ops) {
+    const mm = t.match(re);
+    if (!mm) continue;
+    const a = parseFloat(mm[1]);
+    const b = parseFloat(mm[2]);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
+    const r = fn(a, b);
+    if (!Number.isFinite(r)) {
+      return "القسمة على صفر يا معلم مش بتحصل حتى عندنا هههه — غير الرقم التاني وأنا أحسبهالك على طول.";
+    }
+    const rr = Math.round(r * 1000) / 1000;
+    return `${a} ${sym} ${b} = ${rr} يا معلم، حسبة نضيفة من غير آلة حاسبة هههه — حسبة تانية ولا نشوف مصاريفك؟`;
+  }
+  return null;
+}
+
 export function answerShubraKnowledge(
   message: string,
   language: "ar" | "en"
@@ -140,10 +191,15 @@ export function answerShubraKnowledge(
   const m = String(message || "").trim();
   if (!m) return null;
 
+  // Pocket calculator runs FIRST: pure math like "٢٠ زائد ٥ كام" must never
+  // be mistaken for a data question by the money guard below.
+  const math = tryArithmetic(m);
+  if (math) return canned(math);
+
   // Money/data questions stay with the deterministic rules engine — never canned.
   if (/كام|كم\s|إجمالي|اجمالي|صافي|صرفت|صرفي|دفعت|المتبقي/.test(m)) return null;
 
-  if (/من\s?(انت|انتي|أنت|أنتي)\b|انت ايه|انتي ايه|انتِ مين|انت مين|مين سايبك|عرف نفسك/.test(m)) return IDENTITY;
+  if (/من\s?(انت|انتي|أنت|أنتي)\b|انت ايه|انتي ايه|انتِ مين|انت مين|مين سايبك|عرف نفسك|مين انت|مين انتي|مين انتى|مين انتِ|مين اسمك|اسمك ايه|اسمك مين/.test(m)) return IDENTITY;
   // اشترك (the verb!) — "عايز اشترك في التطبيق ده" is the #1 onboarding ask.
   if (/بفلوس|مجاني|اشتراك|اشترك|اشتركت|باقة|تكلفة|تكلقة|ببلاش|مقابل فلوس/.test(m) && /تطبيق|سمارت|smart|استخدام|خدمة|عندكم|عندك|فيه|دي|ده/.test(m)) return FREE;
   if (/أمان|امان|بياناتي|سرية|سر\b|باسورد|كلمة السر|خصوصية/.test(m)) return SECURITY;
@@ -157,6 +213,11 @@ export function answerShubraKnowledge(
   if (/^(تمام|ماشي|اوك|أوك|okay|ok|حاضر|ايوه|أيوه|اه|أه)[\s.!،]*$/i.test(m)) return OK_ACK;
   if (/^ه+[اهي]*$/.test(m) || (/هههه/.test(m) && m.length <= 30)) return LAUGH;
   if (/(مين عملك|مين اللي عملك|مينصممك|مين صممك|عملك مين|صممك مين|فين معمول)/.test(m)) return WHO_MADE;
+  // Fun & social bank (v3.2): jokes, personal questions, politics off-limits.
+  if (/(ضحكني|نكتة|نكتة جدة|قولي حاجة تضحك|هزني|مقلب)/.test(m) && m.length <= 80) return canned(jokeForNow());
+  if (/(عندك حبيب|عندك حد|بتحبي حد|حبيبك مين|عايشة مع مين|نتجوز)/.test(m)) return SOCIAL_LOVE;
+  if (/(بتحبي|بحب ايه|اكلك المفضل|قهوة ولا شاي|مشروبك|بتحبي اكل ايه)/.test(m) && m.length <= 60) return SOCIAL_TASTE;
+  if (/(سياسة|حزب|انتخاب|رئيس الوزراء|السيسي|برلمان|ثورة|ميدان التحرير|الحرب|حرب)/.test(m)) return POLITICS;
   // Onboarding: signup steps + "where do I start"
   if (/(اعمل حساب|عمل حساب|سجل حساب|انشاء حساب|إنشاء حساب|فتح حساب|حساب جديد|التسجيل|ازاي اسجل|إزاي أسجل|سجلني)/.test(m)) return SIGNUP;
   if (/(ابدا منين|ابدأ منين|أبدأ منين|ابدأ من فين|أبدأ من فين|ابدا ازاي|ابدأ إزاي|أبدأ إزاي|ابدا من فين|اول مرة|أول مرة|لسه جديد|لسه مسجل|مبتدئ|عرفني التطبيق|دليني|نفسي ابدأ)/.test(m)) return ONBOARD;
