@@ -43,38 +43,154 @@ function normalizeNumberText(value: string) {
 
 function extractAmount(message: string): number | null {
   const normalized = normalizeNumberText(message);
-  const match = normalized.match(/(?:^|\s)(\d+(?:\.\d+)?)(?:\s|$)/);
+  // Amount priority: «بمبلغ 250» / «مبلغ 250» → «250 جنيه» → bare number.
+  // The bare-number fallback strips fuel-grade numbers («بنزين 92») so the
+  // octane is NEVER mistaken for the amount.
+  let match = normalized.match(/(?:بمبلغ|مبلغ)\s*([\d]+(?:\.[\d]+)?)/);
+  if (!match) match = normalized.match(/([\d]+(?:\.[\d]+)?)\s*(?:جنيه|ج\s|egp)/);
+  if (!match) {
+    const cleaned = normalized.replace(/(?:بنزين|سولار)\s*\d+/g, " بنزين ");
+    match = cleaned.match(/(?:^|\s)(\d+(?:\.\d+)?)(?:\s|$)/);
+  }
   if (!match) return null;
   const n = Number(match[1]);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 function today() { return new Date().toISOString().slice(0, 10); }
+function daysAgo(n: number) { return new Date(Date.now() - n * 86400000).toISOString().slice(0, 10); }
+function daysAhead(n: number) { return new Date(Date.now() + n * 86400000).toISOString().slice(0, 10); }
+
+// ------------------------------------------------------------
+// Data-entry parser (the "قل وانا أسجل" flow): turns a spoken Arabic
+// instruction like «دخل مصروف بنزين 92 بمبلغ 250 امبارح كاش» into a
+// typed, confirmable action. Precision rules:
+//   * «بنزين 92» — 92 is the OCTANE (fuel grade), never the amount.
+//   * Amount priority: بمبلغ/مبلغ X → X جنيه → bare number (octane stripped).
+//   * Extracts date (امبارح/قبل يومين), payment method (كاش/فيز/محفظة),
+//     category (عربيات/تعليم/أكل/مواصلات/صحة/فواتير), and task time/priority.
+// Budget writes are NOT parsed — the canonical finance boundary is
+// read-only for budget in this phase, so a failing action is worse than
+// a clear pointer to the screen.
+// ------------------------------------------------------------
+const CATEGORY_LABELS: Record<string, string> = {
+  vehicle: "عربيات", education: "تعليم", food: "أكل", transport: "مواصلات",
+  health: "صحة", bills: "فواتير", other: "أخرى",
+};
+const PAYMENT_LABELS: Record<string, string> = {
+  cash: "كاش", card: "فيز/بطاقة", wallet: "محفظة إلكترونية",
+};
+
+function parseExpenseDate(m: string): string {
+  if (/امبارح|إمبارح|البارحة|اول امس|أول أمس|yesterday/.test(m)) return daysAgo(1);
+  const before = m.match(/قبل\s*(?:(\d+|يومين|اثنين))\s*(?:يوم|أيام|ايام)?/);
+  if (before) {
+    const n = before[1] === "يومين" || before[1] === "اثنين" ? 2 : Number(before[1]);
+    if (Number.isFinite(n) && n > 0 && n < 60) return daysAgo(n);
+  }
+  return today();
+}
+
+function parsePaymentMethod(m: string): string {
+  if (/فيز|فيصا|بطاقة|كارت|card|visa/.test(m)) return "card";
+  if (/محفظة|محفظتى|فودافون|انستا|instapay|wallet|كاش كارد/.test(m)) return "wallet";
+  return "cash";
+}
+
+function parseCategory(m: string): string {
+  if (/بنزين|وقود|سولار|عربية|عربيه|صيانة|صيانه|طوارق|كويليك|fuel/.test(m)) return "vehicle";
+  if (/درس|دروس|تعليم|مدرسة|مدرسه|كتب|درس خصوصي|جزاين|tuition/.test(m)) return "education";
+  if (/اكل|أكل|مطعم|غدا|غداء|عشا|فطار|سناك|قهوة|كافيه|food|restaurant/.test(m)) return "food";
+  if (/مواصلات|مترو|أتوبيس|اتوبيس|تاكسي|اوبير|uber|كريم|careem|باج/.test(m)) return "transport";
+  if (/دواء|دوا|دكتور|مستشفى|تحاليل|معمل|صيدلية|علاج/.test(m)) return "health";
+  if (/فاتورة|فواتير|كهرباء|مياه|غاز|انترنت|إنترنت|تليفون|موبايل|شحن/.test(m)) return "bills";
+  return "other";
+}
+
+function parseTimeOfDay(m: string): string | null {
+  const t = m.match(/الساعة\s*(\d{1,2})(?:[:٫.](\d{1,2}))?\s*(صباحاً|صباح|مساءً|مساء|ظهراً|ظهر|بالليل|ليل)?/);
+  if (!t) return null;
+  let h = Number(t[1]);
+  const min = t[2] ? String(Math.min(59, Number(t[2]))).padStart(2, "0") : "00";
+  const part = t[3] || "";
+  if (h >= 0 && h <= 12) {
+    if (/مساء|ظهر|ليل/.test(part)) h = h === 12 ? 12 : h + 12;
+    else if (h === 12) h = 0; // الساعة 12 صباحاً
+  }
+  if (h > 23 || h < 0) return null;
+  return `${String(h).padStart(2, "0")}:${min}`;
+}
 
 function parseAction(message: string): SmartAiAction {
   const m = message.toLowerCase();
+  const fuelOctane = m.match(/(?:بنزين|سولار)\s*(80|92|95)/);
   const value = extractAmount(message);
-  if ((/صرفت|دفعت|مصروف|expense|spent|paid/.test(m)) && value !== null) {
-    const fuel = /بنزين|وقود|fuel|gasoline/.test(m);
+  // Tasks FIRST: «مهمة ادخل على المدرسة الساعة 5» must never be read as an
+  // expense just because a bare number (the time) is present.
+  if (/مهمة|مهام|ذكرني|remind|task/.test(m) && !/مصروف|صرفت|دفعت|بنزين|سولار/.test(m)) {
+    const dueTime = parseTimeOfDay(m);
+    const dueDate = /بكرة|بكره|غدا|غداً|tomorrow/.test(m) ? daysAhead(1)
+      : /النهاردة|اليوم|today/.test(m) ? today()
+        : undefined;
+    const priority = /عالية|عاليه|هامة|مهم جدا|حرجة|urgent|high/.test(m) ? "high"
+      : /منخفضة|منخفضه|مش مهم|لو حبيت|low/.test(m) ? "low"
+        : "medium";
+    const title = message
+      .replace(/(?:^|\s)ذكرني(?:\s+(?:اني|أنى|ان\s))?/gi, " ")
+      .replace(/remind me (?:to )?/gi, "")
+      .replace(/^(?:اضف|أضف|سجل|حط|دخل|ادخل|أدخل|انشاء|أنشاء)\s+(?:مهمة|مهام|task|a task)\s*/i, "")
+      .replace(/^(?:مهمة|مهام|task)\s*/i, "")
+      // temporal tail: time phrase and trailing date words, with or without tail
+      .replace(/\s+الساعة\s*\d.*$/i, "")
+      .replace(/\s+(?:بكرة|بكره|غدا|غداً|النهاردة|اليوم)(?:\s.*$|\s*$)/i, "")
+      // priority words are standalone tokens, strip only the words themselves
+      .replace(/\s*(?:بأولوية|أولوية|عالية|عاليه|هامة|مهم جدا|متوسطة|منخفضة|منخفضه|حرجة)\s*/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    if (title) return { type: "add_daily_task", payload: { title, priority, ...(dueDate ? { dueDate } : {}), ...(dueTime ? { dueTime } : {}), category: "general" } };
+    if (!/صرفت|دفعت|مصروف/.test(m)) return null;
+  }
+  if ((/صرفت|دفعت|مصروف|بنزين|سولار|وقود|expense|spent|paid|(?<![أا])دخل\s|ادخل\s+(?:مصروف|بنزين|فلوس)|أدخل\s+(?:مصروف|بنزين|فلوس)|عندي\s+(مصروف|فلوس)/.test(m)) && value !== null) {
+    const title = fuelOctane ? `بنزين ${fuelOctane[1]}` : /بنزين|وقود|سولار/.test(m) ? "بنزين"
+      : /فاتورة|كهرباء|مياه|انترنت/.test(m) ? "فاتورة"
+        : /دواء|دكتور|تحاليل/.test(m) ? "علاج"
+          : /اكل|أكل|مطعم|غدا|عشا|فطار/.test(m) ? "أكل"
+            : /درس|دروس|مدرسة|تعليم/.test(m) ? "مصروف تعليمي"
+              : "مصروف";
     return {
       type: "add_expense",
       payload: {
-        title: fuel ? "بنزين" : "مصروف",
+        title,
         amount: value,
-        category: fuel ? "vehicle" : "other",
-        date: /النهاردة|اليوم|today/.test(m) ? today() : today(),
-        paymentMethod: "cash"
+        category: parseCategory(m),
+        date: parseExpenseDate(m),
+        paymentMethod: parsePaymentMethod(m),
+        notes: fuelOctane ? `أوكتان ${fuelOctane[1]} — مسجل بالكلام من مركز الذكاء` : "مسجل بالكلام من مركز الذكاء"
       }
     };
   }
-  if (/ميزانية|budget/.test(m) && value !== null) {
-    return { type: "update_budget", payload: { monthlyLimit: value, currency: "EGP" } };
-  }
-  if (/مهمة|task|ذكرني|remind/.test(m)) {
-    const title = message.replace(/مهمة|task|ذكرني|remind/gi, "").trim();
-    if (title) return { type: "add_daily_task", payload: { title } };
-  }
   return null;
+}
+
+// Human-readable one-liner for the UI confirmation card («إجراء جاهز»).
+export function actionCardSummary(action: SmartAiAction): string {
+  if (!action) return "";
+  if (action.type === "add_expense") {
+    const p = action.payload as Record<string, string | number>;
+    const cat = CATEGORY_LABELS[String(p.category)] || String(p.category);
+    const pay = PAYMENT_LABELS[String(p.paymentMethod)] || String(p.paymentMethod);
+    const when = String(p.date) === today() ? "النهاردة" : String(p.date) === daysAgo(1) ? "امبارح" : String(p.date);
+    return `مصروف «${p.title}» — ${p.amount} جنيه — تصنيف ${cat} — ${pay} — ${when}. هيتسجل في شاشة المصروفات والميزانية.`;
+  }
+  if (action.type === "add_daily_task") {
+    const p = action.payload as Record<string, string>;
+    const parts = [`مهمة «${p.title}»`, `أولوية ${p.priority === "high" ? "عالية" : p.priority === "low" ? "منخفضة" : "متوسطة"}`];
+    if (p.dueTime) parts.push(`الساعة ${p.dueTime}`);
+    if (p.dueDate) parts.push(p.dueDate === today() ? "النهاردة" : p.dueDate === daysAhead(1) ? "بكرة" : p.dueDate);
+    parts.push("هيتسجل في شاشة المهام.");
+    return parts.join(" — ");
+  }
+  return "";
 }
 
 export function classifyIntent(message: string): BrainIntent {
@@ -82,7 +198,9 @@ export function classifyIntent(message: string): BrainIntent {
   // How-it-works / explanation questions always belong to the talking brain
   // (persona + app knowledge) — never to the data-computation rules.
   if (/ازاي|إزاي|بيعمل ايه|بتعمل ايه|بتشتغل|شغالة|إيه هو|ايه هو|طريقة|فيه ايه|فيه إيه/.test(m)) return "conversation";
-  if (/صرفت|دفعت|مصروف|expense|spent|paid/.test(m) && extractAmount(message) !== null) return "app_action";
+  // Data-entry verbs (the «قل وأنا أسجل» flow) — mirrors parseAction's verbs:
+  // بنزين/سولار + amount, and entry verbs with a bare amount.
+  if (/صرفت|دفعت|مصروف|بنزين|سولار|وقود|expense|spent|paid|(?<![أا])دخل\s|ادخل|أدخل|عندي\s+(مصروف|فلوس)/.test(m) && extractAmount(message) !== null) return "app_action";
   if (/مهمة|task|ذكرني|remind|سجل|أضف|عدّل|(?<!أ)حدث|حدّث|غير|نفذ|امسح|احذف|execute|add|delete|update|edit/.test(m)) return "app_action";
   if (/بحث|ابحث|مصادر|آخر|latest|search|research/.test(m)) return "web_research";
   if (/pdf|تقرير|report|excel|xlsx|word|docx/.test(m)) return "report_generation";
@@ -119,14 +237,14 @@ export function planRequest(request: SmartAiRequest): BrainPlan {
   };
 }
 
-function verifiedReply(language: "ar" | "en", result: VerifiedToolResult): string {
+function verifiedReply(language: "ar" | "en", result: VerifiedToolResult, action?: SmartAiAction): string {
   if (!result.ok) return language === "ar" ? `فشل التنفيذ يا معلم: ${result.error || "خطأ غير معروف"} — وأنا مش بهمّم نتايج، نجرب تاني؟` : `Execution failed: ${result.error || "unknown error"}`;
   if (result.operation === "addTransaction") {
     const r = result.record as any;
     const remaining = (result.verification as any).monthlyRemaining;
     const balance = remaining === null || remaining === undefined ? "غير محدد لأن ميزانية الشهر غير مسجلة" : `${remaining} ${readCurrency(result)}`;
     return language === "ar"
-      ? `خلصنا يا معلم! سجلت ${r.amount} جنيه ${r.title} ورجعت اتأكدت منها في قاعدة بياناتك بنفسي. المتبقي من ميزانية الشهر: ${balance}.`
+      ? `خلصنا يا معلم! سجلت ${r.amount} جنيه «${r.title}» (${CATEGORY_LABELS[String(r.category)] || "مصروف"}${r.paymentMethod === "cash" ? "، كاش" : r.paymentMethod === "card" ? "، فيز/بطاقة" : r.paymentMethod === "wallet" ? "، محفظة" : ""}) ورجعت اتأكدت منها بنفسي في قاعدة بياناتك — هتلاقيه في شاشة المصروفات والميزانية على طول. المتبقي من ميزانية الشهر: ${balance}.`
       : `Recorded ${r.amount} EGP for ${r.title}; the database read-back verified the transaction. Remaining budget: ${balance}.`;
   }
   if (result.operation === "updateBudget") return language === "ar" ? `خلصنا يا قمر! الميزانية بقت ${Number((result.record as any).monthlyLimit)} ${(result.record as any).currency} ورجعت اتأكدت منها في قاعدة البيانات.` : `Budget updated to ${Number((result.record as any).monthlyLimit)} ${(result.record as any).currency} and verified from the database.`;
@@ -299,21 +417,27 @@ export async function runOpenMindBrain(request: SmartAiRequest): Promise<SmartAi
       return { reply: language === "ar" ? "محتاج أعرف مين انت الأول يا معلم عشان أفتح قاعدة بياناتك — من غير هوية مش هسجل حاجة." : "A user identity is required before I can mutate the real database.", action: plan.action, actionSummary: "user_id_required", requiresConfirmation: true, needsClarification: true, provider: "smart-ai", model: "open-mind-brain", engine: "rules", plan };
     }
     if (!request.confirmed) {
-      return { reply: language === "ar" ? "فهمت العملية وجهزتها يا معلم — بس استنى شوية، محتاج تأكيدك قبل ما أكتب في قاعدة بياناتك، فلوسك مش لعبة. دوّس تأكيد وأنا أتحقق وأرجعلك." : "I understood and prepared the operation. I need your confirmation before writing to the database.", action: plan.action, actionSummary: "confirmation_required", requiresConfirmation: true, needsClarification: false, provider: "smart-ai", model: "open-mind-brain", engine: "rules", plan };
+      const card = actionCardSummary(plan.action);
+      const reply = language === "ar"
+        ? (card
+          ? `فهمتك يا معلم، جهزت التسجيل بالكامل: ${card} — استنى تأكيدك بالضغطة وبتعد وتتحقق بنفسي في قاعدة بياناتك، فلوسك مش لعبة.`
+          : "فهمت العملية وجهزتها يا معلم — بس محتاج تأكيدك قبل ما أكتب في قاعدة بياناتك، فلوسك مش لعبة. دوّس تأكيد وأنا أتحقق وأرجعلك.")
+        : "Operation prepared — your confirmation is required before writing to the database.";
+      return { reply, action: plan.action, actionSummary: card || "confirmation_required", requiresConfirmation: true, needsClarification: false, provider: "smart-ai", model: "open-mind-brain", engine: "rules", plan };
     }
     try {
       const execution = executeToolAction(request.userId, plan.action);
-      return { reply: verifiedReply(language, execution), action: plan.action, actionSummary: execution.operation, requiresConfirmation: false, needsClarification: !execution.ok, provider: "smart-ai", model: "open-mind-brain", engine: "rules", plan, execution };
+      return { reply: verifiedReply(language, execution, plan.action), action: plan.action, actionSummary: execution.ok ? (actionCardSummary(plan.action) || execution.operation) : "execution_failed", requiresConfirmation: false, needsClarification: !execution.ok, provider: "smart-ai", model: "open-mind-brain", engine: "rules", plan, execution };
     } catch (error) {
       const execution: VerifiedToolResult = { ok: false, operation: plan.action.type, record: {}, verification: {}, error: (error as Error).message };
-      return { reply: verifiedReply(language, execution), action: plan.action, actionSummary: "execution_failed", requiresConfirmation: false, needsClarification: true, provider: "smart-ai", model: "open-mind-brain", engine: "rules", plan, execution };
+      return { reply: verifiedReply(language, execution, plan.action), action: plan.action, actionSummary: "execution_failed", requiresConfirmation: false, needsClarification: true, provider: "smart-ai", model: "open-mind-brain", engine: "rules", plan, execution };
     }
   }
 
   // Deterministic Shubra knowledge base — identity/free/security/greeting and
   // every section's "what it does + how it works" answered instantly in
   // consistent dialect (the local model keeps the open conversation).
-  const shubra = answerShubraKnowledge(message, language);
+  const shubra = answerShubraKnowledge(message, language, request.ownerView === true);
   if (shubra) {
     return { ...shubra, requiresConfirmation: false, needsClarification: false, plan } as SmartAiResponse & { plan: BrainPlan };
   }
