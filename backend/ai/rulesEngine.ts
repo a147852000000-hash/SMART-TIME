@@ -41,6 +41,9 @@ function isEducationQuestion(q: string): boolean {
 }
 
 function isComparisonQuestion(q: string): boolean {
+  // "الفرق بين المهام والتقويم" is a conceptual question, not a data
+  // comparison — only count it when money/data words are present too.
+  if (/(الفرق\s?بين|فارق\s?بين)/i.test(q) && !/(مصاريف|مصروف|دخل|فلوس|ميزانية|نقود|expense|income|budget)/i.test(q)) return false;
   return /(قارن|مقارنة|مقارنه|الفرق|مقابل|مقابلين|compare|comparison|difference|versus|vs\.?)/i.test(q);
 }
 
