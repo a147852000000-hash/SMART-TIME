@@ -5,7 +5,7 @@ import { SmartAiVoiceConversationModal } from './SmartAiVoiceConversationModal';
 import { AiMessage, AiModelType, Language } from '../types';
 import { ChatRepository } from '../services';
 import { askSmartAi, buildSmartAiContext, SmartAiAction } from '../services/aiService';
-import { loadSmartAiVoiceId, saveSmartAiVoiceId, speakSmartAi, stopSmartAiVoice, SMART_AI_VOICE_PROFILES } from '../services/smartAiVoiceService';
+import { loadSmartAiVoiceId, saveSmartAiVoiceId, speakSmartAi, stopSmartAiVoice, SMART_AI_VOICE_PROFILES, speakServerVoice, stopServerVoice } from '../services/smartAiVoiceService';
 import { listVoiceDnaProfiles, readVoiceDnaSample, type SmartVoiceDnaProfile } from '../services/smartVoiceDnaService';
 import { getVoiceDnaStatus, synthesizeVoiceDna } from '../services/smartVoiceDnaClient';
 import type { SmartAiVoiceId } from '../types';
@@ -112,6 +112,7 @@ export const AiCenterView: React.FC<AiCenterViewProps> = ({
 
   useEffect(() => () => {
     stopSmartAiVoice();
+    stopServerVoice();
   }, []);
 
   const selectedVoiceDnaProfile = voiceDnaProfiles.find((profile) => profile.id === selectedVoiceDnaId) || null;
@@ -120,6 +121,10 @@ export const AiCenterView: React.FC<AiCenterViewProps> = ({
     if (!text.trim()) return false;
 
     if (!selectedVoiceDnaProfile) {
+      // Server Egyptian voice first — the device browser voice may be English
+      // if no Arabic TTS voice is installed; the server voice is always شبرا.
+      const serverOk = await speakServerVoice(text, selectedVoice);
+      if (serverOk) return true;
       return speakSmartAi(text, smartLanguage, selectedVoice);
     }
 
@@ -218,10 +223,7 @@ export const AiCenterView: React.FC<AiCenterViewProps> = ({
       });
 
       if ((isVoiceEnabled || forceVoiceReply) && data.reply) {
-        const usedDna = await speakWithSelectedVoice(data.reply);
-        if (!usedDna && selectedVoiceDnaProfile) {
-          speakSmartAi(data.reply, smartLanguage, selectedVoice);
-        }
+        await speakWithSelectedVoice(data.reply);
       }
 
       const aiMessage: AiMessage = {

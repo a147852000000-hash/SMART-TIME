@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "path";
 import dotenv from "dotenv";
 import crypto from "node:crypto";
+import { spawn as nodeSpawn } from "node:child_process";
 import { Buffer } from "node:buffer";
 import { db, seedDefaultChatRooms, DB_PATH } from "./backend/database.js";
 import { getCache, setCache } from "./backend/cache.js";
@@ -885,12 +886,17 @@ app.get("/api/database/health", (_req, res) => {
 // SMART AI is app-owned. The V1 core answers app-data questions from
 // sanitized SMART TIME context and does not require an AI API key.
 const handleAiChat = async (req: express.Request, res: express.Response) => {
-  const language = String(req.body?.language || "ar") === "en" ? "en" : "ar";
+  const message0 = String(req.body?.message || req.body?.prompt || "");
+  // Language follows the MESSAGE, not the UI toggle: an Arabic question must
+  // always be answered in Shubra dialect even if the interface is in English.
+  const hasArabicScript = /[\u0600-\u06FF]/.test(message0);
+  const language: "ar" | "en" = hasArabicScript ? "ar"
+    : (String(req.body?.language || "ar") === "en" ? "en" : "ar");
   try {
     const user = authUser(req);
     if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول لاستخدام SMART AI." });
 
-    const message = String(req.body?.message || req.body?.prompt || "").trim();
+    const message = message0.trim();
     const conversationHistory = Array.isArray(req.body?.conversationHistory)
       ? req.body.conversationHistory.slice(-8)
       : [];
@@ -930,6 +936,84 @@ const handleAiChat = async (req: express.Request, res: express.Response) => {
 
 app.post("/api/ai/chat", handleAiChat);
 app.post("/api/gemini/chat", handleAiChat);
+
+// ----------------------------------------------------
+// SMART AI voice — free server-side Egyptian TTS (edge-tts).
+// The browser speechSynthesis falls back to an English voice when the
+// device has no Arabic voice installed, which made SMART AI "talk
+// English". Synthesizing on the server with ar-EG neural voices keeps
+// the dialect 100% Egyptian at zero cost (Microsoft edge endpoints, no
+// key). Results are cached by text hash and rate-limited per user.
+// ----------------------------------------------------
+const TTS_CACHE_DIR = path.join(path.dirname(DB_PATH), "tts-cache");
+const TTS_VOICES: Record<string, string> = {
+  female: "ar-EG-SalmaNeural",
+  male: "ar-EG-ShakirNeural",
+};
+const ttsRate = new Map<string, number[]>();
+function ttsAllowed(userId: string) {
+  const now = Date.now();
+  const windowMs = 60_000;
+  const hits = (ttsRate.get(userId) || []).filter((t) => now - t < windowMs);
+  if (hits.length >= 20) return false;
+  hits.push(now);
+  ttsRate.set(userId, hits);
+  return true;
+}
+
+app.post("/api/ai/tts", async (req, res) => {
+  try {
+    const user = authUser(req);
+    if (!user) return res.status(401).json({ error: "يجب تسجيل الدخول لاستخدام صوت SMART AI." });
+    const text = String(req.body?.text || "").trim();
+    if (!text) return res.status(400).json({ error: "النص مطلوب." });
+    if (text.length > 1200) return res.status(413).json({ error: "النص طويل جدًا للقراءة الصوتية." });
+    if (!ttsAllowed(user.id)) return res.status(429).json({ error: "طلبات الصوت كتير، استنى دقيقة وحاول تاني." });
+
+    const voiceKey = String(req.body?.voice || "female") === "male" ? "male" : "female";
+    const voice = TTS_VOICES[voiceKey];
+    const hash = crypto.createHash("sha1").update(`${voice}|${text}`).digest("hex");
+    const cacheFile = path.join(TTS_CACHE_DIR, `${hash}.mp3`);
+
+    try {
+      if (!fs.existsSync(TTS_CACHE_DIR)) fs.mkdirSync(TTS_CACHE_DIR, { recursive: true });
+    } catch { /* cache dir is best-effort */ }
+
+    if (!fs.existsSync(cacheFile)) {
+      // Text is spoken out loud by our own voice model — strip anything that
+      // could confuse the TTS or leak internals (markdown, urls, emojis).
+      const spoken = text
+        .replace(/https?:\/\/\S+/g, "لينك")
+        .replace(/[*_#`>|]/g, " ")
+        .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 1200);
+      const tmpFile = `${cacheFile}.${process.pid}.tmp`;
+      const args = ["-m", "edge_tts", "--voice", voice, "--text", spoken, "--write-media", tmpFile];
+      await new Promise<void>((resolve, reject) => {
+        const child = nodeSpawn("python3", args, { timeout: 45_000 });
+        let stderr = "";
+        child.stderr.on("data", (d: Buffer) => { stderr += String(d).slice(0, 500); });
+        child.on("error", reject);
+        child.on("close", (code: number) => {
+          if (code === 0 && fs.existsSync(tmpFile) && fs.statSync(tmpFile).size > 500) resolve();
+          else reject(new Error(stderr || `edge-tts exited ${code}`));
+        });
+      });
+      fs.renameSync(tmpFile, cacheFile);
+    }
+
+    const audio = fs.readFileSync(cacheFile);
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Cache-Control", "private, max-age=86400");
+    res.setHeader("X-SMART-VOICE", voice);
+    return res.send(audio);
+  } catch (error: any) {
+    console.error("SMART AI TTS error:", error?.message || error);
+    return res.status(502).json({ error: "تعذر توليد الصوت المصري حاليًا. جرّب تاني." });
+  }
+});
 
 app.get("/api/ai/status", (req, res) => {
   const user = authUser(req);

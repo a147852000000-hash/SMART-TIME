@@ -26,6 +26,16 @@ const NO_INVENTION = "Never invent facts, numbers, tool results, locations, file
 const LOCAL_MODEL_INTENTS = new Set<BrainIntent>(["conversation", "social_emotional", "unknown"]);
 const ARABIC_DIGITS = "٠١٢٣٤٥٦٧٨٩";
 
+// An Arabic question deserves an Arabic answer. If a model drifts into
+// Latin/English script, we detect it here and force a dialect retry.
+function latinRatio(text: string): number {
+  const letters = String(text || "").match(/[A-Za-z\u0600-\u06FF]/g) || [];
+  if (!letters.length) return 0;
+  return (String(text).match(/[A-Za-z]/g) || []).length / letters.length;
+}
+const isArabicMessage = (m: string) => /[\u0600-\u06FF]/.test(String(m || ""));
+const LATIN_DRIFT_LIMIT = 0.55;
+
 function normalizeNumberText(value: string) {
   return value.replace(/[٠-٩]/g, d => String(ARABIC_DIGITS.indexOf(d))).replace(/[,،]/g, "");
 }
@@ -184,8 +194,19 @@ async function askGroqOpenMind(input: {
     temperature: 0.3,
     maxCompletionTokens: 900,
   });
-  const reply = String(result.content || "").trim();
+  let reply = String(result.content || "").trim();
   if (!reply) throw new Error("Groq returned an empty reply.");
+  // Drift guard: Arabic in, English out must never pass. One strict retry,
+  // then keep the best of the two (retry wins if it respects the dialect).
+  if (isArabicMessage(request.message) && latinRatio(reply) > LATIN_DRIFT_LIMIT) {
+    try {
+      messages.push({ role: "assistant", content: reply.slice(0, 500) });
+      messages.push({ role: "user", content: "ردّي على نفس رسالة المستخدم تاني، بس المرة دي بالعامية المصرية الشبرا خالص، من غير أي كلمة إنجليزي ولا حرف لاتيني زيادة." });
+      const retry = await groqProvider.chat({ messages, temperature: 0.3, maxCompletionTokens: 900 });
+      const retryReply = String(retry.content || "").trim();
+      if (retryReply && latinRatio(retryReply) <= LATIN_DRIFT_LIMIT) reply = retryReply;
+    } catch { /* keep first reply */ }
+  }
   return {
     reply,
     action: null,
@@ -275,7 +296,15 @@ export async function runOpenMindBrain(request: SmartAiRequest): Promise<SmartAi
       // model echo the envelope or drift to MSA/English.
       const local = await askLocalSmartAi({ language, message, data, conversationHistory: modelHistory,
         memoryContext });
-      if (local?.reply) return { ...local, requiresConfirmation: plan.requiresConfirmation, plan };
+      if (local?.reply) {
+        // The 1.5B model sometimes drifts to English on open talk — drop the
+        // English answer and let the deterministic rules engine reply instead.
+        if (isArabicMessage(message) && latinRatio(local.reply) > LATIN_DRIFT_LIMIT) {
+          console.warn("OPEN MIND local model drifted to Latin script, discarding reply.");
+        } else {
+          return { ...local, requiresConfirmation: plan.requiresConfirmation, plan };
+        }
+      }
     } catch (error) { console.warn("OPEN MIND local model unavailable:", (error as Error)?.message); }
   }
   // Deterministic rules engine — grounded answers for data questions with zero keys.

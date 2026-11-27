@@ -1,4 +1,6 @@
 import { StorageAdapter } from './storageAdapter';
+import { apiUrl } from './apiConfig';
+import { authHeaders } from './authService';
 export type SmartAiVoiceId = "male" | "female" | "youth" | "child";
 
 export type SmartAiVoiceProvider = "browser-tts" | "voice-dna-local";
@@ -109,5 +111,48 @@ export function speakSmartAi(text: string, language: "ar" | "en", profileId: Sma
 export function stopSmartAiVoice(): void {
   if (typeof window !== "undefined" && "speechSynthesis" in window) {
     window.speechSynthesis.cancel();
+  }
+}
+
+// ------------------------------------------------------------
+// Server Egyptian voice (edge-tts ar-EG) — preferred over the browser
+// voices: devices without an installed Arabic voice fall back to an
+// English one, which made SMART AI "talk English". The server voice is
+// always Egyptian dialect. Browser TTS stays as offline fallback.
+// ------------------------------------------------------------
+let serverVoiceAudio: HTMLAudioElement | null = null;
+
+export function stopServerVoice(): void {
+  if (serverVoiceAudio) {
+    try { serverVoiceAudio.pause(); } catch { /* already stopped */ }
+    serverVoiceAudio = null;
+  }
+}
+
+export function hasArabicBrowserVoice(): boolean {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return false;
+  return (window.speechSynthesis.getVoices() || []).some((v) => (v.lang || "").toLowerCase().startsWith("ar"));
+}
+
+export async function speakServerVoice(text: string, profileId: SmartAiVoiceId): Promise<boolean> {
+  if (!text.trim() || typeof window === "undefined") return false;
+  try {
+    stopServerVoice();
+    stopSmartAiVoice();
+    const voice = profileId === "male" ? "male" : "female";
+    const res = await fetch(apiUrl("/api/ai/tts"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ text: text.slice(0, 1200), voice }),
+    });
+    if (!res.ok) return false;
+    const blob = await res.blob();
+    if (!blob || blob.size < 500) return false;
+    const audio = new Audio(URL.createObjectURL(blob));
+    serverVoiceAudio = audio;
+    await audio.play();
+    return true;
+  } catch {
+    return false;
   }
 }
