@@ -192,11 +192,25 @@ async function askGroqOpenMind(input: {
   }
   messages.push({ role: "user", content: String(request.message || "").slice(0, 4000) });
 
-  const result = await groqProvider.chat({
-    messages,
-    temperature: 0.3,
-    maxCompletionTokens: 900,
-  });
+  let result: { content?: string; model?: string } = { content: "" };
+  try {
+    result = await groqProvider.chat({
+      messages,
+      temperature: 0.3,
+      maxCompletionTokens: 900,
+    });
+    // Empty reply happens occasionally (content filter / glitch) — one cheap
+    // retry beats dropping into the 45-90s local-model fallback.
+    if (!String(result.content || "").trim()) {
+      result = await groqProvider.chat({
+        messages,
+        temperature: 0.5,
+        maxCompletionTokens: 700,
+      });
+    }
+  } catch (error) {
+    if (!String(result.content || "").trim()) throw error;
+  }
   let reply = String(result.content || "").trim();
   if (!reply) throw new Error("Groq returned an empty reply.");
   // Drift guard: Arabic in, English out must never pass. One strict retry,

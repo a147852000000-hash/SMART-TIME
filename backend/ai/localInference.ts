@@ -62,7 +62,7 @@ export async function askLocalSmartAi(input: LocalAiRequest): Promise<SmartAiRes
   if (JSON.stringify(input.data || {}).length > 4000) return null;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 90000);
+  const timeout = setTimeout(() => controller.abort(), 45000);
 
   // The dedicated SMART-TIME model carries the compact app knowledge for Arabic
   // (mirrors the SYSTEM baked into the Ollama model, cache-friendly on 1 core).
@@ -168,7 +168,7 @@ export async function* streamLocalSmartAi(input: {
   if (!LOCAL_URL) return;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 90000);
+  const timeout = setTimeout(() => controller.abort(), 45000);
 
   const system = input.language === "ar"
     ? [
