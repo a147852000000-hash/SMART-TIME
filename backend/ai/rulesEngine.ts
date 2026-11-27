@@ -112,13 +112,13 @@ export function answerWithRules(message: string, language: "ar" | "en", data: Sm
     const previousTotal = Number(previous?.total || 0);
     const delta = Math.round((currentTotal - previousTotal) * 100) / 100;
     const percent = previousTotal === 0 ? null : Math.round((delta / previousTotal) * 1000) / 10;
-    const direction = delta > 0 ? (language === "ar" ? "أعلى" : "higher") : delta < 0 ? (language === "ar" ? "أقل" : "lower") : (language === "ar" ? "مساوي" : "the same");
+    const direction = delta > 0 ? (language === "ar" ? "زاد" : "higher") : delta < 0 ? (language === "ar" ? "قل" : "lower") : (language === "ar" ? "زي ما هو" : "the same");
     const changeText = percent === null
-      ? (language === "ar" ? "لا يمكن حساب نسبة التغير لأن الشهر الماضي كان 0." : "A percentage change cannot be calculated because last month was 0.")
+      ? (language === "ar" ? "مش قادر أحسب نسبة التغير يا معلم لأن الشهر اللي فات مفيهوش ولا حاجة مسجلة." : "A percentage change cannot be calculated because last month was 0.")
       : (language === "ar" ? "التغير حوالي " + Math.abs(percent) + "%." : "The change was about " + Math.abs(percent) + "%.");
     return {
       reply: language === "ar"
-        ? "مصاريف الشهر ده " + money(currentTotal, currency) + " مقابل " + money(previousTotal, currency) + " الشهر اللي فات؛ يعني " + direction + " بمقدار " + money(Math.abs(delta), currency) + ". " + changeText
+        ? "مصاريف الشهر ده " + money(currentTotal, currency) + " واللي فات " + money(previousTotal, currency) + " — يعني " + direction + " " + money(Math.abs(delta), currency) + ". " + changeText
         : "This month's expenses are " + money(currentTotal, currency) + " versus " + money(previousTotal, currency) + " last month; that is " + direction + " by " + money(Math.abs(delta), currency) + ". " + changeText,
       action,
       provider: "smart-ai",
@@ -133,7 +133,7 @@ export function answerWithRules(message: string, language: "ar" | "en", data: Sm
     const net = Math.round((income - expenses) * 100) / 100;
     return {
       reply: language === "ar"
-        ? "الدخل المسجل في الشهر ده " + money(income, currency) + "، والمصاريف " + money(expenses, currency) + "، وصافي الدخل المحسوب هو " + money(net, currency) + "."
+        ? "دخلك المسجل في الشهر ده " + money(income, currency) + " يا معلم، والمصاريف " + money(expenses, currency) + " — فيبقى الصافي " + money(net, currency) + " بالجنيه."
         : "Recorded income this month is " + money(income, currency) + ", expenses are " + money(expenses, currency) + ", and calculated net income is " + money(net, currency) + ".",
       action,
       provider: "smart-ai",
@@ -187,7 +187,7 @@ export function answerWithRules(message: string, language: "ar" | "en", data: Sm
     const average = Math.round((total / days) * 100) / 100;
     return {
       reply: language === "ar"
-        ? "إجمالي المصاريف " + money(total, currency) + " على " + days + " أيام — المتوسط " + money(average, currency) + " في اليوم."
+        ? "مجموع المصاريف " + money(total, currency) + " على " + days + " أيام — يعني المتوسط " + money(average, currency) + " في اليوم."
         : "Total expenses of " + money(total, currency) + " over " + days + " days — an average of " + money(average, currency) + " per day.",
       action,
       provider: "smart-ai",
@@ -200,7 +200,7 @@ export function answerWithRules(message: string, language: "ar" | "en", data: Sm
     const income = Number(typedData.comparisons?.thisMonthIncome || 0);
     return {
       reply: language === "ar"
-        ? "الدخل المسجل في " + periodLabel(typedData.period?.key, "ar") + " هو " + money(income, currency) + "."
+        ? "دخلك المسجل في " + periodLabel(typedData.period?.key, "ar") + " " + money(income, currency) + "."
         : "Recorded income for " + periodLabel(typedData.period?.key, "en") + " is " + money(income, currency) + ".",
       action,
       provider: "smart-ai",
@@ -212,7 +212,7 @@ export function answerWithRules(message: string, language: "ar" | "en", data: Sm
   if (isHelpQuestion(q)) {
     return {
       reply: language === "ar"
-        ? "أنا SMART AI داخل SMART TIME. أقدر أشرح بيانات التطبيق، ألخّص المصاريف والفترة الزمنية، أراجع الوقود والتعليم، وأساعدك في فهم بياناتك. التنفيذ على البيانات لا يتم إلا بتأكيدك."
+        ? "أنا SMART AI جوه سمارت تايم يا معلم. أقدر أشرحلك بيانات التطبيق، ألخّصلك المصاريف والفترات، أراجع الوقود والتعليم، وأساعدك تفهم أرقامك. ومفيش حاجة هتتعدل غير بعد تأكيدك أنت الأول."
         : "I am SMART AI inside SMART TIME. I can explain app data, summarize expenses and periods, review fuel and education data, and help you understand your records. Data changes require your confirmation.",
       action,
       needsClarification: false,
@@ -258,7 +258,7 @@ export function answerWithRules(message: string, language: "ar" | "en", data: Sm
     const accountsCount = Number(typedData.accounts?.count || 0);
     return {
       reply: language === "ar"
-        ? "الطلب ده عملية تدميرية على بياناتك" + (accountsCount > 0 ? " (عندك " + accountsCount + " حساب مسجل)" : "") + " — مش بتنفذ من مسار الشات أبدًا. العمليات التدميرية بتتم من الواجهة فقط بعد تأكيد صريح، وأنا بس أوضحلك النطاق المطلوب قبلها."
+        ? "الطلب ده عملية خطيرة على بياناتك" + (accountsCount > 0 ? " (عندك " + accountsCount + " حساب مسجل)" : "") + " — ومن الشات مش بتنفذ أبدًا. الحاجات دي بتتعمل من الشاشة نفسها بس بعد تأكيدك بالحرف، وأنا بس أوضحلك اللي هيتعمل قبلها."
         : "That is a destructive operation on your data" + (accountsCount > 0 ? " (you have " + accountsCount + " recorded account(s))" : "") + " — it never executes from the chat path. Destructive operations happen only from the UI after explicit confirmation.",
       action,
       needsClarification: true,

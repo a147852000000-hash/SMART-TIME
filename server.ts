@@ -8,6 +8,7 @@ import crypto from "node:crypto";
 import { spawn as nodeSpawn } from "node:child_process";
 import { Buffer } from "node:buffer";
 import { db, seedDefaultChatRooms, DB_PATH } from "./backend/database.js";
+import { egyptianizeText } from "./backend/ai/egyptianize.js";
 import { getCache, setCache } from "./backend/cache.js";
 import { getServiceStatuses, seedServiceStatuses, setServiceStatus } from "./backend/serviceStatus.js";
 import { chatRouter, setupChatWebSocket } from "./backend/chatServer.js";
@@ -922,6 +923,12 @@ const handleAiChat = async (req: express.Request, res: express.Response) => {
       confirmed: req.body?.confirmed === true,
       ownerView: resolvedAccountRole(user) === "owner",
     });
+
+    // Central dialect choke point: every Arabic reply leaves the server
+    // pure Egyptian — covers rules engine, local model and any future path.
+    if (language === "ar" && typeof (response as any)?.reply === "string") {
+      (response as any).reply = egyptianizeText((response as any).reply);
+    }
 
     return res.json(response);
   } catch (error: any) {

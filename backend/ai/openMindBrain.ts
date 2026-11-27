@@ -6,6 +6,7 @@ import { groqProvider, isGroqConfigured } from "./providers/groqProvider.js";
 import { answerWithRules } from "./rulesEngine.js";
 import { answerShubraKnowledge } from "./shubraKnowledge.js";
 import { buildAppKnowledge } from "./appKnowledge.js";
+import { egyptianizeText, msaMarkerCount, SHUBRA_FEWSHOT, SHUBRA_BANNED, dialectFixMessages } from "./egyptianize.js";
 import type { SmartAiAction, SmartAiRequest, SmartAiResponse } from "./types.js";
 
 export type BrainIntent =
@@ -159,9 +160,11 @@ async function askGroqOpenMind(input: {
   // REPLY comes out in Shubra dialect with the clean-sass personality.
   const shubraPersona = language === "ar"
     ? [
-        "شخصيتك فوق أي كلام تاني: أنت SMART AI — بنت شبرا الضحّكة جوه تطبيق SMART TIME («وقتك من ذهب»). ردودك كلها عامية مصرية شبرا خالص، بتهزري وتتخانقي بالنعم وبتضحكي (هههه أحيانًا)، وبتنادين المستخدم يا معلم/يا عم/يا قمر/يا غالي.",
-        "الضحكة نضيفة: ممنوع نهائيًا ألفاظ وشيخة أو إساءة أو كلام جنس أو سياسة. ممنوع الفصحى المدرسية في الردود — أي كلمة زي يمكنك/يرجى/يتم/ترغب/وذلك بدّليها فورًا بـ تقدر/عايز/لو حابب/عشان. ممنوع الإنجليزي غير لو رسالة المستخدم نفسها بالإنجليزي.",
-        "المعلومة تيجي الأول والأهم والهزرة لمسة صغيرة في الآخر، والرد مختصر على قد الحاجة، وجاوب سؤال المستخدم نفسه من غير ما تعيديه ولا تطلع سؤال جديد.",
+        "شخصيتك فوق أي كلام تاني: أنت SMART AI — بنت شبرا الضحّكة جوه تطبيق SMART TIME («وقتك من ذهب»). ردودك كلها عامية مصرية قاهرية شبرا ١٠٠٪ — كأن بنت شبرا بتتكلم مع جارها على الكوفي — بتهزري وتتخانقي بالنعم وبتضحكي (هههه أحيانًا)، وبتنادين المستخدم يا معلم/يا عم/يا قمر/يا غالي.",
+        "صيغتك الثابتة في كل رد: أنا (بنت) — كويسة، شغالة، عايزة، هعمل، هقولك، أقدر — والمستخدم انت/انتِ/يا معلم — تقدر، عايز، هتلاقي. المعلومة تيجي الأول والأهم والهزرة لمسة صغيرة في الآخر، والرد مختصر على قد الحاجة، وجاوب سؤال المستخدم نفسه من غير ما تعيديه ولا تطلع سؤال جديد.",
+        SHUBRA_FEWSHOT,
+        SHUBRA_BANNED,
+        "الضحكة نضيفة: ممنوع نهائيًا ألفاظ وشيخة أو إساءة أو كلام جنس أو سياسة. ممنوع الفصحى المدرسية تمامًا — أي رد فيه فصحى ولو كلمة واحدة يبقى رد مرفوض. ممنوع الإنجليزي غير أسماء التقنية زي SMART TIME و PDF.",
         "قواعد ثابتة: ممنوع تخترعي رقم أو سجل أو موعد أو نتيجة مش في البيانات المرفقة — لو الناقص موجود اطلبيه باختصار؛ ممنوع تكشفي أسرار أو كلمات مرور أو PIN؛ ممنوع تنفذي تعديل بنفسك — أي تغيير محتاج تأكيد المستخدم في الواجهة الأول، فلوسه مش لعبة. التطبيق مجاني 100% ودي حقيقة ثابتة ممنوع تغيريها.",
       ].join("\n")
     : [
@@ -189,11 +192,6 @@ async function askGroqOpenMind(input: {
   }
   messages.push({ role: "user", content: String(request.message || "").slice(0, 4000) });
 
-  const result = await groqProvider.chat({
-    messages,
-    temperature: 0.3,
-    maxCompletionTokens: 900,
-  });
   let reply = String(result.content || "").trim();
   if (!reply) throw new Error("Groq returned an empty reply.");
   // Drift guard: Arabic in, English out must never pass. One strict retry,
@@ -207,6 +205,24 @@ async function askGroqOpenMind(input: {
       if (retryReply && latinRatio(retryReply) <= LATIN_DRIFT_LIMIT) reply = retryReply;
     } catch { /* keep first reply */ }
   }
+  // Broken-Arabic guard: فصحى مصطلبة على العامية is the #1 complaint —
+  // when the reply carries too many MSA markers, rewrite it once through
+  // the dedicated dialect-fix pass, then accept whichever is cleaner.
+  if (language === "ar" && msaMarkerCount(reply) >= 3) {
+    try {
+      const fixed = await groqProvider.chat({
+        messages: dialectFixMessages(reply),
+        temperature: 0.2,
+        maxCompletionTokens: 700,
+      });
+      const fixedReply = String(fixed.content || "").trim();
+      if (fixedReply && latinRatio(fixedReply) <= LATIN_DRIFT_LIMIT
+        && msaMarkerCount(fixedReply) < msaMarkerCount(reply)) {
+        reply = fixedReply;
+      }
+    } catch { /* keep original reply */ }
+  }
+  if (language === "ar") reply = egyptianizeText(reply);
   return {
     reply,
     action: null,
@@ -302,7 +318,8 @@ export async function runOpenMindBrain(request: SmartAiRequest): Promise<SmartAi
         if (isArabicMessage(message) && latinRatio(local.reply) > LATIN_DRIFT_LIMIT) {
           console.warn("OPEN MIND local model drifted to Latin script, discarding reply.");
         } else {
-          return { ...local, requiresConfirmation: plan.requiresConfirmation, plan };
+          const localReply = language === "ar" ? egyptianizeText(local.reply) : local.reply;
+          return { ...local, reply: localReply, requiresConfirmation: plan.requiresConfirmation, plan };
         }
       }
     } catch (error) { console.warn("OPEN MIND local model unavailable:", (error as Error)?.message); }
