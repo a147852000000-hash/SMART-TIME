@@ -192,6 +192,11 @@ async function askGroqOpenMind(input: {
   }
   messages.push({ role: "user", content: String(request.message || "").slice(0, 4000) });
 
+  const result = await groqProvider.chat({
+    messages,
+    temperature: 0.3,
+    maxCompletionTokens: 900,
+  });
   let reply = String(result.content || "").trim();
   if (!reply) throw new Error("Groq returned an empty reply.");
   // Drift guard: Arabic in, English out must never pass. One strict retry,
@@ -313,10 +318,12 @@ export async function runOpenMindBrain(request: SmartAiRequest): Promise<SmartAi
       const local = await askLocalSmartAi({ language, message, data, conversationHistory: modelHistory,
         memoryContext });
       if (local?.reply) {
-        // The 1.5B model sometimes drifts to English on open talk — drop the
-        // English answer and let the deterministic rules engine reply instead.
-        if (isArabicMessage(message) && latinRatio(local.reply) > LATIN_DRIFT_LIMIT) {
-          console.warn("OPEN MIND local model drifted to Latin script, discarding reply.");
+        // Quality gate: the small model is the #1 source of broken Arabic
+        // (عربي مكسر). English drift or heavy MSA → discard and let the
+        // deterministic dialect rules engine answer instead.
+        const badDialect = language === "ar" && msaMarkerCount(local.reply) >= 3;
+        if ((isArabicMessage(message) && latinRatio(local.reply) > LATIN_DRIFT_LIMIT) || badDialect) {
+          console.warn(`OPEN MIND local model reply discarded (latin=${latinRatio(local.reply).toFixed(2)}, msa=${msaMarkerCount(local.reply)}).`);
         } else {
           const localReply = language === "ar" ? egyptianizeText(local.reply) : local.reply;
           return { ...local, reply: localReply, requiresConfirmation: plan.requiresConfirmation, plan };
