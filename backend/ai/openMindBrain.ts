@@ -20,6 +20,7 @@ export interface BrainPlan {
 }
 
 const NO_INVENTION = "Never invent facts, numbers, tool results, locations, files, execution status, or measurements. If required evidence is missing, say so and ask for it.";
+const NO_INVENTION_AR = "ممنوع تخترع حقائق أو أرقام أو نتائج أو مواعيد؛ لو الدليل ناقص قول كده واطلب الناقص.";
 // Dedicated local model handles persona + app knowledge + how-it-works talk.
 // Number/data intents go straight to the deterministic rules engine (grounded).
 const LOCAL_MODEL_INTENTS = new Set<BrainIntent>(["conversation", "social_emotional", "unknown"]);
@@ -247,7 +248,11 @@ export async function runOpenMindBrain(request: SmartAiRequest): Promise<SmartAi
   }
   if (isLocalSmartAiConfigured() && LOCAL_MODEL_INTENTS.has(plan.intent)) {
     try {
-      const local = await askLocalSmartAi({ language, message: `${NO_INVENTION}\nIntent: ${plan.intent}\nPlan: ${plan.steps.join(" -> ")}\nUser: ${message}`, data, conversationHistory: modelHistory,
+      // Arabic wrapper: an English envelope pushes the 1.5B model toward MSA/English
+      // replies — keep the local-model envelope fully in Shubra dialect.
+      const local = await askLocalSmartAi({ language, message: language === "ar"
+        ? `${NO_INVENTION_AR}\nسؤال المستخدم: ${message}`
+        : `${NO_INVENTION}\nUser: ${message}`, data, conversationHistory: modelHistory,
         memoryContext });
       if (local?.reply) return { ...local, requiresConfirmation: plan.requiresConfirmation, plan };
     } catch (error) { console.warn("OPEN MIND local model unavailable:", (error as Error)?.message); }
